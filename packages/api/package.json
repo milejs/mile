@@ -1,0 +1,27 @@
+{
+  "name": "@milejs/api",
+  "version": "0.0.0",
+  "exports": {
+    ".": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.mjs",
+      "require": "./dist/api.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "rm -rf dist && tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf {dist,.turbo,node_modules}"
+  },
+  "devDependencies": {
+    "@milejs/eslint-config": "workspace:*",
+    "@milejs/typescript-config": "workspace:*",
+    "@types/node": "^22",
+    "tsup": "^8.5.0",
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "hono": "^4.9.9"
+  }
+}

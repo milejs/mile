@@ -1,0 +1,30 @@
+'use client';
+
+import { MileComponentProps } from "@milejs/types";
+import cn from "../lib/cn";
+import Link from "next/link";
+import { useState } from "react";
+
+export function Hero(props: MileComponentProps) {
+  const [state, setState] = useState(false);
+  const { options } = props ?? {};
+  const { title, btn_text, link, image } = options ?? {};
+  return (
+    <div {...props} className={cn(`py-10`, props.className)}>
+      <div className="flex min-h-[400px] max-w-5xl mx-auto">
+        <div className="grow">
+          <h1 className="text-6xl font-bold">
+            {title ?? "Title goes here"}
+          </h1>
+        </div>
+        <div className="w-[300px] shrink-0">
+          {link?.is_external ? (
+            <a href={link?.url ?? "/"} target="_blank" rel="noopener noreferrer" className="block px-6 py-3 rounded-full bg-blue-500 text-white text-center font-semibold text-base">{link?.link_text ?? "Button"}</a>
+          ) : (
+            <Link href={link?.url ?? "/"} className="block px-6 py-3 rounded-full bg-blue-500 text-white text-center font-semibold text-base">{link?.link_text ?? "Button"}</Link>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

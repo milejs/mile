@@ -1,0 +1,15 @@
+import { defineConfig } from "tsup";
+
+export default defineConfig((options) => ({
+	entryPoints: ["exports/mile.ts", "exports/app.ts", "exports/client.ts"],
+	format: ["cjs", "esm"],
+	dts: true,
+	sourcemap: true,
+	bundle: true,
+	external: ["react", "react-dom"],
+	loader: {
+		".jpg": "base64",
+		".png": "base64",
+	},
+	...options,
+}));
