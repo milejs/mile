@@ -209,7 +209,7 @@ export function MileFrame({ data, iframeSrc, frameRef, title, router }: { frameR
   //   };
   // }, []);
   const editor = useEditor();
-  console.log('MileFrame editor:', editor);
+  // console.log('MileFrame editor:', editor);
 
   useEffect(() => {
     let unsubscribe = tinykeys(window, {

@@ -28,7 +28,7 @@ export async function App({ params }: { params: Promise<{ mileApp: string[] }>; 
       },
     }
   }
-  console.log("data", data);
+  // console.log("data", data);
   // console.log("schema", schema);
   if (!data) return <div className="">No content</div>;
   // const content = JSON.parse(data.content as string);

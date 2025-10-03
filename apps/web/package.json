@@ -22,9 +22,9 @@
     "tailwindcss": "^4.1.13"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "^15",
     "@milejs/eslint-config": "workspace:*",
     "@milejs/typescript-config": "workspace:*",
+    "@next/eslint-plugin-next": "^15",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",

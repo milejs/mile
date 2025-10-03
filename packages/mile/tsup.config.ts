@@ -1,7 +1,12 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig((options) => ({
-	entryPoints: ["exports/mile.ts", "exports/app.ts", "exports/client.ts"],
+	entryPoints: [
+		"exports/mile.ts",
+		"exports/app.ts",
+		"exports/client.ts",
+		"exports/data.ts",
+	],
 	format: ["cjs", "esm"],
 	dts: true,
 	sourcemap: true,
