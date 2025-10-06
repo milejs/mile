@@ -12,16 +12,31 @@
     "build": "tsup",
     "dev": "rm -rf dist && tsup --watch",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf {dist,.turbo,node_modules}"
+    "clean": "rm -rf {dist,.turbo,node_modules}",
+    "db:seed": "npx tsx src/scripts/seed.ts",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
     "@milejs/eslint-config": "workspace:*",
     "@milejs/typescript-config": "workspace:*",
     "@types/node": "^22",
+    "@types/ws": "^8.18.1",
+    "drizzle-kit": "^0.31.5",
     "tsup": "^8.5.0",
     "typescript": "^5"
   },
   "dependencies": {
-    "hono": "^4.9.9"
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@neondatabase/serverless": "^1.0.2",
+    "@sindresorhus/slugify": "^3.0.0",
+    "better-upload": "^2.0.1",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.44.6",
+    "hono": "^4.9.9",
+    "ws": "^8.18.3",
+    "zod": "^4.1.11"
   }
 }

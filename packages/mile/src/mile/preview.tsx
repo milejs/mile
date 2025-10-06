@@ -72,6 +72,7 @@ export function Preview({ slug, data: initialData }: PreviewProps) {
 function Render({ data }: { data: TreeData | undefined; }) {
   if (!data) return null;
   const root = data.root;
+  if (!root) return null;
 
   return <RenderItem key={root.id} data={data} id={root.id} />;
 }

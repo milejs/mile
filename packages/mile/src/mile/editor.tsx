@@ -1,9 +1,13 @@
 import { createContext, useContext, useMemo } from "react";
 import { useMileProvider } from "./client";
 import { invariant } from "@/lib/invariant";
-import { Action, Actions, Config, HistoryEntry, MileClient, MileEditor, MileEditorSchema, MileHistoryManager, MilePersister, Operation, PageMetaData, Schema, SchemaTypeDefinition, SetData, SetOperation, TreeData, NodeData, Trigger } from "@milejs/types";
+import { Action, Actions, Config, HistoryEntry, MileClient, MileEditor, MileHistoryManager, MilePersister, Operation, PageMetaData, Schema, SchemaTypeDefinition, SetData, SetOperation, TreeData, NodeData, Trigger, Components } from "@milejs/types";
 import { Tree } from "./tree";
 import { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/types/types";
+import { mutate } from "swr";
+import { toast } from "sonner";
+
+const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
 const EditorContext = createContext<Editor | null>(null);
 
@@ -18,13 +22,14 @@ type EditorProviderProps = {
   tree: Tree;
   setData: SetData;
   setLastOperation: SetOperation;
+  page_info: PageMetaData;
 };
-export function EditorProvider({ children, tree, setData, setLastOperation }: EditorProviderProps) {
+export function EditorProvider({ page_info, children, tree, setData, setLastOperation }: EditorProviderProps) {
   const mile = useMileProvider();
   invariant(mile);
   const editor = useMemo(() => {
-    return new Editor(mile, tree, setData, setLastOperation);
-  }, [mile, tree, setData, setLastOperation]);
+    return new Editor(mile, tree, page_info, setData, setLastOperation);
+  }, [mile, page_info, tree, setData, setLastOperation]);
   return (
     <EditorContext value={editor}>{children}</EditorContext>
   );
@@ -197,6 +202,7 @@ export class Editor implements MileEditor {
   mile: MileClient;
   config: Config;
   tree: Tree;
+  page_info: PageMetaData;
   setData: SetData;
   setLastOperation: SetOperation;
   history: HistoryManager = new HistoryManager();
@@ -206,11 +212,14 @@ export class Editor implements MileEditor {
   // toastQueue: ToastQueue<MileToast>;
   zoom: number;
   breakpoint: "desktop" | "tablet" | "mobile";
+  is_disabled: boolean;
 
-  constructor(mile: MileClient, tree: Tree, setData: SetData, setLastOperation: SetOperation) {
+  constructor(mile: MileClient, tree: Tree, page_info: PageMetaData, setData: SetData, setLastOperation: SetOperation) {
+    this.is_disabled = false;
     this.mile = mile;
     this.config = mile.config;
     this.tree = tree;
+    this.page_info = page_info;
     this.setData = setData;
     this.setLastOperation = setLastOperation;
     this.actions = initializeActions(actions, mile.config.actions);
@@ -232,17 +241,30 @@ export class Editor implements MileEditor {
 
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile") {
     this.breakpoint = breakpoint;
+    this.forceReRender();
+  }
+
+  forceReRender() {
     // force re-render
     const newData = { ...this.tree.data };
     this.setData(newData);
   }
 
-  async save(pageData: PageMetaData) {
-    console.log("pageData", pageData, this.tree.data);
-    const result = await this.persister.save(pageData.id, pageData, this.tree.data);
-    // if (result?.message) {
-    //   this.toastQueue.add({ type: "error", title: "Error!", description: result.message });
-    // }
+  async save() {
+    this.is_disabled = true;
+    this.forceReRender();
+    try {
+      const result = await this.persister.save(this.page_info.id, this.page_info, this.tree.data, this.config.components);
+      this.is_disabled = false;
+      this.forceReRender();
+      toast.success("Saved successfully");
+      return { ok: true, error: undefined };
+    } catch (error) {
+      this.is_disabled = false;
+      this.forceReRender();
+      toast.error("Failed to save");
+      return { ok: false, error };
+    }
   }
 
   updateData(data: TreeData, lastOperation?: Operation) {
@@ -356,6 +378,74 @@ export class HistoryManager implements MileHistoryManager {
   };
 }
 
+/**
+ * {
+    "root": {
+        "id": "root",
+        "type": "root",
+        "props": {},
+        "options": {},
+        "children": [
+            "fe8eb00a-d4c6-428c-b513-3611bccacf53"
+        ]
+    },
+    "fe8eb00a-d4c6-428c-b513-3611bccacf53": {
+        "id": "fe8eb00a-d4c6-428c-b513-3611bccacf53",
+        "type": "hero",
+        "props": {
+            "className": ""
+        },
+        "options": {
+            "title": "Supreme",
+            "image": {
+                "image_url": "https://pub-47fe340e22e548e5a8ed17dd964ffa4a.r2.dev/mileupload/2024-drive-the-icons-monterey-car-week-tour-12-cropped-jpg",
+                "alt_text": ""
+            },
+            "link": {
+                "url": "/aa",
+                "link_text": "Book",
+                "is_external": false
+            }
+        }
+    }
+  }
+ */
+function treeToMDXstring(data: TreeData, components?: Components | undefined) {
+  const lines: string[] = [];
+
+  function renderComponent(componentId: string) {
+    const component = data[componentId];
+    if (!component) return;
+
+    const { id, type, props = {}, options = {} } = component;
+    if (id !== "root") {
+      invariant(components && components[type], `Unknown component type: ${type}`);
+      // Convert props safely (only use className for now)
+      const className = props.className ?? '';
+
+      // Serialize options object as inline JS
+      const optionsString = JSON.stringify(options)
+        .replace(/"([^"]+)":/g, '$1:') // remove quotes from keys
+        .replace(/"/g, '"'); // keep quotes for string values
+
+      // Get componentName i.e. <Hero />
+      const componentName = components[type].component.name;
+
+      const line = optionsString === "{}"
+        ? `<${componentName} id="${id}" type="${type}" className="${className}" />`
+        : `<${componentName} id="${id}" type="${type}" className="${className}" options={${optionsString}} />`;
+
+      lines.push(line);
+    }
+    // Recursively render children if any
+    if (component.children && component.children.length > 0) {
+      component.children.forEach(childId => renderComponent(childId));
+    }
+  }
+  renderComponent('root');
+  return lines.join('\n');
+}
+
 class Persister implements MilePersister {
   editor: Editor;
 
@@ -363,35 +453,34 @@ class Persister implements MilePersister {
     this.editor = editor;
   }
 
-  async save(id: string, pageData: PageMetaData, content: TreeData) {
-    const resp = await fetch(`/api/mile/pages/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...pageData, content }),
-    });
+  async save(id: string, page_info: PageMetaData, content: TreeData, components?: Components | undefined) {
+    // convert json to mdx string
+    const mdxstring = treeToMDXstring(content, components);
+    console.log('mdxstring', mdxstring);
 
-    if (!resp.ok) {
-      const info = await resp.json();
-      console.error("save error", info);
-      if (info?.message) {
-        return { message: info.message };
-      }
-      return {
-        message:
-          "An error occurred while saving the page. If you think the changes you've made is okay and the error keeps happening, please contact us.",
-      };
-    }
-
-    const result = await resp.json();
-    if (result != null) {
-      const url = new URL(`/mile${pageData.slug}/edit`, window.parent.location.origin);
-      // sendMessage({ type: "http-redirect", payload: url.toString() });
-      return undefined;
-    }
-    return {
-      message:
-        "An error occurred while saving the page. If you think the changes you've made is okay and the error keeps happening, please contact us.",
-    };
+    return mutate(
+      [`/pages`, `/${id}`],
+      async () => {
+        const resp = await fetch(`${API}/pages/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...page_info, content: mdxstring }),
+        });
+        if (!resp.ok) {
+          const error = new Error("An error occurred while saving the page.");
+          const info = await resp.json();
+          console.error("Error saving page", info);
+          // @ts-expect-error okk
+          error.info = info;
+          // @ts-expect-error okk
+          error.status = resp.status;
+          throw error;
+        }
+        const result = await resp.json();
+        return result;
+      },
+      // { revalidate: false },
+    );
   }
 }
 

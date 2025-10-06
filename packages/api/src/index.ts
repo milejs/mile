@@ -1,13 +1,53 @@
 import { Hono } from 'hono'
 import { handle } from 'hono/vercel'
 import { HTTPException } from "hono/http-exception";
-import { randomBytes } from 'node:crypto';
-import fs from 'node:fs/promises';
+import { db } from './db/drizzle';
+import { pages as pagesTable } from './db/schema';
+import { desc, eq } from 'drizzle-orm';
+import { z } from 'zod';
+import { handleRequest, type Router, route } from 'better-upload/server';
+import { cloudflare } from "better-upload/server/helpers";
+import { invariant } from './invariant';
+import slugify from "@sindresorhus/slugify";
 
 type MileAPIOptions = {
   s3?: {
     filePrefix?: string;
   };
+};
+
+invariant(process.env.CLOUDFLARE_ACCOUNT_ID, "CLOUDFLARE_ACCOUNT_ID is required");
+invariant(process.env.AWS_ACCESS_KEY_ID, "AWS_ACCESS_KEY_ID is required");
+invariant(process.env.AWS_SECRET_ACCESS_KEY, "AWS_SECRET_ACCESS_KEY is required");
+invariant(process.env.AWS_BUCKET_NAME, "AWS_BUCKET_NAME is required");
+
+const client = cloudflare({
+  accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+});
+
+const router: Router = {
+  // client: s3,
+  client,
+  bucketName: process.env.AWS_BUCKET_NAME!,
+  routes: {
+    mileupload: route({
+      fileTypes: ["image/*"],
+      maxFileSize: 1024 * 1024 * 10, // 10MB
+      onBeforeUpload: async ({ req, file, clientMetadata }) => {
+        // const session = await auth.current();
+        // if (!session) {
+        //   throw new UploadFileError("Unauthorized");
+        // }
+        return {
+          objectInfo: {
+            key: `mileupload/${slugify(file.name)}`,
+          },
+        };
+      },
+    }),
+  },
 };
 
 export function MileAPI(options: MileAPIOptions) {
@@ -21,58 +61,91 @@ export function MileAPI(options: MileAPIOptions) {
     return c.json({ message: err.message ?? "Error" }, 400);
   });
 
-  app.route('/github', github)
+  app.route('/pages', pages);
+  app.route('/page', page_by_slug);
+  app.post('/upload', (c) => {
+    return handleRequest(c.req.raw, router);
+  });
 
   return handle(app);
 }
 
-const github = new Hono();
+const pages = new Hono();
+const page_by_slug = new Hono();
 
-github.get('/login', (c) => {
-  return c.redirect('/mile/setup');
-});
-github.get('/created-app', async (c) => {
-  const searchParams = new URL(c.req.url, 'https://localhost').searchParams;
-  const code = searchParams.get('code');
-  if (typeof code !== 'string' || !/^[a-zA-Z0-9]+$/.test(code)) {
-    return c.text('Bad Request', 400);
-  }
-  const ghAppRes = await fetch(
-    `https://api.github.com/app-manifests/${code}/conversions`,
-    {
-      method: 'POST',
-      headers: { Accept: 'application/json' },
-    }
-  );
-  if (!ghAppRes.ok) {
-    console.log(ghAppRes);
-    return c.text('An error occurred while creating the GitHub App', 500);
-  }
-  const ghAppDataRaw: any = await ghAppRes.json();
-  console.log('ghAppDataRaw', ghAppDataRaw);
-  // let ghAppDataResult;
-  // try {
-  //   ghAppDataResult = s.create(ghAppDataRaw, ghAppSchema);
-  // } catch {
-  //   console.log(ghAppDataRaw);
-  //   return c.text('An unexpected response was received from GitHub', 500);
-  // }
-  const toAddToEnv = `# Keystatic
-KEYSTATIC_GITHUB_CLIENT_ID=${ghAppDataRaw.client_id}
-KEYSTATIC_GITHUB_CLIENT_SECRET=${ghAppDataRaw.client_secret}
-KEYSTATIC_SECRET=${randomBytes(40).toString('hex')}
-PUBLIC_KEYSTATIC_GITHUB_APP_SLUG=${ghAppDataRaw.slug} # https://github.com/apps/${ghAppDataRaw.slug}
-`;
-  let prevEnv: string | undefined;
-  try {
-    prevEnv = await fs.readFile('.env', 'utf-8');
-  } catch (err) {
-    if ((err as any).code !== 'ENOENT') throw err;
-  }
-  const newEnv = prevEnv ? `${prevEnv}\n\n${toAddToEnv}` : toAddToEnv;
-  await fs.writeFile('.env', newEnv);
-  await wait(200);
-  return c.redirect('/mile/created-github-app?slug=' + ghAppDataRaw.slug);
+const createPageSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  parent_id: z.uuid().optional(),
 });
 
-const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+// Get page by id
+page_by_slug.get('/', async (c) => {
+  const [page] = await db.select().from(pagesTable).where(eq(pagesTable.slug, "/"));
+  if (!page) {
+    return c.json({ message: 'Page not found' }, 404);
+  }
+  return c.json(page);
+});
+page_by_slug.get('/:slug', async (c) => {
+  const slug = c.req.param('slug');
+  const [page] = await db.select().from(pagesTable).where(eq(pagesTable.slug, slug));
+  if (!page) {
+    return c.json({ message: 'Page not found' }, 404);
+  }
+  return c.json(page);
+});
+
+// List all pages with pagination
+pages.get('/', async (c) => {
+  console.log('-------- GET /',);
+  const { offset = '0', limit = '10' } = c.req.query();
+  const result = await db
+    .select()
+    .from(pagesTable)
+    .orderBy(desc(pagesTable.created_at))
+    .limit(parseInt(limit, 10))
+    .offset(parseInt(offset, 10));
+  return c.json(result);
+});
+
+// Create a page
+pages.post('/', async (c) => {
+  const body = await c.req.json();
+  const parsed = createPageSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ message: 'Invalid request body', errors: parsed.error.flatten() }, 400);
+  }
+  const [newPage] = await db.insert(pagesTable).values(parsed.data).returning();
+  return c.json(newPage, 201);
+});
+
+// Get page by id
+pages.get('/:id', async (c) => {
+  const id = c.req.param('id');
+  console.log('GET /:id', id);
+  const [page] = await db.select().from(pagesTable).where(eq(pagesTable.id, id));
+  if (!page) {
+    return c.json({ message: 'Page not found' }, 404);
+  }
+  return c.json(page);
+});
+
+// Update page by id
+pages.put('/:id', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json();
+  console.log('SAVE page ---- body', body);
+  // Here you might want to add validation similar to the POST route
+  const [updatedPage] = await db.update(pagesTable).set({ ...body, created_at: new Date(body.created_at), updated_at: new Date() }).where(eq(pagesTable.id, id)).returning();
+  return c.json(updatedPage);
+});
+
+// Delete page by id
+pages.delete('/:id', async (c) => {
+  const id = c.req.param('id');
+  await db.delete(pagesTable).where(eq(pagesTable.id, id));
+  return c.json({ message: 'Page deleted successfully' });
+});

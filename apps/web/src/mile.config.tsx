@@ -21,14 +21,10 @@ export const mileconfig: Config = {
   // },
   schema: [
     {
-      type: "featured",
-      name: "featured",
-      title: "Featured",
-    },
-    {
       type: "hero",
       name: "hero",
       title: "Hero",
+      thumbnail: "/mile-thumbnails/hero.png",
       fields: [
         {
           type: "string",
@@ -36,34 +32,28 @@ export const mileconfig: Config = {
           title: "Title",
         },
         {
-          type: "link",
-          name: "link",
-          title: "Link",
-        },
-        {
           type: "image",
           name: "image",
           title: "Image",
         },
-      ]
-    },
-    {
-      type: "heading",
-      name: "heading",
-      title: "Heading",
-      fields: [
         {
-          type: "string",
-          name: "text",
-          title: "Text",
+          type: "link",
+          name: "link",
+          title: "Link",
         },
       ]
     },
     {
-      type: "two_column",
+      type: "lead",
       name: "lead",
       title: "Lead",
+      thumbnail: "/mile-thumbnails/lead.png",
       fields: [
+        {
+          type: "string",
+          name: "title",
+          title: "Title",
+        },
         {
           type: "image",
           name: "image",
@@ -82,41 +72,30 @@ export const mileconfig: Config = {
       ]
     },
     {
-      type: "link",
-      name: "link",
-      title: "Link",
+      type: "banner_blue",
+      name: "banner_blue",
+      title: "Banner Blue",
+      thumbnail: "/mile-thumbnails/banner_blue.png",
       fields: [
         {
-          type: "url",
-          name: "url",
-          title: "URL",
-        },
-        {
           type: "string",
-          name: "link_text",
-          title: "Link Text",
+          name: "title",
+          title: "Title",
         },
         {
-          type: "boolean",
-          name: "is_external",
-          title: "External",
-        },
-      ]
-    },
-    {
-      type: "image",
-      name: "image",
-      title: "Image",
-      fields: [
-        {
-          type: "url",
-          name: "url",
-          title: "URL",
+          type: "image",
+          name: "image",
+          title: "Image",
         },
         {
-          type: "string",
-          name: "alt_text",
-          title: "Alt Text",
+          type: "richtext",
+          name: "text",
+          title: "Text",
+        },
+        {
+          type: "link",
+          name: "link",
+          title: "Link",
         },
       ]
     },

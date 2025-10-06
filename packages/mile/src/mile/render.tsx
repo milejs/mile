@@ -1,6 +1,9 @@
 import { Components, TreeData } from "@milejs/types";
 import { ClientComponent } from "./client";
 
+/**
+ * not used
+ */
 export function Render({ data }: { data: TreeData | undefined; }) {
   if (!data) return null;
   const root = data.root;

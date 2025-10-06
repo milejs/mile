@@ -1,14 +1,12 @@
 // import useSWR, { mutate } from "swr";
 import { Config, PageMetaData } from "@milejs/types";
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useRef, useState } from "react";
 import slugify from '@sindresorhus/slugify';
-import { demo_tree_data } from "./demo";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { PlusIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, PlusIcon, XIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -16,39 +14,51 @@ import {
 import { generateId } from "@/lib/generate-id";
 import { Input } from "@/components/ui/input";
 import { getAuth } from "./auth";
+import useSWR, { mutate } from "swr";
+import { Combobox } from '@base-ui-components/react/combobox';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
-const data = [
-  { id: '0', slug: "/", title: "Home", created_at: new Date(), updated_at: new Date() },
-  { id: '1', slug: "/about", title: "About", created_at: new Date(), updated_at: new Date() },
-]
+const fetcher = (key: string[]) => fetch(`${API}${key.join("")}`).then(res => res.json());
 
-export function Dashboard({ config, path, search }: { config: Config; path: string; search: { [key: string]: string | string[] | undefined } }) {
-  // const { data, error, isLoading } = useSWR("/api/mile/pages", fetcher);
-  // if (!data) return null;
-  // if (error || data?.error) return <div className="">Error: loading pages failed.</div>;
-  // if (isLoading) return <div>loading...</div>;
+export function Dashboard({ path, search }: { path: string; search: { [key: string]: string | string[] | undefined } }) {
+  const { data: pages, error: pagesError, isLoading: pagesIsLoading } = useSWR([`/pages`], fetcher);
+  console.log('pages', pages);
+  if (pagesError) return <div>failed to load</div>
+  if (pagesIsLoading) return <div>loading...</div>
 
   return (
-    <PageWrapper config={config} path={path} search={search}>
-      <div className="py-5">
-        <div className="max-w-5xl mx-auto">
-          <div className="mb-6 flex gap-2 items-center">
-            <h1 className="font-bold text-3xl">Pages</h1>
-            <PageSettingsModal />
-          </div>
-          <div className="">
-            <PagesList data={data} />
-          </div>
+    // <PageWrapper config={config} path={path} search={search}>
+    <div className="py-5">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-6 flex gap-2 items-center">
+          <h1 className="font-bold text-3xl">Pages</h1>
+          <CreatePageModal />
+        </div>
+        <div className="">
+          <PagesList data={pages} />
         </div>
       </div>
-    </PageWrapper>
+    </div>
+    // </PageWrapper>
+  );
+}
+
+function PagesList({ data }: { data: any }) {
+  if (!data || data.length === 0) {
+    return <div className="">No pages</div>;
+  }
+  return (
+    <div className="">
+      {data.map((e: any) => {
+        return <PageItem key={e.id} data={e} />;
+      })}
+    </div>
   );
 }
 
 function PageItem({ data }: { data: any }) {
-  const href = `/mile${data.slug === "/" ? "/edit" : `${data.slug}/edit`}`;
+  const href = `/mile/${data.id}/edit`;
   return (
     <div className="flex flex-row">
       <div className="w-48 shrink-0">
@@ -64,25 +74,14 @@ function PageItem({ data }: { data: any }) {
   );
 }
 
-function PagesList({ data }: { data: any }) {
-  if (data.length === 0) {
-    return <div className="">No pages</div>;
-  }
-  return (
-    <div className="">
-      {data.map((e: any) => {
-        return <PageItem key={e.id} data={e} />;
-      })}
-    </div>
-  );
-}
-
-function PageSettingsModal() {
+function CreatePageModal() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger className="flex gap-1 items-center bg-gray-100 px-3 py-1 text-sm rounded-md border border-gray-400 hover:border-gray-500">New <PlusIcon size={16} /></DialogTrigger>
+      <DialogTrigger className="flex gap-1 items-center bg-zinc-100 px-3 py-1 text-sm rounded-md border border-zinc-400 hover:border-zinc-500">
+        New <PlusIcon size={16} />
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Create New Page</DialogTitle>
@@ -100,35 +99,37 @@ function PageSettingsModal() {
 }
 
 function createPage(data: { [k: string]: any }) {
-  return Promise.resolve({});
-  // return mutate(
-  //   "/api/mile/pages",
-  //   async (pages) => {
-  //     const resp = await fetch("/api/mile/pages", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify(data),
-  //     });
-  //     if (!resp.ok) {
-  //       const error = new Error("An error occurred while creating the page.");
-  //       const info = await resp.json();
-  //       console.error("Error creating page", info);
-  //       // @ts-expect-error
-  //       error.info = info;
-  //       // @ts-expect-error
-  //       error.status = resp.status;
-  //       throw error;
-  //     }
-  //     const result = await resp.json();
-  //     return [...pages, result];
-  //   },
-  //   { revalidate: false },
-  // );
+  return mutate(
+    ["/pages"],
+    async (pages: any) => {
+      const resp = await fetch(`${API}/pages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!resp.ok) {
+        const error = new Error("An error occurred while creating the page.");
+        const info = await resp.json();
+        console.error("Error creating page", info);
+        // @ts-expect-error okk
+        error.info = info;
+        // @ts-expect-error okk
+        error.status = resp.status;
+        throw error;
+      }
+      const result = await resp.json();
+      return [...pages, result];
+    },
+    // { revalidate: false },
+  );
 }
 
 function NewPageSettings({ close }: any) {
+  const comboboxid = useId();
+  const { data: parents, error: parentsError, isLoading: parentsIsLoading } = useSWR([`/pages`], fetcher);
   const [pageData, setPageData] = useState<PageMetaData>({
     id: "_notused_",
+    name: "",
     title: "",
     slug: "/",
     parent_id: null,
@@ -141,6 +142,19 @@ function NewPageSettings({ close }: any) {
       return { ...e, title: event.target.value };
     });
   }
+
+  function handleNameChange(event: any) {
+    setPageData((e) => {
+      return { ...e, name: event.target.value };
+    });
+  }
+
+  function handleSlugChange(event: any) {
+    setPageData((e) => {
+      return { ...e, slug: event.target.value };
+    });
+  }
+
   function handleAutoSlug() {
     setPageData((e) => {
       if (!e.title) {
@@ -153,6 +167,10 @@ function NewPageSettings({ close }: any) {
   async function handleCreatePage() {
     const pageId = generateId();
     // validate
+    if (pageData.name === "") {
+      setError("Name is required.");
+      return;
+    }
     if (pageData.title === "") {
       setError("Title is required.");
       return;
@@ -168,13 +186,13 @@ function NewPageSettings({ close }: any) {
     setError(null);
     await createPage({
       id: pageId,
-      content: demo_tree_data, // TODO: make template selectable
       title: pageData.title?.trim(),
       name: pageData.title?.trim(),
       slug: pageData.slug.trim(),
       parent_id: pageData.parent_id?.trim(),
     })
       .then((e) => {
+        console.log('e', e);
         close();
       })
       .catch((e) => {
@@ -182,35 +200,104 @@ function NewPageSettings({ close }: any) {
         setError(message);
       });
   }
+
   return (
-    <div className="flex px-4 py-8 h-full">
-      <div className="w-full flex flex-col justify-center items-center">
-        <div className="w-full px-8">
-          <label htmlFor="">Title</label>
+    <div className="flex py-8 h-full">
+      <div className="w-full flex flex-col justify-center items-center gap-y-4">
+        <div className="w-full">
+          <label htmlFor="name" className="font-semibold text-sm">Name</label>
           <Input
-            // defaultValue={defaultValue ?? undefined}
+            id="name"
+            value={pageData.name}
+            onChange={handleNameChange}
+            placeholder="e.g. About us"
+          />
+          <div className="mt-1 text-xs text-zinc-600">Nickname only you see</div>
+        </div>
+        <div className="w-full">
+          <label htmlFor="title" className="font-semibold text-sm">Title</label>
+          <Input
+            id="title"
             value={pageData.title}
             onChange={handleTitleChange}
             placeholder="e.g. About us"
           />
+          <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
         </div>
-        <div className="relative mt-4 w-full px-8">
-          <div className="relative">
-            <div className="absolute right-0 -top-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  handleAutoSlug();
-                }}
-                className="text-xs leading-none"
-              >
-                Auto
-              </button>
-            </div>
+        <div className="w-full relative">
+          <label htmlFor="slug" className="font-semibold text-sm">Slug</label>
+          <div className="flex">
+            {parents.length > 0 && (
+              <Combobox.Root items={parents}>
+                <div className="relative flex flex-col gap-1 text-sm leading-5 font-medium text-zinc-900">
+                  <Combobox.Input
+                    placeholder="e.g. Apple"
+                    id={comboboxid}
+                    className="h-9 rounded-l-md border border-zinc-200 pl-3.5 text-base text-zinc-900 bg-[canvas] focus:outline focus:outline-2 focus:-outline-offset-1 focus:outline-blue-800"
+                  />
+                  <div className="absolute right-2 bottom-0 flex h-10 items-center justify-center text-zinc-600">
+                    <Combobox.Clear
+                      className="flex h-10 w-6 items-center justify-center rounded bg-transparent p-0"
+                      aria-label="Clear selection"
+                    >
+                      <XIcon className="size-4" />
+                    </Combobox.Clear>
+                    <Combobox.Trigger
+                      className="flex h-10 w-6 items-center justify-center rounded bg-transparent p-0"
+                      aria-label="Open popup"
+                    >
+                      <ChevronDownIcon className="size-4" />
+                    </Combobox.Trigger>
+                  </div>
+                </div>
+
+                <Combobox.Portal>
+                  <Combobox.Positioner className="outline-none" sideOffset={4}>
+                    <Combobox.Popup className="w-[var(--anchor-width)] max-h-[min(var(--available-height),23rem)] max-w-[var(--available-width)] origin-[var(--transform-origin)] overflow-y-auto scroll-pt-2 scroll-pb-2 overscroll-contain rounded-md bg-[canvas] py-2 text-zinc-900 shadow-lg shadow-zinc-200 outline-1 outline-zinc-200 transition-[transform,scale,opacity] data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0 dark:shadow-none dark:-outline-offset-1 dark:outline-zinc-300">
+                      <Combobox.Empty className="px-4 py-2 text-[0.925rem] leading-4 text-zinc-600 empty:m-0 empty:p-0">
+                        No parent page found
+                      </Combobox.Empty>
+                      <Combobox.List>
+                        {(item: string) => (
+                          <Combobox.Item
+                            key={item}
+                            value={item}
+                            className="grid cursor-default grid-cols-[0.75rem_1fr] items-center gap-2 py-2 pr-8 pl-4 text-base leading-4 outline-none select-none data-[highlighted]:relative data-[highlighted]:z-0 data-[highlighted]:text-zinc-50 data-[highlighted]:before:absolute data-[highlighted]:before:inset-x-2 data-[highlighted]:before:inset-y-0 data-[highlighted]:before:z-[-1] data-[highlighted]:before:rounded-sm data-[highlighted]:before:bg-zinc-900"
+                          >
+                            <Combobox.ItemIndicator className="col-start-1">
+                              <CheckIcon className="size-3" />
+                            </Combobox.ItemIndicator>
+                            <div className="col-start-2">{item}</div>
+                          </Combobox.Item>
+                        )}
+                      </Combobox.List>
+                    </Combobox.Popup>
+                  </Combobox.Positioner>
+                </Combobox.Portal>
+              </Combobox.Root>
+            )}
+            <Input
+              id="slug"
+              value={pageData.slug}
+              onChange={handleSlugChange}
+              placeholder="e.g. /about-us"
+              className={`${parents.length > 0 ? "-ml-[1px] rounded-none rounded-r-md" : ""}`}
+            />
           </div>
-          {/* <PageSlugInput pageMetadataRef={dummyRef} localData={pageData} setLocalData={setPageData} /> */}
+          <div className="mt-1 text-xs text-zinc-600">The URL of the page (typically from the title) starts with /</div>
+          <div className="absolute right-0 -top-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                handleAutoSlug();
+              }}
+              className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
+            >
+              Auto
+            </button>
+          </div>
         </div>
-        <div className="mt-4 w-full px-8">
+        <div className="mt-4 w-full">
           {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
           <Button
             onClick={handleCreatePage}

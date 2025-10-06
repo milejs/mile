@@ -4,4 +4,5 @@ packages:
 
 ignoredBuiltDependencies:
   - '@swc/core'
+  - esbuild
   - sharp

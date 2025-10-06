@@ -5,7 +5,7 @@ import { ComponentType, ReactElement, ReactNode, RefObject } from "react";
 
 export interface MileOptions {
   options: OptionComponents;
-  schema: MileEditorSchema;
+  schema: MileSchema;
   resolveOptionFromField(field: FieldDefinition): React.ComponentType<FieldOptionProps>;
 }
 
@@ -92,12 +92,13 @@ export interface MileEditor {
   setLastOperation: SetOperation;
   history: MileHistoryManager;
   actions: Actions;
-  // schema: MileEditorSchema;
+  // schema: MileSchema;
   persister: MilePersister;
   // toastQueue: ToastQueue<MileToast>;
   // toastQueue: any;
   zoom: number;
   breakpoint: "desktop" | "tablet" | "mobile";
+  is_disabled: boolean;
   setZoom(level: number): void;
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile"): void;
   save(pageData: PageMetaData): void;
@@ -112,8 +113,9 @@ export interface MileEditor {
 
 // export type OptionComponents = Record<string, ComponentType<FieldOptionProps>>;
 
-export interface MileEditorSchema {
+export interface MileSchema {
   schema: Schema;
+  user_schema: Schema;
   schemaMap: Map<string, SchemaTypeDefinition | FieldDefinition>;
   buildSchemaMap(): Map<string, SchemaTypeDefinition | FieldDefinition>;
   get(name: string): SchemaTypeDefinition | FieldDefinition;
@@ -424,6 +426,7 @@ interface BaseSchemaDefinition {
   groups?: Group[];
   isHighlight?: boolean;
   isResponsive?: boolean;
+  thumbnail?: string;
 }
 
 interface Group {
@@ -586,6 +589,7 @@ export type FieldDefinition<
   TAlias extends BuiltInTypeName | undefined = undefined,
 > = (InlineFieldDefinition[TType] | TypeAliasDefinition<string, TAlias>) & FieldDefinitionBase;
 
+// ["string", "number", "boolean", "url", "date", "richtext"];
 interface BuiltInDefinitions {
   section: SectionDefinition;
   row: RowDefinition;

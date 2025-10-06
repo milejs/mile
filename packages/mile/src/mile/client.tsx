@@ -1,6 +1,6 @@
 'use client';
 
-import { ComponentData, Components, Config, MileClient, MileComponentProps, MileRegistry, Schema } from "@milejs/types";
+import { ComponentData, Components, Config, FieldDefinition, MileClient, MileComponentProps, MileRegistry, MileSchema as MileSchemaType, Schema, SchemaTypeDefinition } from "@milejs/types";
 import React, { ComponentType, createContext, ReactNode, useContext, useEffect, useMemo } from "react";
 import { invariant } from "@/lib/invariant";
 
@@ -58,15 +58,125 @@ export function useMileProvider() {
   return c;
 }
 
+class MileSchema implements MileSchemaType {
+  user_schema: Schema;
+  schema: Schema;
+  schemaMap: Map<string, SchemaTypeDefinition | FieldDefinition>;
+  constructor(schema: Schema) {
+    this.user_schema = schema; // from config.schema
+    this.schema = initializeSchema(schema); // combine user and internal schema
+    this.schemaMap = this.buildSchemaMap();
+  }
+  buildSchemaMap() {
+    const map = new Map<string, SchemaTypeDefinition | FieldDefinition>();
+    for (const entry of this.schema) {
+      if (!entry.type) throw new Error("Name is required in schema");
+      if (!map.has(entry.type)) {
+        map.set(entry.type, entry);
+      }
+    }
+    return map;
+  }
+  get(name: string) {
+    if (this.schemaMap.has(name)) {
+      const schema = this.schemaMap.get(name);
+      invariant(schema);
+      return schema;
+    } else {
+      throw new Error(`Unknown schema type: ${name}`);
+    }
+  }
+  resolveField(field: FieldDefinition): FieldDefinition | SchemaTypeDefinition {
+    throw new Error("Method not implemented.")
+  }
+  // resolveField(field: FieldDefinition) {
+  //   if (isBuiltinSchemaType(field.type)) {
+  //     return field;
+  //   } else if (this.schemaMap.has(field.type)) {
+  //     const resolvedField = this.schemaMap.get(field.type);
+  //     if (!resolvedField) {
+  //       throw new Error("Unknown field");
+  //     }
+  //     return resolvedField;
+  //   } else {
+  //     throw new Error("Unknown field");
+  //   }
+  // }
+}
+
+// const primitiveTypes = ["string", "number", "boolean", "url", "date", "richtext"];
+// function isBuiltinSchemaType(type: string) {
+//   return (
+//     type === "string" ||
+//     type === "number" ||
+//     type === "boolean" ||
+//     type === "url" ||
+//     type === "date" ||
+//     type === "richtext"
+//   );
+// }
+
+const internalSchema = [
+  {
+    type: "link",
+    name: "link",
+    title: "Link",
+    fields: [
+      {
+        type: "url",
+        name: "url",
+        title: "URL",
+      },
+      {
+        type: "string",
+        name: "link_text",
+        title: "Link Text",
+      },
+      {
+        type: "boolean",
+        name: "is_external",
+        title: "External",
+      },
+    ]
+  },
+  {
+    type: "image",
+    name: "image",
+    title: "Image",
+    fields: [
+      {
+        type: "image_url",
+        name: "image_url",
+        title: "Image URL",
+      },
+      {
+        type: "string",
+        name: "alt_text",
+        title: "Alt Text",
+      },
+    ]
+  },
+]
+
+function initializeSchema(userSchema?: Schema): Schema {
+  if (!userSchema) return internalSchema;
+  return [...internalSchema, ...userSchema];
+}
+
 class Mile implements MileClient {
   config: Config;
   userOptions: any;
   registry: Registry;
+  schema: MileSchema;
 
   constructor(config: Config, optionComponents?: any) {
     this.config = config;
     if (optionComponents) this.userOptions = optionComponents;
     this.registry = new Registry(config?.components);
+    if (!this.config.schema) {
+      throw new Error("config.schema is required");
+    }
+    this.schema = new MileSchema(this.config.schema);
   }
 
   setConfig(config: any) {

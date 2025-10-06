@@ -1,10 +1,10 @@
 import "../mile.css";
 
 import { use, useEffect, useMemo, useReducer, useRef, useState, SetStateAction, useCallback } from "react";
-import { FieldDefinition, MileEditor, NodeData, Operation, PageData, RouterLike, Schema, SchemaTypeDefinition, TreeData } from "@milejs/types";
+import { FieldDefinition, MileEditor, MileSchema, NodeData, Operation, PageData, RouterLike, Schema, SchemaTypeDefinition, TreeData } from "@milejs/types";
 import { tinykeys } from "@/lib/tinykeys";
 import { flushSync } from "react-dom";
-import { ChevronLeft, ChevronRight, LaptopIcon, PencilIcon, SmartphoneIcon, SquareArrowOutUpRight, TabletIcon, Trash2Icon, TrashIcon, ZoomInIcon, ZoomOutIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, LaptopIcon, PencilIcon, PlusIcon, SmartphoneIcon, SquareArrowOutUpRight, TabletIcon, TrashIcon } from "lucide-react";
 import { invariant } from "@/lib/invariant";
 import { Preview } from "./preview";
 import { createChannel } from "bidc";
@@ -15,9 +15,16 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dashboard } from "./dashboard";
+import useSWR from 'swr';
+import { Popover } from '@base-ui-components/react/popover';
+import { mdxToTree } from "./data";
+import { generateId } from "@/lib/generate-id";
+import { Toaster } from "sonner";
+import { Uploader } from "@/components/ui/uploader";
 
 const HEADER_HEIGHT = 40;
 const NEXT_PUBLIC_HOST_URL = process.env.NEXT_PUBLIC_HOST_URL;
+const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
 
 const resolvePath = (paths: string[] = []) => {
   const hasPath = paths.length > 0;
@@ -30,34 +37,84 @@ const resolvePath = (paths: string[] = []) => {
   };
 };
 
+const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
+const fetcher = (key: string[]) => fetch(`${API}${key.join("")}`).then(res => res.json());
+
 export function Mile({
   params,
   searchParams,
-  router,
-  data: page_data,
 }: {
   params: Promise<{ milePath?: string[] }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-  router: RouterLike;
-  data: PageData;
 }) {
-  const mile = useMileProvider();
   const { milePath } = use(params);
-  const search = use(searchParams);
   const { isEdit, isIframeContent, path } = resolvePath(milePath);
-  // const page_data: PageData = getData();
+  const search = use(searchParams);
+
+  if (!isEdit && !isIframeContent) {
+    return <Dashboard path={path} search={search} />
+  }
+
+  return (
+    <MileInner isEdit={isEdit} isIframeContent={isIframeContent} path={path} />
+  )
+}
+
+function MileInner({
+  isEdit,
+  isIframeContent,
+  path,
+}: {
+  isEdit: boolean;
+  isIframeContent: boolean;
+  path: string
+}) {
+  // console.log({ isEdit, isIframeContent, path });
+  const { data: page_data, error: pageError, isLoading: pageIsLoading } = useSWR([`/pages`, path], fetcher);
+
+  if (pageError) return <div>failed to load</div>
+  if (pageIsLoading) return <div>loading...</div>
+  if (!page_data) {
+    return <div>no data</div>
+  }
+
+  return (
+    <MileReady page_data={page_data} isEdit={isEdit} isIframeContent={isIframeContent} path={path} />
+  );
+}
+
+function MileReady({
+  isEdit,
+  isIframeContent,
+  path,
+  page_data,
+}: {
+  isEdit: boolean;
+  isIframeContent: boolean;
+  path: string;
+  page_data: PageData
+}) {
   console.log({ isEdit, isIframeContent, path });
+  // const { data: page_data, error: pagesError, isLoading: pagesIsLoading } = useSWR([`/pages`, path], fetcher);
   const tree = useMemo(() => {
-    if (page_data) {
+    if (page_data && page_data.content) {
       if (typeof page_data.content === "string") {
-        return new Tree(JSON.parse(page_data.content));
+        const { result, error } = mdxToTree(page_data.content);
+        return new Tree(result.content);
+      } else {
+        return new Tree(page_data.content ?? {});
       }
     }
-    if (typeof page_data.content !== "string") {
-      return new Tree(page_data.content ?? {});
-    }
-    return new Tree({});
-  }, [path]);
+    return new Tree({
+      root: {
+        type: "root",
+        id: "root",
+        props: {},
+        options: {},
+        children: [],
+      }
+    });
+  }, [page_data]);
   const [data, setData] = useState<TreeData | undefined>(() => tree?.data);
   const [lastOperation, setLastOperation] = useState<Operation | null>(null);
   //
@@ -65,8 +122,8 @@ export function Mile({
   const channelRef = useRef<ReturnType<typeof createChannel> | null>(null);
 
   useEffect(() => {
-    if (!frameRef.current) return
-    if (!frameRef.current.contentWindow) return
+    if (!frameRef.current) return;
+    if (!frameRef.current.contentWindow) return;
 
     // Create channel for parent->iframe communication
     const channel = createChannel(frameRef.current.contentWindow);
@@ -96,17 +153,23 @@ export function Mile({
     });
   }, []);
 
+  // console.log('page_data', page_data);
+  // console.log('data', data);
+  // console.log('tree', tree);
+
   if (isEdit) {
     return (
-      <EditorProvider tree={tree} setData={setDataAndSend} setLastOperation={setLastOperation}>
-        <MileFrame
-          title={page_data.title}
-          data={data}
-          router={router}
-          frameRef={frameRef}
-          iframeSrc={`${process.env.NEXT_PUBLIC_HOST_URL}/mile${path === "/" ? "" : path}/__iframe_content__`}
-        />
-      </EditorProvider>
+      <>
+        <EditorProvider page_info={page_data} tree={tree} setData={setDataAndSend} setLastOperation={setLastOperation}>
+          <MileFrame
+            title={page_data?.title ?? "Title"}
+            data={data}
+            frameRef={frameRef}
+            iframeSrc={`${process.env.NEXT_PUBLIC_HOST_URL}/mile${path}/__iframe_content__`}
+          />
+        </EditorProvider>
+        <Toaster />
+      </>
     );
   }
 
@@ -114,7 +177,7 @@ export function Mile({
     return <Preview slug={path} data={data} />;
   }
 
-  return <Dashboard config={mile.config} path={path} search={search} />;
+  return null;
 }
 
 enum IframeActionType {
@@ -182,35 +245,8 @@ type IFrame = HTMLIFrameElement & {
   | null
   | undefined;
 };
-// type IFrame = HTMLIFrameElement & {
-//   contentWindow:
-//   | (Window & {
-//     __mile_messenger__: MileMessenger;
-//   })
-//   | null
-//   | undefined;
-// };
 
-export function MileFrame({ data, iframeSrc, frameRef, title, router }: { frameRef: React.RefObject<IFrame | null>; data: TreeData | undefined, title?: string; iframeSrc: string; router: RouterLike }) {
-  // useEffect(() => {
-  //   function handleMessage(event: MessageEvent) {
-  //     if (event.origin !== NEXT_PUBLIC_HOST_URL) {
-  //       return; // Ignore messages from other origins
-  //     }
-  //     let { type, payload } = event.data;
-  //     if (type === "http-redirect") {
-  //       window.location.href = payload;
-  //       return;
-  //     }
-  //   }
-  //   window.addEventListener("message", handleMessage);
-  //   return () => {
-  //     window.removeEventListener("message", handleMessage);
-  //   };
-  // }, []);
-  const editor = useEditor();
-  // console.log('MileFrame editor:', editor);
-
+export function MileFrame({ data, iframeSrc, frameRef, title }: { frameRef: React.RefObject<IFrame | null>; data: TreeData | undefined, title?: string; iframeSrc: string; }) {
   useEffect(() => {
     let unsubscribe = tinykeys(window, {
       "$mod+S": (e: Event) => {
@@ -332,7 +368,6 @@ function MileContent({
   return (
     <div className="flex grow h-(--h) mt-[40px]" style={{ ["--h" as string]: `${h}` }}>
       <PanelGroup direction="horizontal" autoSaveId="mile-editor" className="relative">
-        {/* artboard starts */}
         <Panel minSize={30}>
           <div className="artboard-inner h-full overflow-y-auto">
             <div className="">
@@ -363,8 +398,6 @@ function MileContent({
             {isOpen ? <ChevronRight color="black" size={14} /> : <ChevronLeft color="black" size={14} />}
           </button>
         </div>
-        {/* artboard ends */}
-
       </PanelGroup>
       <div className="mile-controls">
         <div className="mile-controls-right">
@@ -377,22 +410,9 @@ function MileContent({
   );
 }
 
-function getSchemaMap(schema: Schema): Record<string, SchemaTypeDefinition> {
-  const typeMap: Record<string, SchemaTypeDefinition> = {};
-
-  for (const entry of schema) {
-    if (!(entry.type in typeMap)) {
-      typeMap[entry.type] = entry;
-    }
-  }
-
-  return typeMap;
-}
-
-function Layer({ item, schemaMap, setActiveItem }: { item: NodeData; schemaMap: Record<string, SchemaTypeDefinition>; setActiveItem: (id: string) => void; }) {
+function Layer({ item, mile_schema, setActiveItem }: { item: NodeData; mile_schema: MileSchema; setActiveItem: (id: string) => void; }) {
   const editor = useEditor();
-  // console.log('layer', schemaMap[item.type], item);
-  const schema = schemaMap[item.type];
+  const schema = mile_schema.get(item.type);
   async function handleDeleteNode() {
     const action = {
       type: "deleteNode",
@@ -400,10 +420,6 @@ function Layer({ item, schemaMap, setActiveItem }: { item: NodeData; schemaMap: 
       payload: { id: item.id },
     };
     editor.performAction(action);
-    // await channelRef.current?.send({
-    //   kind: "update_data",
-    //   data: editor.tree.data,
-    // });
   }
 
   return (
@@ -427,7 +443,7 @@ function Layer({ item, schemaMap, setActiveItem }: { item: NodeData; schemaMap: 
   )
 }
 
-const primitiveTypes = ["string", "number", "boolean", "url", "date", "richtext"];
+const primitiveTypes = ["string", "number", "boolean", "url", "image_url", "date", "richtext"];
 
 function isPrimitiveType(type: string) {
   return primitiveTypes.includes(type);
@@ -443,6 +459,8 @@ function getPrimitiveComponent(type: string) {
       return EditBooleanComponent;
     case "url":
       return EditUrlComponent;
+    case "image_url":
+      return EditImageUrlComponent;
     case "date":
       return EditDateComponent;
     case "richtext":
@@ -459,10 +477,9 @@ type EditComponentProps = {
   state: any;
   handleChange: (path: string[], v: any) => void;
   field: FieldDefinition;
-  schemaMap: Record<string, SchemaTypeDefinition>;
 }
 
-function EditRichtextComponent({ editor, node, field, schemaMap }: EditComponentProps) {
+function EditRichtextComponent({ editor, node, field }: EditComponentProps) {
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
@@ -471,7 +488,7 @@ function EditRichtextComponent({ editor, node, field, schemaMap }: EditComponent
   )
 }
 
-function EditDateComponent({ editor, node, field, schemaMap }: EditComponentProps) {
+function EditDateComponent({ editor, node, field }: EditComponentProps) {
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
@@ -480,20 +497,58 @@ function EditDateComponent({ editor, node, field, schemaMap }: EditComponentProp
   )
 }
 
-function EditUrlComponent({ node, path, state, handleChange, field, schemaMap }: EditComponentProps) {
+function EditUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const value = getFieldValue(state, path);
+  // console.log('state, path, value -------------', state, path, value);
   function handleInputChange(e: any) {
     handleChange(path, e.target.value);
   }
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
-      <Input type="text" className="border" value={value} onChange={handleInputChange} />
+      <Input type="text" className="border" value={value} onChange={handleInputChange} disabled={editor.is_disabled} />
     </div>
   )
 }
 
-function EditBooleanComponent({ node, path, state, handleChange, field, schemaMap }: EditComponentProps) {
+function EditImageUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
+  console.log('EditImageUrlComponent---',);
+  const value = getFieldValue(state, path);
+  function handleUploadSuccess(upload: any) {
+    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectKey}`;
+    // console.log('image_url', image_url);
+    handleChange(path, image_url);
+    // const result = setUserProfilePhotoAction({
+    //   image: `https://multiplej.com/${upload.file.objectKey}`,
+    // });
+
+    // if (result.status === "success") {
+    //   if (result.data?.image) {
+    //     const new_image = result.data.image;
+    //     mutate("/api/me/settings", data.map((e: any) => {
+    //       return { ...e, user: { ...e.user, image: new_image } }
+    //     }));
+    //     mutate("/api/auth/session");
+    //   }
+    // } else if (result.status === "error") {
+    //   logger.error("Action Error: setting profile photo", result.error);
+    // }
+  }
+  return (
+    <div className="flex flex-col gap-y-1">
+      <label className="text-sm font-semibold">{field.title}</label>
+      {value ? (
+        <div className="max-w-[150px]">
+          <img src={value} alt="" />
+        </div>
+      ) : null}
+      <Uploader is_disabled={editor.is_disabled} onSuccess={handleUploadSuccess} label={value ? "Change image" : "Upload image"} />
+      {/* <Input type="text" className="border" value={value} onChange={handleInputChange} /> */}
+    </div>
+  )
+}
+
+function EditBooleanComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const value = getFieldValue(state, path);
   function handleInputChange(e: boolean | 'indeterminate') {
     handleChange(path, e);
@@ -508,7 +563,7 @@ function EditBooleanComponent({ node, path, state, handleChange, field, schemaMa
   )
 }
 
-function EditNumberComponent({ editor, node, field, schemaMap }: EditComponentProps) {
+function EditNumberComponent({ editor, node, field }: EditComponentProps) {
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
@@ -529,15 +584,16 @@ function getFieldValue(state: any, path: string[]) {
   return getFieldValue(state[first], rest);
 }
 
-function EditStringComponent({ node, path, state, handleChange, field, schemaMap }: EditComponentProps) {
+function EditStringComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const value = getFieldValue(state, path);
+  // console.log('state, path, value -------------', state, path, value);
   function handleInputChange(e: any) {
     handleChange(path, e.target.value);
   }
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
-      <Input type="text" className="border" value={value} onChange={handleInputChange} />
+      <Input type="text" className="border" value={value} onChange={handleInputChange} disabled={editor.is_disabled} />
     </div>
   )
 }
@@ -545,11 +601,11 @@ function EditStringComponent({ node, path, state, handleChange, field, schemaMap
 /*************************************************************
  * Start: Edit Component Update State
  */
-function createInitialValue(current: unknown, field: any, schemaMap: Record<string, SchemaTypeDefinition> = {}) {
+function createInitialValue(current: unknown, field: any, schema: MileSchema) {
   if (current) {
     return current;
   }
-  return createInitialEmptyValue(field, schemaMap);
+  return createInitialEmptyValue(field, schema);
 }
 
 function getDefaultValueForType(type: string): any {
@@ -565,6 +621,8 @@ function getDefaultValueForType(type: string): any {
       return {};
     case "url":
       return "";
+    case "image_url":
+      return "";
     case "richtext":
       return "";
     case "date":
@@ -574,16 +632,16 @@ function getDefaultValueForType(type: string): any {
   }
 }
 
-function initializeFields(fields: any, schemaMap: Record<string, SchemaTypeDefinition> = {}): Record<string, any> {
-  console.log('initializeFields', fields, schemaMap);
+function initializeFields(fields: any, schema: MileSchema): Record<string, any> {
+  // console.log('initializeFields', fields, schema);
   return fields.reduce(
     (acc: Record<string, any>, field: any) => {
       const isPrimitive = isPrimitiveType(field.type);
       if (isPrimitive) {
         acc[field.name] = getDefaultValueForType(field.type);
       } else {
-        const f = schemaMap[field.type];
-        acc[field.name] = initializeFields(f.fields, schemaMap);
+        const f = schema.get(field.type);
+        acc[field.name] = initializeFields(f.fields, schema);
       }
       return acc;
     },
@@ -591,8 +649,8 @@ function initializeFields(fields: any, schemaMap: Record<string, SchemaTypeDefin
   );
 }
 
-function createInitialEmptyValue(field: any, schemaMap: Record<string, SchemaTypeDefinition> = {}) {
-  const initialFields = field.fields ? initializeFields(field.fields, schemaMap) : getDefaultValueForType(field.type);
+function createInitialEmptyValue(field: any, schema: MileSchema) {
+  const initialFields = field.fields ? initializeFields(field.fields, schema) : getDefaultValueForType(field.type);
   if (field.isResponsive) {
     return {
       mobile: { ...initialFields },
@@ -609,9 +667,10 @@ function updateState(
   value: any,
   field: any,
   breakpoint: "desktop" | "tablet" | "mobile",
+  schema: MileSchema,
 ) {
   if (state == null) {
-    const initializeState = createInitialValue(state, field);
+    const initializeState = createInitialValue(state, field, schema);
     // console.log("field", field, initializeState);
     return updateNestedState(initializeState, path, value, field, breakpoint);
   }
@@ -657,14 +716,20 @@ function updateNestedStateRec(
  * End: Edit Component Update State
  */
 
-function EditPrimitiveField({ node, path, state, handleChange, field, schemaMap }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; field: FieldDefinition; schemaMap: Record<string, SchemaTypeDefinition> }) {
+function EditPrimitiveField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; field: FieldDefinition; }) {
   const editor = useEditor();
+  const [, forceUpdate] = useReducer(x => x + 1, 0);
+  const is_disabled = editor.is_disabled;
+  console.log('is_disabled------', is_disabled);
+  useEffect(() => { forceUpdate() }, [is_disabled])
   const EditComponent = getPrimitiveComponent(field.type);
-  return <EditComponent editor={editor} node={node} path={path} state={state} handleChange={handleChange} field={field} schemaMap={schemaMap} />
+  return <EditComponent editor={editor} node={node} path={path} state={state} handleChange={handleChange} field={field} />
 }
 
-function EditField({ node, path, state, handleChange, field, schemaMap }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; field: FieldDefinition; schemaMap: Record<string, SchemaTypeDefinition> }) {
-  console.log('EditField', path, field.type, state);
+function EditField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; field: FieldDefinition; }) {
+  const mile = useMileProvider();
+
+  // console.log('EditField', path, field.type, state);
   const type = field.type;
   const isPrimitive = isPrimitiveType(type);
   if (isPrimitive) {
@@ -675,17 +740,11 @@ function EditField({ node, path, state, handleChange, field, schemaMap }: { node
         state={state}
         handleChange={handleChange}
         field={field}
-        schemaMap={schemaMap}
       />
     )
   }
 
-  const schema = schemaMap[type];
-  if (!schema || !schema.fields) {
-    console.log('not schema', type);
-    return null;
-  }
-
+  const schema = mile.schema.get(type);
   invariant(path.at(-1) === type);
   invariant(schema.name);
 
@@ -698,13 +757,12 @@ function EditField({ node, path, state, handleChange, field, schemaMap }: { node
         state={state}
         handleChange={handleChange}
         fields={schema.fields}
-        schemaMap={schemaMap}
       />
     </div>
   )
 }
 
-function EditFields({ node, path, state, handleChange, fields, schemaMap }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; fields: FieldDefinition[]; schemaMap: Record<string, SchemaTypeDefinition> }) {
+function EditFields({ node, path, state, handleChange, fields }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; fields: FieldDefinition[] | undefined; }) {
   // console.log('EditFields', path);
   if (!fields) {
     return (
@@ -725,58 +783,35 @@ function EditFields({ node, path, state, handleChange, fields, schemaMap }: { no
             state={state}
             handleChange={handleChange}
             field={e}
-            schemaMap={schemaMap}
           />
         )
       })}
     </div>
   )
 }
-/**
- * 
- const editor = useEditor();
-  const treenode = editor.getNode(node.id);
-  const optionValue = treenode.options[field.name ?? ""]; // undefined or option value
-  const [initialValue] = useState(() => createInitialValue(optionValue, field));
-  const [state, setState] = useState(() => createInitialValue(optionValue, field));
-  console.log("state", node.id, path, editor, field.name, optionValue, state, editor.breakpoint);
-  const handleChange = (e: any) => {
-    // if (isSettingDirty && isSettingDirty.current === false) {
-    //   isSettingDirty.current = true;
-    // }
-    // console.log("update----", state, path, v, field, editor.breakpoint);
-    const value = updateState(state, path.length === 1 ? [] : path.slice(0, -1), e.target.value, field, editor.breakpoint);
-    editor.perform({
-      type: "updateNodeOption",
-      name: `Update node option (${field.name})`,
-      payload: { nodeId: node.id, optionName: field.name, value, initialValue },
-    });
-    setState(value);
-  };
- */
-function EditNode({ node, schemaMap }: { node: NodeData; schemaMap: Record<string, SchemaTypeDefinition> }) {
+
+function EditNode({ node }: { node: NodeData; }) {
   const editor = useEditor();
-  const schema = schemaMap[node.type];
-  invariant(schema.name);
+  const mile = useMileProvider();
+  const schema = mile.schema.get(node.type);
   if (!schema.fields) {
     console.log('no fields');
     return null;
   }
-  console.log('EditNode', node, schema, schemaMap);
 
   const treenode = editor.getNode(node.id);
   const optionValue = treenode.options; // undefined or option value
-  console.log('EditNode optionValue', optionValue);
 
-  const [initialValue] = useState(() => createInitialValue(optionValue, schema, schemaMap));
-  const [state, setState] = useState(() => createInitialValue(optionValue, schema, schemaMap));
-  console.log("root state", node.id, schema.name, state);
+  const [initialValue] = useState(() => createInitialValue(optionValue, schema, mile.schema));
+  const [state, setState] = useState(() => createInitialValue(optionValue, schema, mile.schema));
+  console.log('EditNode', editor, node, schema, optionValue, state);
+
   const handleChange = (path: string[], v: any) => {
     // if (isSettingDirty && isSettingDirty.current === false) {
     //   isSettingDirty.current = true;
     // }
-    console.log("update----", state, path, v, schema, editor.breakpoint);
-    const value = updateState(state, path, v, schema, editor.breakpoint);
+    // console.log("update----", state, path, v, schema, editor.breakpoint);
+    const value = updateState(state, path, v, schema, editor.breakpoint, mile.schema);
     editor.perform({
       type: "updateNodeOption",
       name: `Update node option (${schema.name})`,
@@ -794,53 +829,163 @@ function EditNode({ node, schemaMap }: { node: NodeData; schemaMap: Record<strin
         state={state}
         handleChange={handleChange}
         fields={schema.fields}
-        schemaMap={schemaMap}
       />
     </div>
   )
 }
 
 function Layers({ data }: { data: TreeData | undefined; }) {
-  const mile = useMileProvider();
   const [activeItem, setActiveItem] = useState<string | null>(null);
-  const schemaMap = useMemo(() => getSchemaMap(mile.config.schema!), [mile.config.schema])
   function handleBackClick() {
     setActiveItem(null);
   }
 
   if (!data) return null;
-  if (!mile.config.schema) {
-    throw new Error("Schema not found");
-  }
-
-  const layers = data.root.children?.map(e => {
+  const layers = data.root?.children?.map(e => {
     return data[e];
   });
-  if (!layers) return null;
 
   if (activeItem !== null) {
-    const node = data[activeItem];
     return (
-      <div className="py-4">
-        <button onClick={handleBackClick} className="ml-4 pl-2 pr-3 py-1 flex items-center gap-x-1 bg-slate-600 hover:bg-slate-700 transition-colors rounded-full text-white text-[10px] uppercase tracking-wider">
-          <ChevronLeft size={12} />Back
-        </button>
-        <div className="mt-4 px-4">
-          <EditNode node={node} schemaMap={schemaMap} />
-        </div>
-      </div>
+      <EditNodeSettings
+        onBackClick={handleBackClick}
+        node={data[activeItem]}
+      />
     )
   }
 
   return (
+    <LayersInner layers={layers} setActiveItem={setActiveItem} />
+  )
+}
+
+function LayersInner({ layers, setActiveItem }: { layers: NodeData[] | undefined; setActiveItem: (v: string | null) => void; }) {
+  const mile = useMileProvider();
+  const [open, setOpen] = useState(false);
+
+  return (
     <div className="py-4">
-      <h3 className="mb-2 px-4 text-[10px] uppercase tracking-wider">Layers</h3>
+      <div className="mb-2 flex items-center">
+        <h3 className="px-4 text-[10px] uppercase tracking-wider select-none">
+          Layers
+        </h3>
+        <Popover.Root open={open} onOpenChange={setOpen}>
+          <Popover.Trigger className="px-1.5 py-1 text-xs font-medium rounded-md border border-slate-400 bg-white hover:bg-slate-200 transition-colors flex items-center justify-center gap-x-1">
+            Add <PlusIcon size={12} />
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Positioner sideOffset={12}>
+              <Popover.Popup className="w-lg origin-[var(--transform-origin)] rounded-lg bg-[canvas] px-6 py-4 text-gray-900 shadow-lg shadow-gray-200 outline-1 outline-gray-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0 dark:shadow-none dark:-outline-offset-1 dark:outline-gray-300">
+                <Popover.Arrow className="data-[side=bottom]:top-[-8px] data-[side=left]:right-[-13px] data-[side=left]:rotate-90 data-[side=right]:left-[-13px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-8px] data-[side=top]:rotate-180">
+                  <ArrowSvg />
+                </Popover.Arrow>
+                <Popover.Title className="text-base font-medium">Add Component</Popover.Title>
+                <div className="mt-6 space-y-4">
+                  <ComponentPicker schema={mile.schema} close={() => setOpen(false)} setActiveItem={setActiveItem} />
+                </div>
+              </Popover.Popup>
+            </Popover.Positioner>
+          </Popover.Portal>
+        </Popover.Root>
+      </div>
       <div className="divide-y-1 divide-slate-300 border-y border-slate-300">
-        {layers.map(e => {
+        {(layers ?? []).map(e => {
           return (
-            <Layer key={e.id} item={e} schemaMap={schemaMap} setActiveItem={setActiveItem} />
+            <Layer key={e.id} item={e} mile_schema={mile.schema} setActiveItem={setActiveItem} />
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+function buildNewNodePayload(type: string) {
+  switch (type) {
+    case "hero": {
+      const nodeId = generateId();
+      return {
+        id: "root",
+        mode: "last-child",
+        nodeId,
+        nodes: {
+          [nodeId]: {
+            id: nodeId,
+            type: "hero",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        }
+      }
+    }
+    default: {
+      throw new Error("Unsupported node type")
+    }
+  }
+}
+
+function ComponentPicker({ schema, close, setActiveItem }: { schema: MileSchema; close: () => void; setActiveItem: (v: string | null) => void }) {
+  const editor = useEditor();
+  const user_schema = schema.user_schema;
+
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+      {user_schema.map(e => {
+        function handleClick() {
+          const payload = buildNewNodePayload(e.type)
+          editor.perform({
+            type: "addNode",
+            name: "Add Node",
+            payload,
+          });
+          close();
+          setActiveItem(payload.nodeId);
+        }
+        return (
+          <div className="py-2 px-2 bg-indigo-100 space-y-2" key={e.type}>
+            <button onClick={handleClick}>
+              <div className="">
+                <img src={e.thumbnail} alt="" className="" />
+              </div>
+              <h4 className="font-semibold text-sm text-center">
+                {e.title}
+              </h4>
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ArrowSvg(props: React.ComponentProps<'svg'>) {
+  return (
+    <svg width="20" height="10" viewBox="0 0 20 10" fill="none" {...props}>
+      <path
+        d="M9.66437 2.60207L4.80758 6.97318C4.07308 7.63423 3.11989 8 2.13172 8H0V10H20V8H18.5349C17.5468 8 16.5936 7.63423 15.8591 6.97318L11.0023 2.60207C10.622 2.2598 10.0447 2.25979 9.66437 2.60207Z"
+        className="fill-[canvas]"
+      />
+      <path
+        d="M8.99542 1.85876C9.75604 1.17425 10.9106 1.17422 11.6713 1.85878L16.5281 6.22989C17.0789 6.72568 17.7938 7.00001 18.5349 7.00001L15.89 7L11.0023 2.60207C10.622 2.2598 10.0447 2.2598 9.66436 2.60207L4.77734 7L2.13171 7.00001C2.87284 7.00001 3.58774 6.72568 4.13861 6.22989L8.99542 1.85876Z"
+        className="fill-gray-200 dark:fill-none"
+      />
+      <path
+        d="M10.3333 3.34539L5.47654 7.71648C4.55842 8.54279 3.36693 9 2.13172 9H0V8H2.13172C3.11989 8 4.07308 7.63423 4.80758 6.97318L9.66437 2.60207C10.0447 2.25979 10.622 2.2598 11.0023 2.60207L15.8591 6.97318C16.5936 7.63423 17.5468 8 18.5349 8H20V9H18.5349C17.2998 9 16.1083 8.54278 15.1901 7.71648L10.3333 3.34539Z"
+        className="dark:fill-gray-300"
+      />
+    </svg>
+  );
+}
+
+function EditNodeSettings({ onBackClick, node }: { onBackClick: () => void; node: NodeData }) {
+  return (
+    <div className="py-4">
+      <button onClick={onBackClick} className="ml-4 pl-2 pr-3 py-1 flex items-center gap-x-1 bg-slate-600 hover:bg-slate-700 transition-colors rounded-full text-white text-[10px] uppercase tracking-wider">
+        <ChevronLeft size={12} />Back
+      </button>
+      <div className="mt-4 px-4">
+        <EditNode node={node} />
       </div>
     </div>
   )
@@ -882,7 +1027,7 @@ function MileHeader({
 }) {
   const editor = useEditor();
   function handleSavePage() {
-    sendMessage({ type: "mile_save_page" }, frameRef);
+    editor.save();
   }
 
   function handleEditPageData() {
@@ -1029,13 +1174,13 @@ function MileHeader({
         <a
           type="button"
           href="#"
-          className="px-2 py-1.5 flex items-center gap-1 text-xs bg-blue-600 text-white"
+          className="px-2 py-1.5 flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white"
         >
           View <SquareArrowOutUpRight size={10} color="rgba(255,255,255,0.6)" />
         </a>
         <button
           type="button"
-          className="px-2 py-1.5 text-xs bg-blue-600 text-white"
+          className="px-2 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
           onClick={handleSavePage}
         >
           Save

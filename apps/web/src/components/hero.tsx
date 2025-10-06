@@ -10,7 +10,7 @@ export function Hero(props: MileComponentProps) {
   const { options } = props ?? {};
   const { title, btn_text, link, image } = options ?? {};
   return (
-    <div {...props} className={cn(`py-10`, props.className)}>
+    <div {...props} className={cn(`py-10 bg-[image:var(--bg-image)] bg-no-repeat bg-cover`, props.className)} style={{ ["--bg-image" as string]: `url(${image?.image_url ?? ""})` }}>
       <div className="flex min-h-[400px] max-w-5xl mx-auto">
         <div className="grow">
           <h1 className="text-6xl font-bold">
