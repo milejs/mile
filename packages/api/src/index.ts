@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { handle } from 'hono/vercel'
 import { HTTPException } from "hono/http-exception";
 import { db } from './db/drizzle';
-import { pages as pagesTable } from './db/schema';
+import { pages as pagesTable, medias as mediasTable } from './db/schema';
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { handleRequest, type Router, route } from 'better-upload/server';
@@ -42,8 +42,24 @@ const router: Router = {
         // }
         return {
           objectInfo: {
-            key: `mileupload/${slugify(file.name)}`,
+            key: `mileupload/${slugify(file.name, { preserveCharacters: ['.'] })}`,
           },
+        };
+      },
+    }),
+    mileuploads: route({
+      multipleFiles: true,
+      fileTypes: ["image/*"],
+      maxFileSize: 1024 * 1024 * 10, // 10MB
+      onBeforeUpload: async ({ req, files, clientMetadata }) => {
+        // const session = await auth.current();
+        // if (!session) {
+        //   throw new UploadFileError("Unauthorized");
+        // }
+        return {
+          generateObjectInfo: ({ file }) => ({
+            key: `mileupload/${slugify(file.name, { preserveCharacters: ['.'] })}`,
+          }),
         };
       },
     }),
@@ -61,24 +77,61 @@ export function MileAPI(options: MileAPIOptions) {
     return c.json({ message: err.message ?? "Error" }, 400);
   });
 
+  app.route('/medias', medias);
   app.route('/pages', pages);
   app.route('/page', page_by_slug);
   app.post('/upload', (c) => {
+    return handleRequest(c.req.raw, router);
+  });
+  app.post('/uploads', (c) => {
     return handleRequest(c.req.raw, router);
   });
 
   return handle(app);
 }
 
+const medias = new Hono();
 const pages = new Hono();
 const page_by_slug = new Hono();
 
-const createPageSchema = z.object({
-  slug: z.string(),
-  name: z.string(),
-  title: z.string().optional(),
-  content: z.string().optional(),
-  parent_id: z.uuid().optional(),
+medias.get("/", async (c) => {
+  const { offset = '0', limit = '10' } = c.req.query();
+  const result = await db
+    .select()
+    .from(mediasTable)
+    .orderBy(desc(mediasTable.created_at))
+    .limit(parseInt(limit, 10))
+    .offset(parseInt(offset, 10));
+  return c.json(result);
+});
+
+medias.get("/:id", async (c) => {
+  const id = c.req.param('id');
+  console.log('GET /:id', id);
+  const [single] = await db.select().from(mediasTable).where(eq(mediasTable.id, id));
+  if (!single) {
+    return c.json({ message: 'Media not found' }, 404);
+  }
+  return c.json(single);
+});
+
+medias.post("/", async (c) => {
+  const body = await c.req.json();
+  const parsed = createImagesSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ message: 'Invalid request body', errors: parsed.error.flatten() }, 400);
+  }
+  console.log('parsed ----', parsed);
+  const newImages = await db.insert(mediasTable).values(parsed.data).returning();
+  return c.json(newImages, 201);
+});
+
+medias.patch("/:id", async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json();
+  console.log('UPDATE media ---- body', body);
+  const [updated] = await db.update(mediasTable).set({ ...body }).where(eq(mediasTable.id, id)).returning();
+  return c.json(updated);
 });
 
 // Get page by id
@@ -89,18 +142,18 @@ page_by_slug.get('/', async (c) => {
   }
   return c.json(page);
 });
+
 page_by_slug.get('/:slug', async (c) => {
   const slug = c.req.param('slug');
-  const [page] = await db.select().from(pagesTable).where(eq(pagesTable.slug, slug));
-  if (!page) {
+  const [single] = await db.select().from(pagesTable).where(eq(pagesTable.slug, slug));
+  if (!single) {
     return c.json({ message: 'Page not found' }, 404);
   }
-  return c.json(page);
+  return c.json(single);
 });
 
 // List all pages with pagination
 pages.get('/', async (c) => {
-  console.log('-------- GET /',);
   const { offset = '0', limit = '10' } = c.req.query();
   const result = await db
     .select()
@@ -125,12 +178,11 @@ pages.post('/', async (c) => {
 // Get page by id
 pages.get('/:id', async (c) => {
   const id = c.req.param('id');
-  console.log('GET /:id', id);
-  const [page] = await db.select().from(pagesTable).where(eq(pagesTable.id, id));
-  if (!page) {
+  const [single] = await db.select().from(pagesTable).where(eq(pagesTable.id, id));
+  if (!single) {
     return c.json({ message: 'Page not found' }, 404);
   }
-  return c.json(page);
+  return c.json(single);
 });
 
 // Update page by id
@@ -149,3 +201,24 @@ pages.delete('/:id', async (c) => {
   await db.delete(pagesTable).where(eq(pagesTable.id, id));
   return c.json({ message: 'Page deleted successfully' });
 });
+
+/****************************************************************
+ * Schema
+ */
+const createPageSchema = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  title: z.string().optional(),
+  content: z.string().optional(),
+  parent_id: z.string().optional(),
+});
+
+const imageSchema = z.object({
+  id: z.string(),
+  type: z.string(),
+  size: z.number(),
+  filepath: z.string(),
+});
+
+const createImagesSchema = z.array(imageSchema);

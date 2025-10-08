@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useReducer, useRef, useState, SetStateAction, 
 import { FieldDefinition, MileEditor, MileSchema, NodeData, Operation, PageData, RouterLike, Schema, SchemaTypeDefinition, TreeData } from "@milejs/types";
 import { tinykeys } from "@/lib/tinykeys";
 import { flushSync } from "react-dom";
-import { ChevronLeft, ChevronRight, LaptopIcon, PencilIcon, PlusIcon, SmartphoneIcon, SquareArrowOutUpRight, TabletIcon, TrashIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagesIcon, LaptopIcon, PencilIcon, PlusIcon, SmartphoneIcon, SquareArrowOutUpRight, TabletIcon, TrashIcon, Upload } from "lucide-react";
 import { invariant } from "@/lib/invariant";
 import { Preview } from "./preview";
 import { createChannel } from "bidc";
@@ -15,12 +15,16 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dashboard } from "./dashboard";
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
 import { Popover } from '@base-ui-components/react/popover';
 import { mdxToTree } from "./data";
 import { generateId } from "@/lib/generate-id";
-import { Toaster } from "sonner";
-import { Uploader } from "@/components/ui/uploader";
+import { toast, Toaster } from "sonner";
+import { Uploader, Uploaders } from "@/components/ui/uploader";
+import { Button } from "@/components/ui/button";
+import { Dialog } from '@base-ui-components/react/dialog';
+import { filesize } from "./utils";
+import { Field } from '@base-ui-components/react/field';
 
 const HEADER_HEIGHT = 40;
 const NEXT_PUBLIC_HOST_URL = process.env.NEXT_PUBLIC_HOST_URL;
@@ -151,7 +155,7 @@ function MileReady({
       kind: "update_data",
       data: value,
     });
-  }, []);
+  }, [setData]);
 
   // console.log('page_data', page_data);
   // console.log('data', data);
@@ -475,7 +479,7 @@ type EditComponentProps = {
   node: NodeData;
   path: string[];
   state: any;
-  handleChange: (path: string[], v: any) => void;
+  handleChange: (changes: Change[] | Change) => void;
   field: FieldDefinition;
 }
 
@@ -501,7 +505,7 @@ function EditUrlComponent({ editor, node, path, state, handleChange, field }: Ed
   const value = getFieldValue(state, path);
   // console.log('state, path, value -------------', state, path, value);
   function handleInputChange(e: any) {
-    handleChange(path, e.target.value);
+    handleChange({ path, value: e.target.value });
   }
   return (
     <div className="flex flex-col gap-y-1">
@@ -511,29 +515,96 @@ function EditUrlComponent({ editor, node, path, state, handleChange, field }: Ed
   )
 }
 
-function EditImageUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
-  console.log('EditImageUrlComponent---',);
-  const value = getFieldValue(state, path);
-  function handleUploadSuccess(upload: any) {
-    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectKey}`;
-    // console.log('image_url', image_url);
-    handleChange(path, image_url);
-    // const result = setUserProfilePhotoAction({
-    //   image: `https://multiplej.com/${upload.file.objectKey}`,
-    // });
-
-    // if (result.status === "success") {
-    //   if (result.data?.image) {
-    //     const new_image = result.data.image;
-    //     mutate("/api/me/settings", data.map((e: any) => {
-    //       return { ...e, user: { ...e.user, image: new_image } }
-    //     }));
-    //     mutate("/api/auth/session");
-    //   }
-    // } else if (result.status === "error") {
-    //   logger.error("Action Error: setting profile photo", result.error);
-    // }
+function getAltTextPath(path: string[]): string[] {
+  if (
+    path.length >= 2 &&
+    path[path.length - 2] === 'image' &&
+    path[path.length - 1] === 'image_url'
+  ) {
+    return [...path.slice(0, -1), 'alt_text'];
   }
+
+  return [];
+}
+
+function EditImageUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
+  const [selectedFileId, setSelectedFileId] = useState("");
+  const [open, setOpen] = useState(false);
+  const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
+  // console.log('ImageURL', data, error, isLoading, isValidating);
+
+  const value = getFieldValue(state, path);
+  // const value_alt_text = getFieldValue(state, path_alt_text);
+  // console.log('value_alt_text ------', value_alt_text);
+
+  function handleSelectFile(file_id: string) {
+    setSelectedFileId(file_id);
+  }
+
+  function handleConfirmFile(file_id: string) {
+    // console.log('---------- confirm file',);
+    setSelectedFileId(file_id);
+    if (!data) {
+      toast.error(`Selecting file failed. Please choose different file. Or refresh the page and try agian.`)
+      return;
+    }
+    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${data.filepath}`;
+    const path_alt_text = getAltTextPath(path);
+    handleChange([
+      { path, value: image_url },
+      { path: path_alt_text, value: data.alt },
+    ]);
+    setOpen(false);
+  }
+
+  function handleUploadSuccess(upload: any) {
+    // console.log('upload single file', upload);
+    /**
+     * file: {
+        "status": "complete",
+        "progress": 1,
+        "raw": {},
+        "name": "2024-Drive-The-Icons-Monterey-Car-Week-tour-13.jpg",
+        "size": 114176,
+        "type": "image/jpeg",
+        "objectKey": "mileupload/2024-drive-the-icons-monterey-car-week-tour-13-jpg",
+        "objectMetadata": {}
+      },
+      metadata: {}
+     */
+    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectKey}`;
+    handleChange({ path, value: image_url });
+
+    // save db
+    mutate(`/medias`, async (prev: any) => {
+      const resp = await fetch(`${API}/medias`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          {
+            id: generateId(),
+            type: upload.file.type,
+            size: upload.file.size,
+            filepath: upload.file.objectKey,
+          }
+        ]),
+      });
+      if (!resp.ok) {
+        const error = new Error("An error occurred while saving the images.");
+        const info = await resp.json();
+        console.error("Error saving images", info);
+        // @ts-expect-error okk
+        error.info = info;
+        // @ts-expect-error okk
+        error.status = resp.status;
+        throw error;
+      }
+      const result = await resp.json();
+      // console.log('prev, result', prev, result);
+      return prev ? [...prev, ...result] : result;
+    })
+  }
+
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
@@ -542,7 +613,10 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
           <img src={value} alt="" />
         </div>
       ) : null}
-      <Uploader is_disabled={editor.is_disabled} onSuccess={handleUploadSuccess} label={value ? "Change image" : "Upload image"} />
+      <div className="flex items-center gap-x-2">
+        <Uploader is_disabled={editor.is_disabled} onSuccess={handleUploadSuccess} label={value ? "Change image" : "Upload image"} />
+        <ImageGallery is_disabled={editor.is_disabled} open={open} setOpen={setOpen} handleConfirmFile={handleConfirmFile} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+      </div>
       {/* <Input type="text" className="border" value={value} onChange={handleInputChange} /> */}
     </div>
   )
@@ -551,7 +625,7 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
 function EditBooleanComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const value = getFieldValue(state, path);
   function handleInputChange(e: boolean | 'indeterminate') {
-    handleChange(path, e);
+    handleChange({ path, value: e });
   }
   return (
     <div className="flex flex-col gap-y-1">
@@ -588,7 +662,7 @@ function EditStringComponent({ editor, node, path, state, handleChange, field }:
   const value = getFieldValue(state, path);
   // console.log('state, path, value -------------', state, path, value);
   function handleInputChange(e: any) {
-    handleChange(path, e.target.value);
+    handleChange({ path, value: e.target.value });
   }
   return (
     <div className="flex flex-col gap-y-1">
@@ -700,7 +774,7 @@ function updateNestedStateRec(
   field: any,
   breakpoint: "desktop" | "tablet" | "mobile",
 ): any {
-  console.log('state', state);
+  // console.log('state', state, path, value);
   if (path.length === 0) {
     return value;
   }
@@ -712,21 +786,21 @@ function updateNestedStateRec(
     [key]: updateNestedStateRec(state[key], restPath, value, field, breakpoint),
   };
 }
+
 /*************************************************************
  * End: Edit Component Update State
  */
 
-function EditPrimitiveField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; field: FieldDefinition; }) {
+function EditPrimitiveField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (changes: Change[] | Change) => void; field: FieldDefinition; }) {
   const editor = useEditor();
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const is_disabled = editor.is_disabled;
-  console.log('is_disabled------', is_disabled);
   useEffect(() => { forceUpdate() }, [is_disabled])
   const EditComponent = getPrimitiveComponent(field.type);
   return <EditComponent editor={editor} node={node} path={path} state={state} handleChange={handleChange} field={field} />
 }
 
-function EditField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; field: FieldDefinition; }) {
+function EditField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (changes: Change[] | Change) => void; field: FieldDefinition; }) {
   const mile = useMileProvider();
 
   // console.log('EditField', path, field.type, state);
@@ -762,7 +836,7 @@ function EditField({ node, path, state, handleChange, field }: { node: NodeData;
   )
 }
 
-function EditFields({ node, path, state, handleChange, fields }: { node: NodeData; path: string[]; state: any; handleChange: (path: string[], v: any) => void; fields: FieldDefinition[] | undefined; }) {
+function EditFields({ node, path, state, handleChange, fields }: { node: NodeData; path: string[]; state: any; handleChange: (changes: Change[] | Change) => void; fields: FieldDefinition[] | undefined; }) {
   // console.log('EditFields', path);
   if (!fields) {
     return (
@@ -790,6 +864,8 @@ function EditFields({ node, path, state, handleChange, fields }: { node: NodeDat
   )
 }
 
+type Change = { path: string[]; value: any };
+
 function EditNode({ node }: { node: NodeData; }) {
   const editor = useEditor();
   const mile = useMileProvider();
@@ -804,21 +880,40 @@ function EditNode({ node }: { node: NodeData; }) {
 
   const [initialValue] = useState(() => createInitialValue(optionValue, schema, mile.schema));
   const [state, setState] = useState(() => createInitialValue(optionValue, schema, mile.schema));
-  console.log('EditNode', editor, node, schema, optionValue, state);
+  // console.log('EditNode', editor, node, schema, optionValue, state);
 
-  const handleChange = (path: string[], v: any) => {
-    // if (isSettingDirty && isSettingDirty.current === false) {
-    //   isSettingDirty.current = true;
-    // }
-    // console.log("update----", state, path, v, schema, editor.breakpoint);
-    const value = updateState(state, path, v, schema, editor.breakpoint, mile.schema);
+  const handleChange = (changes: Change[] | Change) => {
+    const changeList = Array.isArray(changes) ? changes : [changes];
+
+    const updatedState = changeList.reduce(
+      (accState, { path, value }) =>
+        updateState(accState, path, value, schema, editor.breakpoint, mile.schema),
+      state
+    );
+
+    // use updated state
+    setState(updatedState);
     editor.perform({
       type: "updateNodeOption",
       name: `Update node option (${schema.name})`,
-      payload: { nodeId: treenode.id, value, initialValue },
+      payload: { nodeId: treenode.id, value: updatedState, initialValue },
     });
-    setState(value);
   };
+
+  // const handleChange = (path: string[], v: any) => {
+  //   // if (isSettingDirty && isSettingDirty.current === false) {
+  //   //   isSettingDirty.current = true;
+  //   // }
+  //   // console.log("update----", state, path, v, schema, editor.breakpoint);
+  //   const value = updateState(state, path, v, schema, editor.breakpoint, mile.schema);
+  //   console.log('updating value', state, path, v, value);
+  //   editor.perform({
+  //     type: "updateNodeOption",
+  //     name: `Update node option (${schema.name})`,
+  //     payload: { nodeId: treenode.id, value, initialValue },
+  //   });
+  //   setState(value);
+  // };
 
   return (
     <div className="space-y-3">
@@ -943,7 +1038,7 @@ function ComponentPicker({ schema, close, setActiveItem }: { schema: MileSchema;
           setActiveItem(payload.nodeId);
         }
         return (
-          <div className="py-2 px-2 bg-indigo-100 space-y-2" key={e.type}>
+          <div className="py-2 px-2 bg-zinc-100 border border-zinc-200 space-y-2" key={e.type}>
             <button onClick={handleClick}>
               <div className="">
                 <img src={e.thumbnail} alt="" className="" />
@@ -997,7 +1092,7 @@ function getIframeBodyHeight(iframe: HTMLIFrameElement | null, zoom: number) {
   }
   const scrollHeight = iframe.contentDocument?.body.scrollHeight;
   const offsetHeight = iframe.contentDocument?.body.offsetHeight;
-  console.log('scrollHeight', scrollHeight);
+  // console.log('scrollHeight', scrollHeight);
   return scrollHeight ?? offsetHeight;
   // if (scrollHeight) {
   //   // return scrollHeight - HEADER_HEIGHT / zoom;
@@ -1203,3 +1298,342 @@ function getEditor(frameRef: React.RefObject<IFrame | null>) {
 function Divider() {
   return <div className="w-[2px] h-[20px] bg-gray-200 my-1 mx-2" />;
 }
+
+// Save db after multiple uploads completed
+function handleUploadsSuccess(upload: any) {
+  // save db
+  const payload = upload.files.map((e: any) => {
+    return {
+      id: generateId(),
+      type: e.type,
+      size: e.size,
+      filepath: e.objectKey,
+    }
+  })
+  mutate(`/medias`, async (prev: any) => {
+    const resp = await fetch(`${API}/medias`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const error = new Error("An error occurred while saving the images.");
+      const info = await resp.json();
+      console.error("Error saving images", info);
+      // @ts-expect-error okk
+      error.info = info;
+      // @ts-expect-error okk
+      error.status = resp.status;
+      throw error;
+    }
+    const result = await resp.json();
+    return prev ? [...prev, ...result] : result;
+  })
+}
+
+function ImageGallery({ open, setOpen, selectedFileId, handleSelectFile, handleConfirmFile, is_disabled }: { open: boolean; setOpen: (v: boolean) => void; selectedFileId: string; handleSelectFile: (file_id: string) => void; handleConfirmFile: (file_id: string) => void; is_disabled: boolean; }) {
+  const [isPending, setIsPending] = useState(false);
+  const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
+
+  return (
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Trigger
+        render={<Button disabled={is_disabled} className="cursor-pointer"><ImagesIcon /> Gallery</Button>}
+      />
+      <Dialog.Portal>
+        <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 dark:opacity-70 supports-[-webkit-touch-callout:none]:absolute" />
+        <Dialog.Popup className="flex flex-col justify-between fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-full max-h-6/7 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-gray-50 outline-1 outline-gray-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+          <div className="py-2 px-3 flex items-center justify-between">
+            <div className="flex items-center gap-x-4">
+              <Dialog.Title className="text-lg font-medium">Gallery</Dialog.Title>
+              <Uploaders onSuccess={handleUploadsSuccess} label={"Upload files"} />
+            </div>
+            <div className="flex gap-4">
+              <Dialog.Close className="flex h-9 text-xs items-center justify-center rounded-md border border-gray-200 bg-gray-50 px-3 font-medium text-gray-900 select-none hover:bg-gray-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-gray-100">
+                Close
+              </Dialog.Close>
+            </div>
+          </div>
+          <div className="px-3 grid grid-cols-[1fr_300px] gap-2 grow overflow-hidden">
+            <div className="overflow-y-auto">
+              <MediaFiles selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+            </div>
+            <div className="overflow-y-auto pt-4 pb-8 px-4 bg-gray-100">
+              <MediaMetadata selectedFileId={selectedFileId} setIsPending={setIsPending} />
+            </div>
+          </div>
+          <div className="py-2 px-3 bg-zinc-200 rounded-b-lg flex justify-end">
+            <button
+              disabled={isPending || isValidating}
+              onClick={() => {
+                handleConfirmFile(selectedFileId);
+              }}
+              className="mr-2 my-1 py-2 px-3 rounded-md bg-blue-600 text-xs text-white hover:bg-blue-700 transition-colors cursor-default disabled:opacity-50"
+            >
+              Select
+            </button>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+function fetchStringKey(key: string) {
+  return fetch(`${API}${key}`).then((r) => r.json());
+}
+
+function useMediaFiles() {
+  return useSWR(`/medias`, fetchStringKey);
+}
+
+function MediaFiles({ selectedFileId, handleSelectFile }: { selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+  const { data, error, isLoading } = useMediaFiles();
+  if (error || data?.error) return <div>failed to load</div>;
+  if (isLoading) return <div>loading...</div>;
+  // console.log('data', data);
+  return (
+    <div className="">
+      <MediaFilesGrid data={data} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+    </div>
+  )
+}
+
+function MediaFilesGrid({ data, selectedFileId, handleSelectFile }: { data: any[]; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+  if (!data || data.length === 0) {
+    return <div className="">No files</div>;
+  }
+  return (
+    <div className="grid grid-cols-4 gap-4 items-start">
+      {data.map((e: any) => (
+        <MediaFileCard data={e} key={e.filepath} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+      ))}
+    </div>
+  );
+}
+
+function getImageUrl(key: string) {
+  return `${process.env.NEXT_PUBLIC_IMAGE_URL}/${key}`;
+}
+
+function getFileName(filepath: string) {
+  return filepath.split("/").at(-1) ?? "Unknown name";
+}
+
+function MediaFileCard({ data, selectedFileId, handleSelectFile }: { data: any; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+  return (
+    <button
+      className={`bg-white flex w-full flex-col border ${selectedFileId === data.id ? "border-zinc-500" : "border-zinc-300"} hover:border-zinc-400`}
+      onClick={() => {
+        handleSelectFile(data.id);
+      }}
+    >
+      <div className={`py-5 ${selectedFileId === data.id ? "bg-blue-100" : "bg-zinc-100"} h-[180px] flex justify-center`}>
+        <img src={getImageUrl(data.filepath)} alt="" className="max-h-full max-w-full object-contain" />
+      </div>
+      <div className="px-2 py-2">
+        <div className="text-sm leading-4 select-text">{getFileName(data.filepath)}</div>
+      </div>
+    </button>
+  );
+}
+
+function useMediaFile(media_id?: string) {
+  return useSWR(media_id ? `/medias/${media_id}` : null, fetchStringKey);
+}
+
+function MediaMetadata({ selectedFileId, setIsPending }: { selectedFileId: string; setIsPending: (v: boolean) => void; }) {
+  const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
+  if (error || data?.error) return <div>failed to load</div>;
+  if (isLoading) return <div>loading...</div>;
+
+  if (!data) return null;
+  if (data.type == null) {
+    return (
+      <div className="">
+        <h2 className="mb-4">Media details</h2>
+        <div className="mb-4 text-xs">
+          <h3 className="mb-1 font-medium">Unknown media file type.</h3>
+        </div>
+      </div>
+    );
+  }
+  if (data.type.startsWith("image/")) {
+    return <ImageDetails selectedFileId={selectedFileId} data={data} setIsPending={setIsPending} />;
+  }
+
+  return null;
+}
+
+function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: string; data: any; setIsPending: (v: boolean) => void; }) {
+  return (
+    <div className="">
+      <h2 className="mb-4 font-semibold">Media details</h2>
+
+      <div className="mb-4 grid grid-cols-[112px_1fr] gap-x-3">
+        <div className="mb-2">
+          <img src={getImageUrl(data.filepath)} alt="" />
+        </div>
+        <div className="mb-4 text-xs">
+          <h3 className="mb-1.5 font-medium">{data.filepath}</h3>
+          <div className="mb-0.5">{filesize(data.size)}</div>
+          <div className="text-gray-500">{new Date(data.created_at).toString()}</div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-y-3">
+        <div className="">
+          <TextAreaImageAltText key={`alt_${selectedFileId}`} fileId={data.id} defaultValue={data.alt} setIsPending={setIsPending} />
+        </div>
+        <div className="">
+          <InputImageTitle
+            key={`title_${selectedFileId}`}
+            fileId={data.id}
+            defaultValue={data.title ?? getFileName(data.filepath)}
+            setIsPending={setIsPending}
+          />
+        </div>
+        <div className="">
+          <TextAreaImageCaption key={`caption_${selectedFileId}`} fileId={data.id} defaultValue={data.caption} setIsPending={setIsPending} />
+        </div>
+        <div className="">
+          <ImageURL defaultValue={getImageUrl(data.filepath)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImageURL({ defaultValue }: any) {
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">File url</label>
+      <Input readOnly defaultValue={defaultValue} className="truncate" />
+    </div>
+  );
+}
+
+function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+  const [isDirty, setIsDirty] = useState(false);
+  const [value, setValue] = useState("");
+  function handleBlur() {
+    if (isDirty) {
+      updateFileMetadata(fileId, { caption: value }, () => setIsPending(false));
+      setIsDirty(false);
+    }
+  }
+  function handleChange(v: string) {
+    setValue(v);
+    if (!isDirty) {
+      setIsDirty(true);
+    }
+  }
+
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">Caption</label>
+      <Field.Control
+        defaultValue={defaultValue ?? undefined}
+        onBlur={handleBlur}
+        onValueChange={handleChange}
+        render={<textarea rows={4} className={textareaClasses} />}
+      />
+    </div>
+  );
+}
+
+const textareaClasses = "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive"
+
+function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+  const [isDirty, setIsDirty] = useState(false);
+  const [value, setValue] = useState("");
+  function handleBlur() {
+    if (isDirty) {
+      updateFileMetadata(fileId, { title: value }, () => setIsPending(false));
+      setIsDirty(false);
+    }
+  }
+  function handleChange(e: any) {
+    setValue(e.target.value);
+    if (!isDirty) {
+      setIsDirty(true);
+    }
+  }
+
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">Title</label>
+      <Input
+        defaultValue={defaultValue ?? undefined}
+        onBlur={handleBlur}
+        onChange={handleChange}
+        className="truncate"
+      />
+    </div>
+  );
+}
+
+function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+  const [isDirty, setIsDirty] = useState(false);
+  const [value, setValue] = useState(defaultValue ?? "");
+  function handleBlur() {
+    if (isDirty) {
+      setIsPending(true);
+      updateFileMetadata(fileId, { alt: value }, () => setIsPending(false));
+      setIsDirty(false);
+    }
+  }
+  function handleChange(v: string) {
+    setValue(v);
+    if (!isDirty) {
+      setIsDirty(true);
+    }
+  }
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">Alt text</label>
+      <Field.Control
+        // defaultValue={defaultValue ?? undefined}
+        value={value}
+        onBlur={handleBlur}
+        onValueChange={handleChange}
+        render={<textarea rows={4} className={textareaClasses} />}
+      />
+      {/* <Button onClick={() => { }} className="text-xs">
+        Fill it
+      </Button> */}
+    </div>
+  );
+}
+
+function updateFileMetadata(file_id: string, data: { [k: string]: string }, done: () => void) {
+  // mutate(
+  //   `/medias/${file_id}`,
+  //   async (media: any) => {
+  //     const resultMutate = await updateMediaMetadata(`${API}/medias/${file_id}`, data);
+  //     // console.log("resultMutate", resultMutate);
+  //     return resultMutate;
+  //   },
+  //   // {
+  //   //   revalidate: false,
+  //   // },
+  // );
+  updateMediaMetadata(`${API}/medias/${file_id}`, data)
+    .then(e => {
+      mutate((k: string) => k === `/medias/${file_id}` || k === "/medias");
+      done();
+    })
+    .catch(e => {
+      console.error('error', e);
+      done();
+    })
+}
+
+async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
+  return await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).then((r) => r.json());
+}
+

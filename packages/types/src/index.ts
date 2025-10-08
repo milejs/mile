@@ -101,7 +101,7 @@ export interface MileEditor {
   is_disabled: boolean;
   setZoom(level: number): void;
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile"): void;
-  save(pageData: PageMetaData): void;
+  save(): void;
   updateData(data: TreeData, lastOperation?: Operation): void;
   findNode(id: string): NodeData | null;
   getNode(id: string): NodeData;
@@ -375,6 +375,7 @@ export interface MilePersister {
     id: string,
     pageData: PageMetaData,
     content: TreeData,
+    components?: Components | undefined
   ): Promise<
     | {
       message: any;

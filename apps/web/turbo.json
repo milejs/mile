@@ -7,6 +7,15 @@
       "outputs": [
         ".next/**",
         "!.next/cache/**"
+      ],
+      "env": [
+        "NEXT_PUBLIC_HOST_URL",
+        "DATABASE_URL",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_BUCKET_NAME",
+        "NEXT_PUBLIC_IMAGE_URL"
       ]
     }
   }

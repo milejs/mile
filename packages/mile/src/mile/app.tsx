@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { MDXComponents, MDXRemote, type MDXRemoteOptions } from "next-mdx-remote-client/rsc";
+import { type MDXComponents, MDXRemote, type MDXRemoteOptions } from "next-mdx-remote-client/rsc";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
