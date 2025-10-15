@@ -1,10 +1,10 @@
 import "../mile.css";
 
-import { use, useEffect, useMemo, useReducer, useRef, useState, SetStateAction, useCallback } from "react";
-import { FieldDefinition, MileEditor, MileSchema, NodeData, Operation, PageData, RouterLike, Schema, SchemaTypeDefinition, TreeData } from "@milejs/types";
+import { use, useEffect, useMemo, useReducer, useRef, useState, SetStateAction, useCallback, startTransition, useId } from "react";
+import { FieldDefinition, MileEditor, MileSchema, NodeData, Operation, PageData, PageMetaData, RouterLike, Schema, SchemaTypeDefinition, TreeData } from "@milejs/types";
 import { tinykeys } from "@/lib/tinykeys";
 import { flushSync } from "react-dom";
-import { ChevronLeft, ChevronRight, ImagesIcon, LaptopIcon, PencilIcon, PlusIcon, SmartphoneIcon, SquareArrowOutUpRight, TabletIcon, TrashIcon, Upload } from "lucide-react";
+import { CheckIcon, ChevronLeft, ChevronRight, ChevronsUpDownIcon, ImagesIcon, LaptopIcon, PencilIcon, PlusIcon, SmartphoneIcon, SquareArrowOutUpRight, TabletIcon, TrashIcon, Upload } from "lucide-react";
 import { invariant } from "@/lib/invariant";
 import { Preview } from "./preview";
 import { createChannel } from "bidc";
@@ -13,7 +13,6 @@ import { Tree } from "./tree";
 import { EditorProvider, useEditor } from "./editor";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dashboard } from "./dashboard";
 import useSWR, { mutate } from 'swr';
 import { Popover } from '@base-ui-components/react/popover';
@@ -25,6 +24,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from '@base-ui-components/react/dialog';
 import { filesize } from "./utils";
 import { Field } from '@base-ui-components/react/field';
+import { Checkbox } from '@base-ui-components/react/checkbox';
+import slugify from '@sindresorhus/slugify';
+import { Combobox } from '@base-ui-components/react/combobox';
 
 const HEADER_HEIGHT = 40;
 const NEXT_PUBLIC_HOST_URL = process.env.NEXT_PUBLIC_HOST_URL;
@@ -74,13 +76,30 @@ function MileInner({
   path: string
 }) {
   // console.log({ isEdit, isIframeContent, path });
-  const { data: page_data, error: pageError, isLoading: pageIsLoading } = useSWR([`/pages`, path], fetcher);
+  let { data: page_data, error: pageError, isLoading: pageIsLoading } = useSWR([`/pages`, path], fetcher);
 
   if (pageError) return <div>failed to load</div>
   if (pageIsLoading) return <div>loading...</div>
   if (!page_data) {
     return <div>no data</div>
   }
+  /**
+   * {
+    "id": "2950199bae37fa6fb854bd7773fb7fc9",
+    "parent_id": null,
+    "slug": "/",
+    "name": "Home",
+    "title": "Home",
+    "content": "<Hero id=\"e5472bffdba8d51fe249b704b8e39b2a\" type=\"hero\" className=\"\" options={{title:\"Supreme Vascular and Inter\",image:{image_url:\"https://pub-47fe340e22e548e5a8ed17dd964ffa4a.r2.dev/mileupload/2024-drive-the-icons-monterey-car-week-tour-2.jpg\",alt_text:\"Side mirror\"},link:{url:\"/contact-us\",link_text:\"Book Appointment\",is_external:true}}} />",
+    "description": null,
+    "keywords": null,
+    "llm": null,
+    "no_index": null,
+    "no_follow": null,
+    "created_at": "2025-10-08T03:25:40.216Z",
+    "updated_at": "2025-10-08T06:36:29.395Z"
+}
+   */
 
   return (
     <MileReady page_data={page_data} isEdit={isEdit} isIframeContent={isIframeContent} path={path} />
@@ -99,7 +118,6 @@ function MileReady({
   page_data: PageData
 }) {
   console.log({ isEdit, isIframeContent, path });
-  // const { data: page_data, error: pagesError, isLoading: pagesIsLoading } = useSWR([`/pages`, path], fetcher);
   const tree = useMemo(() => {
     if (page_data && page_data.content) {
       if (typeof page_data.content === "string") {
@@ -157,7 +175,7 @@ function MileReady({
     });
   }, [setData]);
 
-  // console.log('page_data', page_data);
+  // console.log('page_data ----', page_data);
   // console.log('data', data);
   // console.log('tree', tree);
 
@@ -251,25 +269,26 @@ type IFrame = HTMLIFrameElement & {
 };
 
 export function MileFrame({ data, iframeSrc, frameRef, title }: { frameRef: React.RefObject<IFrame | null>; data: TreeData | undefined, title?: string; iframeSrc: string; }) {
+  const editor = useEditor();
   useEffect(() => {
-    let unsubscribe = tinykeys(window, {
+    const unsubscribe = tinykeys(window, {
       "$mod+S": (e: Event) => {
         e.preventDefault();
-        sendMessage({ type: "mile_save_page" }, frameRef);
+        editor.save();
       },
       "$mod+Z": (e: Event) => {
         e.preventDefault();
-        sendMessage({ type: "mile_undo" }, frameRef);
+        editor.undo();
       },
       "$mod+Y": (e: Event) => {
         e.preventDefault();
-        sendMessage({ type: "mile_redo" }, frameRef);
+        editor.redo();
       },
     });
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [editor]);
 
   const [state, dispatch] = useReducer(iframeReducer, initialIframeState);
 
@@ -372,7 +391,7 @@ function MileContent({
   return (
     <div className="flex grow h-(--h) mt-[40px]" style={{ ["--h" as string]: `${h}` }}>
       <PanelGroup direction="horizontal" autoSaveId="mile-editor" className="relative">
-        <Panel minSize={30}>
+        <Panel id="iframe" order={1} minSize={30}>
           <div className="artboard-inner h-full overflow-y-auto">
             <div className="">
               <div className="mile-canvas-root">
@@ -389,7 +408,7 @@ function MileContent({
           </div>
         </Panel>
         <PanelResizeHandle className="w-[2px] bg-blue-200 hover:bg-blue-400" />
-        {isOpen && <Panel defaultSize={20} minSize={15} maxSize={45} className="bg-slate-100">
+        {isOpen && <Panel id="sidebar" order={2} defaultSize={20} minSize={15} maxSize={45} className="bg-slate-100">
           <div className="h-full overflow-y-auto">
             <Layers data={data} />
           </div>
@@ -503,10 +522,14 @@ function EditDateComponent({ editor, node, field }: EditComponentProps) {
 
 function EditUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const value = getFieldValue(state, path);
-  // console.log('state, path, value -------------', state, path, value);
+
   function handleInputChange(e: any) {
-    handleChange({ path, value: e.target.value });
+    const nextValue = e.target.value;
+    startTransition(() => {
+      handleChange({ path, value: nextValue });
+    });
   }
+
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
@@ -530,19 +553,15 @@ function getAltTextPath(path: string[]): string[] {
 function EditImageUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const [selectedFileId, setSelectedFileId] = useState("");
   const [open, setOpen] = useState(false);
-  const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
-  // console.log('ImageURL', data, error, isLoading, isValidating);
+  const { data, error } = useMediaFile(selectedFileId);
 
   const value = getFieldValue(state, path);
-  // const value_alt_text = getFieldValue(state, path_alt_text);
-  // console.log('value_alt_text ------', value_alt_text);
 
   function handleSelectFile(file_id: string) {
     setSelectedFileId(file_id);
   }
 
   function handleConfirmFile(file_id: string) {
-    // console.log('---------- confirm file',);
     setSelectedFileId(file_id);
     if (!data) {
       toast.error(`Selecting file failed. Please choose different file. Or refresh the page and try agian.`)
@@ -558,8 +577,7 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
   }
 
   function handleUploadSuccess(upload: any) {
-    // console.log('upload single file', upload);
-    /**
+    /** upload
      * file: {
         "status": "complete",
         "progress": 1,
@@ -600,7 +618,6 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
         throw error;
       }
       const result = await resp.json();
-      // console.log('prev, result', prev, result);
       return prev ? [...prev, ...result] : result;
     })
   }
@@ -617,21 +634,30 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
         <Uploader is_disabled={editor.is_disabled} onSuccess={handleUploadSuccess} label={value ? "Change image" : "Upload image"} />
         <ImageGallery is_disabled={editor.is_disabled} open={open} setOpen={setOpen} handleConfirmFile={handleConfirmFile} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
       </div>
-      {/* <Input type="text" className="border" value={value} onChange={handleInputChange} /> */}
     </div>
   )
 }
 
 function EditBooleanComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const value = getFieldValue(state, path);
-  function handleInputChange(e: boolean | 'indeterminate') {
-    handleChange({ path, value: e });
+  const [local, setLocal] = useState(value);
+
+  function handleInputChange(checked: boolean | 'indeterminate') {
+    setLocal(checked);
+    startTransition(() => {
+      handleChange({ path, value: checked });
+    });
   }
+
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold flex items-center gap-x-2">
+        <Checkbox.Root checked={local} onCheckedChange={handleInputChange} className="flex size-5 items-center justify-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-800 data-[checked]:bg-gray-900 data-[unchecked]:border data-[unchecked]:border-gray-300">
+          <Checkbox.Indicator className="flex text-gray-50 data-[unchecked]:hidden">
+            <CheckIcon className="size-3" />
+          </Checkbox.Indicator>
+        </Checkbox.Root>
         {field.title}
-        <Checkbox checked={value} onCheckedChange={handleInputChange} />
       </label>
     </div>
   )
@@ -660,10 +686,14 @@ function getFieldValue(state: any, path: string[]) {
 
 function EditStringComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
   const value = getFieldValue(state, path);
-  // console.log('state, path, value -------------', state, path, value);
+
   function handleInputChange(e: any) {
-    handleChange({ path, value: e.target.value });
+    const nextValue = e.target.value;
+    startTransition(() => {
+      handleChange({ path, value: nextValue });
+    });
   }
+
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
@@ -880,7 +910,7 @@ function EditNode({ node }: { node: NodeData; }) {
 
   const [initialValue] = useState(() => createInitialValue(optionValue, schema, mile.schema));
   const [state, setState] = useState(() => createInitialValue(optionValue, schema, mile.schema));
-  // console.log('EditNode', editor, node, schema, optionValue, state);
+  console.log('EditNode', editor, node, schema, optionValue, state);
 
   const handleChange = (changes: Change[] | Change) => {
     const changeList = Array.isArray(changes) ? changes : [changes];
@@ -892,12 +922,14 @@ function EditNode({ node }: { node: NodeData; }) {
     );
 
     // use updated state
-    setState(updatedState);
-    editor.perform({
-      type: "updateNodeOption",
-      name: `Update node option (${schema.name})`,
-      payload: { nodeId: treenode.id, value: updatedState, initialValue },
-    });
+    startTransition(() => {
+      setState(updatedState);
+      editor.perform({
+        type: "updateNodeOption",
+        name: `Update node option (${schema.name})`,
+        payload: { nodeId: treenode.id, value: updatedState, initialValue },
+      });
+    })
   };
 
   // const handleChange = (path: string[], v: any) => {
@@ -970,7 +1002,7 @@ function LayersInner({ layers, setActiveItem }: { layers: NodeData[] | undefined
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Positioner sideOffset={12}>
-              <Popover.Popup className="w-lg origin-[var(--transform-origin)] rounded-lg bg-[canvas] px-6 py-4 text-gray-900 shadow-lg shadow-gray-200 outline-1 outline-gray-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0 dark:shadow-none dark:-outline-offset-1 dark:outline-gray-300">
+              <Popover.Popup className="w-lg origin-[var(--transform-origin)] rounded-lg bg-[canvas] px-6 py-4 text-gray-900 shadow-lg shadow-gray-200 outline-1 outline-gray-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
                 <Popover.Arrow className="data-[side=bottom]:top-[-8px] data-[side=left]:right-[-13px] data-[side=left]:rotate-90 data-[side=right]:left-[-13px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-8px] data-[side=top]:rotate-180">
                   <ArrowSvg />
                 </Popover.Arrow>
@@ -1063,11 +1095,11 @@ function ArrowSvg(props: React.ComponentProps<'svg'>) {
       />
       <path
         d="M8.99542 1.85876C9.75604 1.17425 10.9106 1.17422 11.6713 1.85878L16.5281 6.22989C17.0789 6.72568 17.7938 7.00001 18.5349 7.00001L15.89 7L11.0023 2.60207C10.622 2.2598 10.0447 2.2598 9.66436 2.60207L4.77734 7L2.13171 7.00001C2.87284 7.00001 3.58774 6.72568 4.13861 6.22989L8.99542 1.85876Z"
-        className="fill-gray-200 dark:fill-none"
+        className="fill-gray-200"
       />
       <path
         d="M10.3333 3.34539L5.47654 7.71648C4.55842 8.54279 3.36693 9 2.13172 9H0V8H2.13172C3.11989 8 4.07308 7.63423 4.80758 6.97318L9.66437 2.60207C10.0447 2.25979 10.622 2.2598 11.0023 2.60207L15.8591 6.97318C16.5936 7.63423 17.5468 8 18.5349 8H20V9H18.5349C17.2998 9 16.1083 8.54278 15.1901 7.71648L10.3333 3.34539Z"
-        className="dark:fill-gray-300"
+        className=""
       />
     </svg>
   );
@@ -1125,10 +1157,6 @@ function MileHeader({
     editor.save();
   }
 
-  function handleEditPageData() {
-    sendMessage({ type: "mile_edit_page_data" }, frameRef);
-  }
-
   return (
     <div className="mile-header h-[40px] bg-white" style={{ zIndex: 2 }}>
       <div className="mile-headLeft">
@@ -1136,7 +1164,7 @@ function MileHeader({
         <Divider />
         <button
           onClick={() => {
-            getEditor(frameRef)?.undo();
+            editor.undo();
           }}
           className="px-2 py-1.5 flex gap-1 text-xs bg-blue-100 text-blue-800 active:bg-blue-200"
         >
@@ -1144,7 +1172,7 @@ function MileHeader({
         </button>
         <button
           onClick={() => {
-            getEditor(frameRef)?.redo();
+            editor.redo();
           }}
           className="px-2 py-1.5 flex gap-1 text-xs bg-blue-100 text-blue-800 active:bg-blue-200"
         >
@@ -1253,18 +1281,7 @@ function MileHeader({
           </button>
         </div>
       </div>
-      <div className="mile-headCenter">
-        <div className="">{title ?? "Untitled"}</div>
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={handleEditPageData}
-            className="px-1 py-0.5 rounded-md cursor-default bg-gray-100 hover:bg-gray-300"
-          >
-            <PencilIcon width={12} />
-          </button>
-        </div>
-      </div>
+      <MileHeaderEditPageInfo title={title} />
       <div className="mile-headRight">
         <a
           type="button"
@@ -1285,14 +1302,370 @@ function MileHeader({
   );
 }
 
-// iframe
-function sendMessage(message: { type: string; payload?: any }, frameRef: React.RefObject<IFrame | null>) {
-  frameRef.current?.contentWindow?.postMessage(message, NEXT_PUBLIC_HOST_URL as string);
+function MileHeaderEditPageInfo({ title }: { title?: string }) {
+  const [localTitle, setLocalTitle] = useState(title);
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="mile-headCenter">
+      <div className="text-sm">{localTitle ?? "Untitled"}</div>
+      <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog.Trigger render={() => (
+          <button onClick={() => { setIsOpen(true) }} className="px-2 select-none flex items-center gap-x-1 text-xs rounded bg-zinc-100 hover:bg-zinc-300">
+            Edit <PencilIcon width={10} />
+          </button>
+        )} />
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
+          <Dialog.Popup className="fixed top-[40px] bottom-0 /top-1/2 /left-1/2 w-lg max-w-[calc(100vw-3rem)] /-translate-x-1/2 /-translate-y-1/2 /rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 /data-[ending-style]:scale-90 data-[ending-style]:-translate-x-6 data-[ending-style]:opacity-0 /data-[starting-style]:scale-90 data-[starting-style]:-translate-x-6 data-[starting-style]:opacity-0">
+            <Dialog.Title className="-mt-1.5 mb-1 text-lg font-medium">
+              Edit Page Data
+            </Dialog.Title>
+            <div className="overflow-y-auto h-full">
+              <EditPageInfoModal close={() => { setIsOpen(false) }} setLocalTitle={setLocalTitle} />
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </div>
+  )
 }
 
-function getEditor(frameRef: React.RefObject<IFrame | null>) {
-  // @ts-expect-error
-  return frameRef.current?.contentWindow?.__mile_messenger__?.editor;
+type ParentPageValue = {
+  id: string;
+  value: string;
+  label: string;
+}
+
+type LocalPageMetaData = Omit<PageMetaData, "slug"> & {
+  own_slug: string;
+  parent?: ParentPageValue | null;
+}
+
+function buildParentItems(parents: any[]): ParentPageValue[] {
+  return parents.map((e) => {
+    return {
+      id: e.id,
+      value: e.slug,
+      label: e.title,
+    }
+  })
+}
+
+function getParentValue(parent?: PageData) {
+  if (!parent) return undefined;
+  return {
+    id: parent.id,
+    value: parent.slug,
+    label: parent.title ?? "Untitled",
+  }
+}
+function getOwnSlug(page_slug: string, parent: ParentPageValue | undefined) {
+  if (parent) {
+    if (page_slug.startsWith(parent?.value)) {
+      return page_slug.slice(parent.value.length);
+    } else {
+      return page_slug;
+    }
+  } else {
+    return page_slug;
+  }
+}
+
+function buildLocalPageInfo(page_info: PageMetaData, parent_page?: PageData): LocalPageMetaData {
+  console.log('page_info', page_info);
+  console.log('parent_page', parent_page);
+  const parent_value = page_info.parent_id ? getParentValue(parent_page) : undefined;
+  const own_slug = getOwnSlug(page_info.slug, parent_value);
+  return {
+    id: page_info.id,
+    title: page_info.title,
+    own_slug,
+    parent: parent_value,
+    parent_id: page_info.parent_id,
+  }
+}
+
+function EditPageInfoModal({ close, setLocalTitle }: any) {
+  const editor = useEditor();
+  const { data: parent_page, error: parentError, isLoading: parentIsLoading } = useSWR(editor.page_info.parent_id ? [`/pages/`, editor.page_info.parent_id] : null, fetcher);
+  if (parentIsLoading) return <div>loading...</div>
+  if (parentError) return <div>error loading parent page data</div>
+  // if (!parent_page) return <div>no parent page data</div>
+
+  return (
+    <EditPageInfoModalReady parent_page={parent_page} close={close} setLocalTitle={setLocalTitle} />
+  );
+}
+
+function savePage(id: string, data: { [k: string]: any }) {
+  return mutate(
+    ["/pages"],
+    async (pages: any) => {
+      // const resp = await fetch(`${API}/pages`, {
+      //   method: "POST",
+      //   headers: { "Content-Type": "application/json" },
+      //   body: JSON.stringify(data),
+      // });
+      const resp = await fetch(`${API}/pages/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!resp.ok) {
+        const error = new Error("An error occurred while creating the page.");
+        const info = await resp.json();
+        console.error("Error creating page", info);
+        // @ts-expect-error okk
+        error.info = info;
+        // @ts-expect-error okk
+        error.status = resp.status;
+        throw error;
+      }
+      const result = await resp.json();
+      return [...pages, result];
+    },
+    // { revalidate: false },
+  );
+}
+
+function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
+  const editor = useEditor();
+  const [pageData, setPageData] = useState<LocalPageMetaData>(() => buildLocalPageInfo(editor.page_info, parent_page));
+  const [error, setError] = useState<string | null>(null);
+  console.log('pageData', pageData);
+
+  function handleTitleChange(event: any) {
+    const value = event.target.value;
+    setLocalTitle(value)
+    setPageData((e) => {
+      return { ...e, title: value };
+    });
+  }
+
+  function handleOwnSlugChange(event: any) {
+    setPageData((e) => {
+      return { ...e, own_slug: event.target.value };
+    });
+  }
+
+  function handleParentSlugChange(v?: ParentPageValue | null) {
+    setPageData((e) => {
+      return { ...e, parent: v };
+    });
+  }
+
+  function handleAutoSlug() {
+    setPageData((e) => {
+      if (!e.title) {
+        return e;
+      }
+      return { ...e, slug: `/${slugify(e.title)}` };
+    });
+  }
+
+  async function handleEditPage() {
+    // const pageId = generateId();
+    // validate
+    if (pageData.title === "") {
+      setError("Title is required.");
+      return;
+    }
+    if (pageData.own_slug === "") {
+      setError("Slug is required.");
+      return;
+    }
+    if (pageData.own_slug !== "/" && pageData.own_slug.at(0) !== "/") {
+      setError("Slug must start with slash e.g. /good-slug");
+      return;
+    }
+    if (pageData.own_slug !== "/" && pageData.own_slug.slice(-1) === "/") {
+      setError("Slug cannot end with slash e.g. /bad-slug/");
+      return;
+    }
+    setError(null);
+    function buildPageSlug(data: LocalPageMetaData) {
+      return data.parent ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}` : data.own_slug;
+    }
+    function buildPageParentId(data: LocalPageMetaData) {
+      if (data.parent) {
+        if (data.parent.value === "/" || data.parent.value === "") {
+          return undefined
+        }
+        return data.parent.id;
+      }
+      return undefined;
+    }
+    const payload = {
+      // id: pageId,
+      title: pageData.title?.trim(),
+      slug: buildPageSlug(pageData),
+      parent_id: buildPageParentId(pageData),
+      // description
+      // keywords
+      // llm
+      // no_index
+      // no_follow
+    }
+    console.log('payload', payload);
+    await savePage(editor.page_info.id, payload)
+      .then((e) => {
+        console.log('e', e);
+        close();
+        window.location.reload();
+      })
+      .catch((e) => {
+        let message = e.info?.message ? `${e.message} ${e.info.message}` : e.message;
+        setError(message);
+      });
+  }
+
+  return (
+    <div className="flex py-8 h-full">
+      <div className="w-full flex flex-col items-center gap-y-4">
+        <div className="w-full">
+          <label htmlFor="title" className="font-semibold text-sm">Title</label>
+          <Input
+            id="title"
+            value={pageData.title}
+            onChange={handleTitleChange}
+            placeholder="e.g. About us"
+          />
+          <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
+        </div>
+        <div className="w-full relative">
+          <SlugInput pageData={pageData} handleParentSlugChange={handleParentSlugChange} handleOwnSlugChange={handleOwnSlugChange} />
+          <div className="absolute right-0 -top-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                handleAutoSlug();
+              }}
+              className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
+            >
+              Auto
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 w-full">
+          {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
+          <Button
+            onClick={handleEditPage}
+            className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
+          >
+            Save
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlugInput({ pageData, handleParentSlugChange, handleOwnSlugChange }: { pageData: LocalPageMetaData; handleParentSlugChange: (v?: ParentPageValue | null) => void; handleOwnSlugChange: (event: any) => void }) {
+  const { data: all_pages, error: parentsError, isLoading: parentsIsLoading } = useSWR([`/pages`], fetcher);
+  const memoParents = useMemo(() => {
+    if (all_pages && all_pages.length > 0) {
+      const parents = all_pages
+        .filter((e: any) => {
+          // exclude the self page
+          return e.slug !== `${pageData.parent?.value}${pageData.own_slug}`
+        })
+        .map((e: any) => {
+          if (e.slug === "/") {
+            return { ...e, title: "Root" }
+          }
+          return e;
+        }).sort((a: any, b: any) => {
+          if (a.slug === "/") return -1;
+          if (b.slug === "/") return 1;
+          return 0; // keep original order otherwise
+        });
+      return buildParentItems(parents);
+    }
+    return [];
+  }, [all_pages, pageData.parent?.value, pageData.own_slug]);
+
+  // value is pageData.parent but we need to get from memoParents 
+  // to get the referentially equal object so that the Combobox list item is highlighted
+  const value = memoParents.find(e => e.value === pageData.parent?.value) ?? null;
+
+  return (
+    <div className="flex flex-col gap-y-3">
+      <div className="flex flex-col gap-y-1">
+        <label htmlFor="slug" className="font-semibold text-sm">Slug</label>
+        <div className="">
+          <code className="text-sm text-zinc-700"><span className="bg-blue-100">{pageData.parent?.value ? pageData.parent.value === "/" ? "" : pageData.parent.value : ""}</span>{`${pageData.own_slug}`}</code>
+        </div>
+        <Input
+          id="slug"
+          value={pageData.own_slug}
+          onChange={handleOwnSlugChange}
+          placeholder="e.g. /about-us"
+        />
+      </div>
+
+      {memoParents.length > 0 && <ParentPicker items={memoParents} value={value} setValue={handleParentSlugChange} />}
+    </div>
+  )
+}
+
+function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; value: ParentPageValue | null | undefined; setValue: (v: ParentPageValue | null | undefined) => void; }) {
+  const comboboxid = useId();
+
+  return (
+    <div className="flex flex-col gap-y-1">
+      <h3 className="font-semibold text-sm">Parent page</h3>
+      <Combobox.Root items={items} value={value} onValueChange={(v) => setValue(v)}>
+        <Combobox.Trigger className="flex pr-3 pl-3.5 h-9 /w-[120px] rounded-md border border-zinc-200 items-center justify-between gap-3 text-base text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 data-[popup-open]:bg-zinc-100 cursor-default">
+          <div className="">
+            <div className="text-sm truncate">{value && value.label ? value.label : "Select.."}</div>
+          </div>
+          <Combobox.Icon className="flex">
+            <ChevronsUpDownIcon size={14} />
+          </Combobox.Icon>
+        </Combobox.Trigger>
+        <Combobox.Portal>
+          <Combobox.Positioner align="start" sideOffset={4}>
+            <Combobox.Popup
+              className="w-md [--input-container-height:3rem] origin-[var(--transform-origin)] max-w-[var(--available-width)] max-h-[24rem] rounded-lg bg-[canvas] shadow-lg shadow-zinc-200 text-zinc-900 outline-1 outline-zinc-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0"
+              aria-label="Select parent page"
+            >
+              <div className="w-full h-[var(--input-container-height)] text-center p-2">
+                <Combobox.Input
+                  id={comboboxid}
+                  placeholder="e.g. About us"
+                  className="h-9 w-full font-normal rounded-md border border-zinc-200 pl-3.5 text-sm text-zinc-900 focus:outline-2 focus:-outline-offset-1 focus:outline-blue-800"
+                />
+              </div>
+              <Combobox.Empty className="p-4 text-[0.925rem] leading-4 text-zinc-600 empty:m-0 empty:p-0">
+                No parent pages found.
+              </Combobox.Empty>
+              <Combobox.List className="overflow-y-auto scroll-py-2 py-2 overscroll-contain max-h-[min(calc(24rem-var(--input-container-height)),calc(var(--available-height)-var(--input-container-height)))] empty:p-0">
+                {(item: any) => {
+                  return (
+                    <Combobox.Item
+                      key={item.value}
+                      value={item}
+                      className="grid min-w-[var(--anchor-width)] cursor-default grid-cols-[0.75rem_1fr] items-start gap-2 py-2 pr-8 pl-4 text-sm leading-4 outline-none select-none data-[highlighted]:relative data-[highlighted]:z-0 data-[highlighted]:text-zinc-50 data-[highlighted]:before:absolute data-[highlighted]:before:inset-x-2 data-[highlighted]:before:inset-y-0 data-[highlighted]:before:z-[-1] data-[highlighted]:before:rounded-sm data-[highlighted]:before:bg-zinc-900"
+                    >
+                      <Combobox.ItemIndicator className="col-start-1">
+                        <CheckIcon className="size-3" />
+                      </Combobox.ItemIndicator>
+                      <div className="col-start-2 flex items-start gap-x-1.5">
+                        <span className="font-medium">{item.label ?? "Unknown"}</span>
+                        <span className="text-xs text-zinc-500">{item.value ?? ""}</span>
+                      </div>
+                    </Combobox.Item>
+                  )
+                }}
+              </Combobox.List>
+            </Combobox.Popup>
+          </Combobox.Positioner>
+        </Combobox.Portal>
+        <div className="mt-1 text-xs text-zinc-600">The URL of the page starts with / (typically from the title)</div>
+      </Combobox.Root>
+    </div>
+  )
 }
 
 function Divider() {
@@ -1333,7 +1706,7 @@ function handleUploadsSuccess(upload: any) {
 
 function ImageGallery({ open, setOpen, selectedFileId, handleSelectFile, handleConfirmFile, is_disabled }: { open: boolean; setOpen: (v: boolean) => void; selectedFileId: string; handleSelectFile: (file_id: string) => void; handleConfirmFile: (file_id: string) => void; is_disabled: boolean; }) {
   const [isPending, setIsPending] = useState(false);
-  const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
+  const { isValidating } = useMediaFile(selectedFileId);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -1341,7 +1714,7 @@ function ImageGallery({ open, setOpen, selectedFileId, handleSelectFile, handleC
         render={<Button disabled={is_disabled} className="cursor-pointer"><ImagesIcon /> Gallery</Button>}
       />
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 dark:opacity-70 supports-[-webkit-touch-callout:none]:absolute" />
+        <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
         <Dialog.Popup className="flex flex-col justify-between fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-full max-h-6/7 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-gray-50 outline-1 outline-gray-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
           <div className="py-2 px-3 flex items-center justify-between">
             <div className="flex items-center gap-x-4">
@@ -1593,7 +1966,6 @@ function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: 
     <div className="flex flex-col">
       <label htmlFor="" className="mb-1 text-xs font-semibold">Alt text</label>
       <Field.Control
-        // defaultValue={defaultValue ?? undefined}
         value={value}
         onBlur={handleBlur}
         onValueChange={handleChange}
@@ -1607,17 +1979,6 @@ function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: 
 }
 
 function updateFileMetadata(file_id: string, data: { [k: string]: string }, done: () => void) {
-  // mutate(
-  //   `/medias/${file_id}`,
-  //   async (media: any) => {
-  //     const resultMutate = await updateMediaMetadata(`${API}/medias/${file_id}`, data);
-  //     // console.log("resultMutate", resultMutate);
-  //     return resultMutate;
-  //   },
-  //   // {
-  //   //   revalidate: false,
-  //   // },
-  // );
   updateMediaMetadata(`${API}/medias/${file_id}`, data)
     .then(e => {
       mutate((k: string) => k === `/medias/${file_id}` || k === "/medias");

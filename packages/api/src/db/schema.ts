@@ -19,7 +19,6 @@ export const pages = pgTable('pages', {
   id: char('id', { length: 32 }).primaryKey(),
   parent_id: char("parent_id", { length: 32 }),
   slug: text('slug').notNull(),
-  name: text('name').notNull(), // nickname
   title: text('title'), // page <title>
   content: text('content'), // mdx string
   description: text('description'),

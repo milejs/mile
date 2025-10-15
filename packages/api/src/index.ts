@@ -190,8 +190,11 @@ pages.put('/:id', async (c) => {
   const id = c.req.param('id');
   const body = await c.req.json();
   console.log('SAVE page ---- body', body);
+  if (body && body.created_at) {
+    delete body.created_at;
+  }
   // Here you might want to add validation similar to the POST route
-  const [updatedPage] = await db.update(pagesTable).set({ ...body, created_at: new Date(body.created_at), updated_at: new Date() }).where(eq(pagesTable.id, id)).returning();
+  const [updatedPage] = await db.update(pagesTable).set({ ...body, updated_at: new Date() }).where(eq(pagesTable.id, id)).returning();
   return c.json(updatedPage);
 });
 
@@ -208,7 +211,6 @@ pages.delete('/:id', async (c) => {
 const createPageSchema = z.object({
   id: z.string(),
   slug: z.string(),
-  name: z.string(),
   title: z.string().optional(),
   content: z.string().optional(),
   parent_id: z.string().optional(),

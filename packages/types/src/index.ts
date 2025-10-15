@@ -130,7 +130,6 @@ export type PageData = {
   parent_id?: string | null;
   content: string | TreeData;
   title?: string;
-  name?: string;
   description?: string;
   keywords?: string;
   no_index?: number;
