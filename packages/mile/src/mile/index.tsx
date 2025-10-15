@@ -998,7 +998,7 @@ function LayersInner({ layers, setActiveItem }: { layers: NodeData[] | undefined
         </h3>
         <Popover.Root open={open} onOpenChange={setOpen}>
           <Popover.Trigger className="px-1.5 py-1 text-xs font-medium rounded-md border border-slate-400 bg-white hover:bg-slate-200 transition-colors flex items-center justify-center gap-x-1">
-            Add <PlusIcon size={12} />
+            <PlusIcon size={12} /> Add
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Positioner sideOffset={12}>
@@ -1311,8 +1311,8 @@ function MileHeaderEditPageInfo({ title }: { title?: string }) {
       <div className="text-sm">{localTitle ?? "Untitled"}</div>
       <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
         <Dialog.Trigger render={() => (
-          <button onClick={() => { setIsOpen(true) }} className="px-2 select-none flex items-center gap-x-1 text-xs rounded bg-zinc-100 hover:bg-zinc-300">
-            Edit <PencilIcon width={10} />
+          <button onClick={() => { setIsOpen(true) }} className="px-2 select-none flex items-center gap-x-1 text-xs rounded bg-zinc-100 hover:bg-zinc-300 border border-zinc-200">
+            <PencilIcon width={10} /> Edit
           </button>
         )} />
         <Dialog.Portal>
