@@ -16,6 +16,7 @@ CREATE TABLE "pages" (
 	"parent_id" char(32),
 	"slug" text NOT NULL,
 	"title" text,
+	"type" text,
 	"content" text,
 	"description" text,
 	"keywords" text,

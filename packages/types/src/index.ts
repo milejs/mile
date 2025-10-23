@@ -86,8 +86,10 @@ export type SetData = React.Dispatch<React.SetStateAction<TreeData | undefined>>
 export type SetOperation = React.Dispatch<React.SetStateAction<Operation | null>>;
 
 export interface MileEditor {
+  mile: MileClient;
   config: Config;
   tree: MileTree;
+  page_data: PageData;
   setData: SetData;
   setLastOperation: SetOperation;
   history: MileHistoryManager;
@@ -128,6 +130,7 @@ export type PageData = {
   id: string;
   slug: string;
   parent_id?: string | null;
+  type: string;
   content: string | TreeData;
   title?: string;
   description?: string;
@@ -372,7 +375,7 @@ export interface MilePersister {
   editor: MileEditor;
   save(
     id: string,
-    pageData: PageMetaData,
+    pageData: PageData,
     content: TreeData,
     components?: Components | undefined
   ): Promise<

@@ -1,90 +1,500 @@
 // import useSWR, { mutate } from "swr";
-import { Config, PageMetaData } from "@milejs/types";
-import { ReactNode, useEffect, useId, useMemo, useState } from "react";
+import { Config, PageData, PageMetaData } from "@milejs/types";
+import { ReactNode, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
 import slugify from '@sindresorhus/slugify';
 import { Button, buttonVariants } from "@/components/ui/button";
-import { CheckIcon, ChevronsUpDownIcon, PlusIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronsUpDownIcon, Circle, EqualIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { Dialog } from '@base-ui-components/react/dialog';
 import { generateId } from "@/lib/generate-id";
 import { Input } from "@/components/ui/input";
 import { getAuth } from "./auth";
 import useSWR, { mutate } from "swr";
-import { Combobox } from '@base-ui-components/react/combobox';
+
+import { Field } from '@base-ui-components/react/field';
+import { Form } from '@base-ui-components/react/form';
+import { cn } from "@/lib/utils";
+import { Drawer, DrawerContent, DrawerPortal, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import { filesize } from "./utils";
+import { Uploaders } from "@/components/ui/uploader";
+import { LocalPageData, ParentPageValue, ParentPicker, SlugInput } from "./shared";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
+const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
 
 const fetcher = (key: string[]) => fetch(`${API}${key.join("")}`).then(res => res.json());
+const searcher = (query: string) => fetch(`${API}/search?q=${query}`).then(res => res.json());
 
-/**
- * 
- * [
-    {
-        "id": "fe4198185b32f23f324cf68b1048ece9",
-        "parent_id": null,
-        "slug": "/about/team",
-        "name": "Team",
-        "title": "Team",
-        "content": "<Hero id=\"5debb6ff83d67a5f53aecebc4e45546f\" type=\"hero\" className=\"\" options={{title:\"About\",image:{image_url:\"https://pub-47fe340e22e548e5a8ed17dd964ffa4a.r2.dev/mileupload/2024-drive-the-icons-monterey-car-week-tour-2.jpg\",alt_text:\"Side mirror\"},link:{url:\"\",link_text:\"\",is_external:false}}} />",
-        "description": null,
-        "keywords": null,
-        "llm": null,
-        "no_index": null,
-        "no_follow": null,
-        "created_at": "2025-10-08T10:10:27.104Z",
-        "updated_at": "2025-10-08T10:10:44.792Z"
-    },
-    {
-        "id": "dc3bbbea4f744220a5e0fe4e96a556cc",
-        "parent_id": null,
-        "slug": "/about",
-        "name": "About",
-        "title": "About",
-        "content": "<Hero id=\"c88f0ade57ca932cca33889bb095be7b\" type=\"hero\" className=\"\" options={{title:\"Test\",image:{image_url:\"\",alt_text:\"\"},link:{url:\"\",link_text:\"\",is_external:false}}} />",
-        "description": null,
-        "keywords": null,
-        "llm": null,
-        "no_index": null,
-        "no_follow": null,
-        "created_at": "2025-10-08T08:34:35.819Z",
-        "updated_at": "2025-10-08T08:34:43.846Z"
-    },
-    {
-        "id": "2950199bae37fa6fb854bd7773fb7fc9",
-        "parent_id": null,
-        "slug": "/",
-        "name": "Home",
-        "title": "Home",
-        "content": "<Hero id=\"e5472bffdba8d51fe249b704b8e39b2a\" type=\"hero\" className=\"\" options={{title:\"Supreme Vascular and Inter\",image:{image_url:\"https://pub-47fe340e22e548e5a8ed17dd964ffa4a.r2.dev/mileupload/2024-drive-the-icons-monterey-car-week-tour-2.jpg\",alt_text:\"Side mirror\"},link:{url:\"/contact-us\",link_text:\"Book Appointment\",is_external:true}}} />",
-        "description": null,
-        "keywords": null,
-        "llm": null,
-        "no_index": null,
-        "no_follow": null,
-        "created_at": "2025-10-08T03:25:40.216Z",
-        "updated_at": "2025-10-08T06:36:29.395Z"
-    }
-]
- */
 export function Dashboard({ path, search }: { path: string; search: { [key: string]: string | string[] | undefined } }) {
-  const { data: pages, error: pagesError, isLoading: pagesIsLoading } = useSWR([`/pages`], fetcher);
-  console.log('pages', pages);
-  if (pagesError) return <div>failed to load</div>
-  if (pagesIsLoading) return <div>loading...</div>
+  console.log('path', path);
+  if (path === "/") {
+    return (
+      <AppShell path={path}>
+        <DashboardMain />
+      </AppShell>
+    )
+  }
+  if (path === "/pages") {
+    return (
+      <AppShell path={path}>
+        <Pages />
+      </AppShell>
+    )
+  }
+  if (path === "/search") {
+    return (
+      <AppShell path={path}>
+        <SearchPage search={search} />
+      </AppShell>
+    )
+  }
+  if (path === "/gallery") {
+    return (
+      <AppShell path={path}>
+        <MediaGallery />
+      </AppShell>
+    )
+  }
+  return (
+    <div className="">Not found</div>
+  )
+}
+
+// Save db after multiple uploads completed
+function handleUploadsSuccess(upload: any) {
+  // save db
+  const payload = upload.files.map((e: any) => {
+    return {
+      id: generateId(),
+      type: e.type,
+      size: e.size,
+      filepath: e.objectKey,
+    }
+  })
+  mutate(`/medias`, async (prev: any) => {
+    const resp = await fetch(`${API}/medias`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const error = new Error("An error occurred while saving the images.");
+      const info = await resp.json();
+      console.error("Error saving images", info);
+      // @ts-expect-error okk
+      error.info = info;
+      // @ts-expect-error okk
+      error.status = resp.status;
+      throw error;
+    }
+    const result = await resp.json();
+    return prev ? [...prev, ...result] : result;
+  })
+}
+
+function MediaGallery() {
+  const [selectedFileId, setSelectedFileId] = useState("");
+  const [open, setOpen] = useState(false);
+  const { data, error, isValidating } = useMediaFile(selectedFileId);
+  const [isPending, setIsPending] = useState(false);
+
+  function handleSelectFile(file_id: string) {
+    setSelectedFileId(file_id);
+    setOpen(true);
+  }
 
   return (
-    // <PageWrapper config={config} path={path} search={search}>
+    <div className="py-5">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-6 flex gap-2 items-center">
+          <h1 className="font-bold text-3xl">Media Gallery</h1>
+        </div>
+        <div className="space-y-8">
+          <div className="py-2 flex items-center justify-between">
+            <div className="flex items-center gap-x-4">
+              <Uploaders onSuccess={handleUploadsSuccess} label={"Upload files"} />
+            </div>
+          </div>
+          <div className="/grid /sm:grid-cols-[1fr_300px] /gap-2 /grow /overflow-hidden">
+            <div className="overflow-y-auto">
+              <MediaFiles selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+            </div>
+            <Drawer open={open} onOpenChange={setOpen}>
+              <DrawerPortal>
+                <DrawerContent className="mx-auto max-h-[85svh] px-6 pb-8">
+                  <DrawerTitle>Test</DrawerTitle>
+                  <MediaMetadata selectedFileId={selectedFileId} setIsPending={setIsPending} />
+                </DrawerContent>
+              </DrawerPortal>
+            </Drawer>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function fetchStringKey(key: string) {
+  return fetch(`${API}${key}`).then((r) => r.json());
+}
+
+function useMediaFiles() {
+  return useSWR(`/medias`, fetchStringKey);
+}
+
+function MediaFiles({ selectedFileId, handleSelectFile }: { selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+  const { data, error, isLoading } = useMediaFiles();
+  if (error || data?.error) return <div>failed to load</div>;
+  if (isLoading) return <div>loading...</div>;
+  console.log('data', data);
+  return (
+    <div className="">
+      <MediaFilesGrid data={data} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+    </div>
+  )
+}
+
+function MediaFilesGrid({ data, selectedFileId, handleSelectFile }: { data: any[]; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+  if (!data || data.length === 0) {
+    return <div className="">No files</div>;
+  }
+  return (
+    <div className="grid grid-cols-4 gap-4 items-start">
+      {data.map((e: any) => (
+        <MediaFileCard data={e} key={e.filepath} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+      ))}
+    </div>
+  );
+}
+
+function getImageUrl(key: string) {
+  return `${NEXT_PUBLIC_IMAGE_URL}/${key}`;
+}
+
+function getFileName(filepath: string) {
+  return filepath.split("/").at(-1) ?? "Unknown name";
+}
+
+function MediaFileCard({ data, selectedFileId, handleSelectFile }: { data: any; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+  return (
+    <button
+      className={`bg-white flex w-full flex-col border ${selectedFileId === data.id ? "border-zinc-500" : "border-zinc-300"} hover:border-zinc-400`}
+      onClick={() => {
+        handleSelectFile(data.id);
+      }}
+    >
+      <div className={`py-5 ${selectedFileId === data.id ? "bg-blue-100" : "bg-zinc-100"} h-[180px] flex justify-center`}>
+        <img src={getImageUrl(data.filepath)} alt="" className="max-h-full max-w-full object-contain" />
+      </div>
+      <div className="px-2 py-2">
+        <div className="text-sm leading-4 select-text">{getFileName(data.filepath)}</div>
+      </div>
+    </button>
+  );
+}
+
+function useMediaFile(media_id?: string) {
+  return useSWR(media_id ? `/medias/${media_id}` : null, fetchStringKey);
+}
+
+function MediaMetadata({ selectedFileId, setIsPending }: { selectedFileId: string; setIsPending: (v: boolean) => void; }) {
+  const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
+  if (error || data?.error) return <div>failed to load</div>;
+  if (isLoading) return <div>loading...</div>;
+
+  if (!data) return null;
+  if (data.type == null) {
+    return (
+      <div className="">
+        <h2 className="mb-4">Media details</h2>
+        <div className="mb-4 text-xs">
+          <h3 className="mb-1 font-medium">Unknown media file type.</h3>
+        </div>
+      </div>
+    );
+  }
+  if (data.type.startsWith("image/")) {
+    return <ImageDetails selectedFileId={selectedFileId} data={data} setIsPending={setIsPending} />;
+  }
+
+  return null;
+}
+
+function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: string; data: any; setIsPending: (v: boolean) => void; }) {
+  return (
+    <div className="">
+      <h2 className="mb-4 font-semibold">Media details</h2>
+
+      <div className="mb-4 grid grid-cols-[112px_1fr] gap-x-3">
+        <div className="mb-2">
+          <img src={getImageUrl(data.filepath)} alt="" />
+        </div>
+        <div className="mb-4 text-xs">
+          <h3 className="mb-1.5 font-medium">{data.filepath}</h3>
+          <div className="mb-0.5">{filesize(data.size)}</div>
+          <div className="text-gray-500">{new Date(data.created_at).toString()}</div>
+          <div className="mt-4">
+            <ImageURL defaultValue={getImageUrl(data.filepath)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-y-3">
+        <div className="">
+          <TextAreaImageAltText key={`alt_${selectedFileId}`} fileId={data.id} defaultValue={data.alt} setIsPending={setIsPending} />
+        </div>
+        <div className="">
+          <InputImageTitle
+            key={`title_${selectedFileId}`}
+            fileId={data.id}
+            defaultValue={data.title ?? getFileName(data.filepath)}
+            setIsPending={setIsPending}
+          />
+        </div>
+        <div className="">
+          <TextAreaImageCaption key={`caption_${selectedFileId}`} fileId={data.id} defaultValue={data.caption} setIsPending={setIsPending} />
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+function ImageURL({ defaultValue }: any) {
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">File url</label>
+      <Input readOnly defaultValue={defaultValue} className="truncate" />
+    </div>
+  );
+}
+
+function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+  const [isDirty, setIsDirty] = useState(false);
+  const [value, setValue] = useState("");
+  function handleBlur() {
+    if (isDirty) {
+      updateFileMetadata(fileId, { caption: value }, () => setIsPending(false));
+      setIsDirty(false);
+    }
+  }
+  function handleChange(v: string) {
+    setValue(v);
+    if (!isDirty) {
+      setIsDirty(true);
+    }
+  }
+
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">Caption</label>
+      <Field.Control
+        defaultValue={defaultValue ?? undefined}
+        onBlur={handleBlur}
+        onValueChange={handleChange}
+        render={<textarea rows={2} className={textareaClasses} />}
+      />
+    </div>
+  );
+}
+
+const textareaClasses = "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive"
+
+function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+  const [isDirty, setIsDirty] = useState(false);
+  const [value, setValue] = useState("");
+  function handleBlur() {
+    if (isDirty) {
+      updateFileMetadata(fileId, { title: value }, () => setIsPending(false));
+      setIsDirty(false);
+    }
+  }
+  function handleChange(e: any) {
+    setValue(e.target.value);
+    if (!isDirty) {
+      setIsDirty(true);
+    }
+  }
+
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">Title</label>
+      <Input
+        defaultValue={defaultValue ?? undefined}
+        onBlur={handleBlur}
+        onChange={handleChange}
+        className="truncate"
+      />
+    </div>
+  );
+}
+
+function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+  const [isDirty, setIsDirty] = useState(false);
+  const [value, setValue] = useState(defaultValue ?? "");
+  function handleBlur() {
+    if (isDirty) {
+      setIsPending(true);
+      updateFileMetadata(fileId, { alt: value }, () => setIsPending(false));
+      setIsDirty(false);
+    }
+  }
+  function handleChange(v: string) {
+    setValue(v);
+    if (!isDirty) {
+      setIsDirty(true);
+    }
+  }
+  return (
+    <div className="flex flex-col">
+      <label htmlFor="" className="mb-1 text-xs font-semibold">Alt text</label>
+      <Field.Control
+        value={value}
+        onBlur={handleBlur}
+        onValueChange={handleChange}
+        render={<textarea rows={4} className={textareaClasses} />}
+      />
+      {/* <Button onClick={() => { }} className="text-xs">
+        Fill it
+      </Button> */}
+    </div>
+  );
+}
+
+function updateFileMetadata(file_id: string, data: { [k: string]: string }, done: () => void) {
+  updateMediaMetadata(`${API}/medias/${file_id}`, data)
+    .then(e => {
+      mutate((k: string) => k === `/medias/${file_id}` || k === "/medias");
+      done();
+    })
+    .catch(e => {
+      console.error('error', e);
+      done();
+    })
+}
+
+async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
+  return await fetch(url, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).then((r) => r.json());
+}
+
+
+function DashboardMain() {
+  return (
+    <div className="py-5">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-6 flex gap-2 items-center">
+          <h1 className="font-bold text-3xl">Welcome</h1>
+        </div>
+        <div className="space-y-8">
+          <div className="">Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsam ab maiores tempore earum a voluptas debitis voluptatem. Nam suscipit officia animi cumque dolorem. Blanditiis amet autem similique porro laborum laudantium!</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SearchPage({ search }: { search: { [key: string]: string | string[] | undefined; } }) {
+  return (
+    <div className="py-5">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-6 flex gap-2 items-center">
+          <h1 className="font-bold text-3xl">Search result</h1>
+        </div>
+        <div className="space-y-8">
+          <SearchForm initialQuery={search.query} />
+          <SearchData search={search} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SearchData({ search }: { search: { [key: string]: string | string[] | undefined; } }) {
+  const { data: result, error: searchError, isLoading: searching } = useSWR(search.query, searcher);
+  if (searchError) return <div>Failed to load</div>
+  if (searching) return <div>loading...</div>
+  if (result?.error) {
+    console.error('error', result.message);
+    return <div>Failed to load</div>
+  }
+
+  return (
+    <PagesList data={result} />
+  )
+}
+
+function Pages() {
+  return (
     <div className="py-5">
       <div className="max-w-5xl mx-auto">
         <div className="mb-6 flex gap-2 items-center">
           <h1 className="font-bold text-3xl">Pages</h1>
           <CreatePageModal />
         </div>
-        <div className="">
-          <PagesList data={pages} />
+        <div className="space-y-8">
+          <SearchForm />
+          <PagesData />
         </div>
       </div>
     </div>
-    // </PageWrapper>
+  );
+}
+function PagesData() {
+  const { data: pages, error: pagesError, isLoading: pagesIsLoading } = useSWR([`/pages`], fetcher);
+  // console.log('pages', pages, pagesError, pagesIsLoading);
+  if (pagesError) return <div>Failed to load</div>
+  if (pagesIsLoading) return <div>loading...</div>
+  if (pages && pages.error === true) {
+    console.error('error', pages.message);
+    return <div className="">Failed to load</div>
+  }
+
+  return (
+    <PagesList data={pages} />
+  );
+}
+
+function SearchForm({ initialQuery }: { initialQuery?: any }) {
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [value, setValue] = useState(initialQuery ?? "");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <Form
+      className="flex flex-row items-center gap-x-2"
+      errors={errors}
+      onClearErrors={setErrors}
+      action="/mile/search"
+    >
+      <Field.Root name="query" className="flex flex-col items-start gap-y-1">
+        <div className="relative">
+          <div className="absolute top-3 left-2"><SearchIcon size={16} /></div>
+          <Field.Control
+            ref={inputRef}
+            type="text"
+            value={value}
+            onValueChange={setValue}
+            placeholder="Search by page title"
+            className="h-10 w-full sm:min-w-[400px] rounded-md border border-gray-300 pl-8 text-base text-gray-900 focus:outline-2 focus:-outline-offset-1 focus:outline-blue-800"
+          />
+          <div className="absolute top-2 right-2">
+            <button type="button" onClick={() => { setValue(''); inputRef.current?.focus(); }} className="rounded px-2 py-1 hover:bg-zinc-100 cursor-pointer"><XIcon size={16} /></button>
+          </div>
+        </div>
+        <Field.Error className="text-sm text-red-800" />
+      </Field.Root>
+      <button
+        disabled={loading}
+        type="submit"
+        className="flex h-10 items-center justify-center rounded-md border border-gray-200 bg-gray-50 px-3.5 text-base font-medium text-gray-900 select-none hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+      >
+        Search
+      </button>
+    </Form>
   );
 }
 
@@ -92,8 +502,9 @@ function PagesList({ data }: { data: any }) {
   if (!data || data.length === 0) {
     return <div className="">No pages</div>;
   }
+
   return (
-    <div className="">
+    <div className="divide-y divide-zinc-200">
       {data.map((e: any) => {
         return <PageItem key={e.id} data={e} />;
       })}
@@ -103,16 +514,30 @@ function PagesList({ data }: { data: any }) {
 
 function PageItem({ data }: { data: any }) {
   const href = `/mile/${data.id}/edit`;
+
   return (
-    <div className="flex flex-row">
-      <div className="w-48 shrink-0">
-        <a href={href}>{data.slug}</a>
-      </div>
+    <div className="py-1.5 flex flex-row">
       <div className="truncate grow-1 w-full">
-        <a href={href}>{data.title ?? "No title"}</a>
+        <div className="">
+          <a href={href}>
+            <div className="font-semibold text-sm">
+              {data.title ?? "No title"}
+            </div>
+            <div className="text-xs text-zinc-500">
+              <code className="">{data.slug}</code>
+            </div>
+          </a>
+        </div>
       </div>
-      <div className="w-48 shrink-0">
-        {new Date(data.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+      <div className="w-32 shrink-0">
+        <div className="text-xs text-zinc-700">
+          {new Date(data.updated_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+        </div>
+      </div>
+      <div className="w-32 shrink-0">
+        <div className="text-xs text-zinc-700">
+          {new Date(data.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+        </div>
       </div>
     </div>
   );
@@ -128,13 +553,11 @@ function CreatePageModal() {
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-        <Dialog.Popup className="fixed top-1/2 left-1/2 /-mt-8 w-lg max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+        <Dialog.Popup className="fixed top-1/2 left-1/2 w-lg max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
           <Dialog.Title className="-mt-1.5 mb-1 text-lg font-medium">
             Create New Page
           </Dialog.Title>
-          <div className="overflow-y-auto h-full">
-            <NewPageSettings close={() => { setIsOpen(false) }} />
-          </div>
+          <NewPageSettings close={() => { setIsOpen(false) }} />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
@@ -167,11 +590,6 @@ function createPage(data: { [k: string]: any }) {
   );
 }
 
-type LocalPageMetaData = Omit<PageMetaData, "slug"> & {
-  own_slug: string;
-  parent?: ParentPageValue | null;
-}
-
 function buildParentItems(parents: any[]): ParentPageValue[] {
   return parents.map((e) => {
     return {
@@ -183,10 +601,13 @@ function buildParentItems(parents: any[]): ParentPageValue[] {
 }
 
 function NewPageSettings({ close }: any) {
-  const [pageData, setPageData] = useState<LocalPageMetaData>({
+  const [pageData, setPageData] = useState<LocalPageData>({
     id: "_notused_",
     title: "",
+    type: "page",
     own_slug: "/",
+    content: "",
+    description: "",
     parent: {
       id: "",
       value: "",
@@ -201,6 +622,11 @@ function NewPageSettings({ close }: any) {
       return { ...e, title: event.target.value };
     });
   }
+  function handleTypeChange(event: any) {
+    setPageData((e) => {
+      return { ...e, type: event.target.value };
+    });
+  }
 
   function handleOwnSlugChange(event: any) {
     setPageData((e) => {
@@ -211,6 +637,12 @@ function NewPageSettings({ close }: any) {
   function handleParentSlugChange(v?: ParentPageValue | null) {
     setPageData((e) => {
       return { ...e, parent: v };
+    });
+  }
+
+  function handleMetaDescriptionChange(v: string) {
+    setPageData((e) => {
+      return { ...e, description: v };
     });
   }
 
@@ -243,10 +675,10 @@ function NewPageSettings({ close }: any) {
       return;
     }
     setError(null);
-    function buildPageSlug(data: LocalPageMetaData) {
+    function buildPageSlug(data: LocalPageData) {
       return data.parent ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}` : data.own_slug;
     }
-    function buildPageParentId(data: LocalPageMetaData) {
+    function buildPageParentId(data: LocalPageData) {
       if (data.parent) {
         if (data.parent.value === "/" || data.parent.value === "") {
           return undefined
@@ -258,8 +690,11 @@ function NewPageSettings({ close }: any) {
     const payload = {
       id: pageId,
       title: pageData.title?.trim(),
+      type: pageData.type?.trim(),
       slug: buildPageSlug(pageData),
       parent_id: buildPageParentId(pageData),
+      content: pageData.content,
+      description: pageData.description,
       // description
       // keywords
       // llm
@@ -270,7 +705,11 @@ function NewPageSettings({ close }: any) {
     await createPage(payload)
       .then((e) => {
         console.log('e', e);
-        close();
+        if (e) {
+          const last = e[e.length - 1];
+          window.location.assign(`/mile/${last.id}/edit`);
+        }
+        // close();
       })
       .catch((e) => {
         let message = e.info?.message ? `${e.message} ${e.info.message}` : e.message;
@@ -279,155 +718,65 @@ function NewPageSettings({ close }: any) {
   }
 
   return (
-    <div className="flex py-8 h-full">
-      <div className="w-full flex flex-col items-center gap-y-4">
-        <div className="w-full">
-          <label htmlFor="title" className="font-semibold text-sm">Title</label>
-          <Input
-            id="title"
-            value={pageData.title}
-            onChange={handleTitleChange}
-            placeholder="e.g. About us"
-          />
-          <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
-        </div>
-        <div className="w-full relative">
-          <SlugInput pageData={pageData} handleParentSlugChange={handleParentSlugChange} handleOwnSlugChange={handleOwnSlugChange} />
-          <div className="absolute right-0 -top-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                handleAutoSlug();
-              }}
-              className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
-            >
-              Auto
-            </button>
+    <>
+      <div className="overflow-y-auto h-[calc(100vh-350px)]">
+        <div className="pt-2 pb-12 space-y-4">
+          <div className="w-full">
+            <label htmlFor="title" className="font-semibold text-sm">Title</label>
+            <Input
+              id="title"
+              value={pageData.title}
+              onChange={handleTitleChange}
+              placeholder="e.g. About us"
+            />
+            <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
           </div>
-        </div>
-        <div className="mt-4 w-full">
-          {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
-          <Button
-            onClick={handleCreatePage}
-            className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
-          >
-            Create page
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SlugInput({ pageData, handleParentSlugChange, handleOwnSlugChange }: { pageData: LocalPageMetaData; handleParentSlugChange: (v?: ParentPageValue | null) => void; handleOwnSlugChange: (event: any) => void }) {
-  const { data: all_pages, error: parentsError, isLoading: parentsIsLoading } = useSWR([`/pages`], fetcher);
-  const memoParents = useMemo(() => {
-    if (all_pages && all_pages.length > 0) {
-      const parents = all_pages
-        // .filter((e: any) => {
-        //   return e.slug !== `${pageData.parent?.value}${pageData.own_slug}`
-        // })
-        .map((e: any) => {
-          if (e.slug === "/") {
-            return { ...e, title: "Root" }
-          }
-          return e;
-        }).sort((a: any, b: any) => {
-          if (a.slug === "/") return -1;
-          if (b.slug === "/") return 1;
-          return 0; // keep original order otherwise
-        });
-      return buildParentItems(parents);
-    }
-    return [];
-  }, [all_pages]);
-
-  // value is pageData.parent but we need to get from memoParents 
-  // to get the referentially equal object so that the Combobox list item is highlighted
-  const value = memoParents.find(e => e.value === pageData.parent?.value) ?? null;
-
-  return (
-    <div className="flex flex-col gap-y-3">
-      <div className="flex flex-col gap-y-1">
-        <label htmlFor="slug" className="font-semibold text-sm">Slug</label>
-        <div className="">
-          <code className="text-sm text-zinc-700"><span className="bg-blue-100">{pageData.parent?.value ? pageData.parent.value === "/" ? "" : pageData.parent.value : ""}</span>{`${pageData.own_slug}`}</code>
-        </div>
-        <Input
-          id="slug"
-          value={pageData.own_slug}
-          onChange={handleOwnSlugChange}
-          placeholder="e.g. /about-us"
-        />
-      </div>
-
-      {memoParents.length > 0 && <ParentPicker items={memoParents} value={value} setValue={handleParentSlugChange} />}
-    </div>
-  )
-}
-
-type ParentPageValue = {
-  id: string;
-  value: string;
-  label: string;
-}
-function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; value: ParentPageValue | null | undefined; setValue: (v: ParentPageValue | null | undefined) => void; }) {
-  const comboboxid = useId();
-
-  return (
-    <div className="flex flex-col gap-y-1">
-      <h3 className="font-semibold text-sm">Parent page</h3>
-      <Combobox.Root items={items} value={value} onValueChange={(v) => setValue(v)}>
-        <Combobox.Trigger className="flex pr-3 pl-3.5 h-9 /w-[120px] rounded-md border border-zinc-200 items-center justify-between gap-3 text-base text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 data-[popup-open]:bg-zinc-100 cursor-default">
-          <div className="">
-            <div className="text-sm truncate">{value && value.label ? value.label : "Select.."}</div>
+          <div className="w-full">
+            <label htmlFor="type" className="font-semibold text-sm">Type</label>
+            <Input
+              id="type"
+              value={pageData.type}
+              onChange={handleTypeChange}
+              placeholder="e.g. page or post"
+            />
+            <div className="mt-1 text-xs text-zinc-600">"page" or "post"</div>
           </div>
-          <Combobox.Icon className="flex">
-            <ChevronsUpDownIcon size={14} />
-          </Combobox.Icon>
-        </Combobox.Trigger>
-        <Combobox.Portal>
-          <Combobox.Positioner align="start" sideOffset={4}>
-            <Combobox.Popup
-              className="w-md [--input-container-height:3rem] origin-[var(--transform-origin)] max-w-[var(--available-width)] max-h-[24rem] rounded-lg bg-[canvas] shadow-lg shadow-zinc-200 text-zinc-900 outline-1 outline-zinc-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0"
-              aria-label="Select parent page"
-            >
-              <div className="w-full h-[var(--input-container-height)] text-center p-2">
-                <Combobox.Input
-                  id={comboboxid}
-                  placeholder="e.g. About us"
-                  className="h-9 w-full font-normal rounded-md border border-zinc-200 pl-3.5 text-sm text-zinc-900 focus:outline-2 focus:-outline-offset-1 focus:outline-blue-800"
-                />
-              </div>
-              <Combobox.Empty className="p-4 text-[0.925rem] leading-4 text-zinc-600 empty:m-0 empty:p-0">
-                No parent pages found.
-              </Combobox.Empty>
-              <Combobox.List className="overflow-y-auto scroll-py-2 py-2 overscroll-contain max-h-[min(calc(24rem-var(--input-container-height)),calc(var(--available-height)-var(--input-container-height)))] empty:p-0">
-                {(item: any) => {
-                  return (
-                    <Combobox.Item
-                      key={item.value}
-                      value={item}
-                      className="grid min-w-[var(--anchor-width)] cursor-default grid-cols-[0.75rem_1fr] items-start gap-2 py-2 pr-8 pl-4 text-sm leading-4 outline-none select-none data-[highlighted]:relative data-[highlighted]:z-0 data-[highlighted]:text-zinc-50 data-[highlighted]:before:absolute data-[highlighted]:before:inset-x-2 data-[highlighted]:before:inset-y-0 data-[highlighted]:before:z-[-1] data-[highlighted]:before:rounded-sm data-[highlighted]:before:bg-zinc-900"
-                    >
-                      <Combobox.ItemIndicator className="col-start-1">
-                        <CheckIcon className="size-3" />
-                      </Combobox.ItemIndicator>
-                      <div className="col-start-2 flex items-start gap-x-1.5">
-                        <span className="font-medium">{item.label ?? "Unknown"}</span>
-                        <span className="text-xs text-zinc-500">{item.value ?? ""}</span>
-                      </div>
-                    </Combobox.Item>
-                  )
+          <div className="w-full relative">
+            <SlugInput pageData={pageData} handleParentSlugChange={handleParentSlugChange} handleOwnSlugChange={handleOwnSlugChange} />
+            <div className="absolute right-0 -top-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  handleAutoSlug();
                 }}
-              </Combobox.List>
-            </Combobox.Popup>
-          </Combobox.Positioner>
-        </Combobox.Portal>
-        <div className="mt-1 text-xs text-zinc-600">The URL of the page starts with / (typically from the title)</div>
-      </Combobox.Root>
-    </div>
-  )
+                className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
+              >
+                Auto
+              </button>
+            </div>
+          </div>
+          <div className="w-full">
+            <label htmlFor="metadescription" className="font-semibold text-sm">Meta Description</label>
+            <Field.Control
+              id="metadescription"
+              value={pageData.description}
+              onValueChange={handleMetaDescriptionChange}
+              render={<textarea rows={4} className={textareaClasses} />}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 w-full">
+        {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
+        <Button
+          onClick={handleCreatePage}
+          className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
+        >
+          Create page
+        </Button>
+      </div>
+    </>
+  );
 }
 
 /**
@@ -611,4 +960,352 @@ const GithubIcon = ({ width, height }: any) => (
   </svg>
 );
 
+function AppShell({ path, children }: { path: string; children: ReactNode }) {
+  return (
+    <div>
+      <Header path={path} />
+      <DocsLayout path={path}>{children}</DocsLayout>
+      <Footer />
+    </div>
+  )
+}
 
+const DocsLayout = ({ path, children }: { path: string; children: React.ReactNode }) => (
+  <div className="/container mx-auto gap-8 px-4 md:grid md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_1fr] xl:px-0">
+    <aside className="fixed top-14 hidden h-[calc(100vh-3.5rem)] w-full shrink-0 md:sticky md:block xl:border-r">
+      <div className="scrollbar-hidden h-full overflow-y-auto py-4 pr-2 pl-6">
+        <DocsSidebarNav path={path} />
+      </div>
+    </aside>
+    <main className="min-h-screen">{children}</main>
+  </div>
+);
+
+interface DocsSidebarNavProps {
+  path: string;
+  onNavItemClick?: () => void;
+}
+const DocsSidebarNav = ({ path, onNavItemClick }: DocsSidebarNavProps) => {
+  return (
+    <>
+      {navConfig.sidebarNav.map((group, index) => (
+        <div key={index} className="pb-4 [&:last-child]:pb-0">
+          <h4 className="text-foreground mb-1 text-sm font-semibold">{group.title}</h4>
+          {group.items.length && (
+            <DocsSidebarNavItems
+              items={group.items}
+              path={path}
+              onNavItemClick={onNavItemClick}
+            />
+          )}
+        </div>
+      ))}
+    </>
+  );
+};
+
+interface SidebarNavGroup {
+  title: string;
+  items: NavItem[];
+  disabled?: boolean;
+}
+
+interface DocsSidebarNavItemsProps {
+  items: SidebarNavGroup["items"];
+  path: string | null;
+  onNavItemClick?: () => void;
+}
+
+const DocsSidebarNavItems = ({
+  items,
+  path,
+  onNavItemClick,
+}: DocsSidebarNavItemsProps) => {
+  console.log('path', path);
+  const milepath = path === "/" ? "/mile" : `/mile${path}`
+  return (
+    <div className="mt-1 space-y-0.5 text-sm">
+      {items.map((item, index) => {
+        console.log('item', item);
+        return !item.disabled && item.href ? (
+          <a
+            key={index}
+            href={item.href}
+            onClick={onNavItemClick}
+            className={cn(
+              "hover:text-foreground -ml-2 flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 transition-colors",
+              milepath === item.href
+                ? "bg-secondary/50 text-foreground pl-2"
+                : "text-muted-foreground border-transparent",
+            )}
+            target={item.external ? "_blank" : ""}
+            rel={item.external ? "noreferrer" : ""}
+          >
+            {item.title}
+            {item.label && (
+              <span className="bg-info text-info-foreground rounded px-1.5 py-0.5 text-xs font-medium">
+                {item.label}
+              </span>
+            )}
+          </a>
+        ) : (
+          <span
+            key={index}
+            className={cn(
+              "text-muted-foreground -ml-2 flex w-full cursor-not-allowed items-center justify-between gap-2 border border-transparent px-2 py-1.5 opacity-60",
+            )}
+          >
+            {item.title}
+            {item.label && (
+              <span className="bg-info text-info-foreground rounded px-1.5 py-0.5 text-xs font-medium">
+                {item.label}
+              </span>
+            )}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+const Footer = () => (
+  <footer className="border-t border-dashed">
+    <div className="/container mx-auto border-dashed py-4 xl:border-x">
+      <div className="text-muted-foreground text-center text-sm">
+        Senior Living Health Solutions
+      </div>
+    </div>
+  </footer>
+);
+
+function Header({ path }: { path: string; }) {
+  return (
+    <header className="bg-background supports-[backdrop-filter]:bg-background/80 sticky top-0 z-50 mx-auto w-full border-b border backdrop-blur">
+      <div className="/container mx-auto px-4 xl:px-0 flex h-14 items-center">
+        <MainNav path={path} />
+        <MobileNav path={path} />
+        <div className="flex-1" />
+        <div className="flex items-center gap-1">
+          <div className="hidden md:block">
+            {/* <SearchDialog /> */}
+          </div>
+          <Button variant="link" asChild>
+            <a href="/help">Help</a>
+          </Button>
+          {/* <AuthedUserMenu /> */}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function MobileNav({ path }: { path: string; }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex items-center gap-2 md:hidden">
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerTrigger asChild>
+          <Button className="[&>svg]:size-6" variant="ghost" size="icon">
+            <EqualIcon />
+          </Button>
+        </DrawerTrigger>
+        <DrawerPortal>
+          <DrawerTitle>Test</DrawerTitle>
+          <DrawerContent className="mx-auto max-h-[85svh] pl-2">
+            <div className="overflow-auto p-6 text-sm">
+              <div className="space-y-0.5">
+                {navConfig.mainNav.map((item) => (
+                  <MobileNavItem
+                    path={path}
+                    key={item.title}
+                    item={item}
+                    onNavItemClick={() => setOpen(false)}
+                  />
+                ))}
+              </div>
+              {navConfig.sidebarNav.map((group) => (
+                <div key={group.title} className="mt-4">
+                  <h4 className="text-foreground mb-1 text-sm font-semibold">{group.title}</h4>
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => (
+                      <MobileNavItem
+                        path={path}
+                        key={item.title}
+                        item={item}
+                        onNavItemClick={() => setOpen(false)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DrawerContent>
+        </DrawerPortal>
+      </Drawer>
+      <div className="mx-2 my-auto h-6 w-[1px] bg-zinc-200" />
+      <a href="/" className="ml-2 flex items-center">
+        {/* <Circle className="size-3" /> */}
+        <span className="ml-0.5 font-mono text-lg font-black">Mile</span>
+      </a>
+    </div>
+  );
+}
+
+interface NavItem {
+  title: string;
+  href: string;
+  disabled?: boolean;
+  external?: boolean;
+  label?: string;
+}
+
+function MobileNavItem({ path, item, onNavItemClick }: { path: string; item: NavItem; onNavItemClick: () => void }) {
+  return !item.disabled && item.href ? (
+    <a
+      href={item.href}
+      onClick={onNavItemClick}
+      className={cn(
+        "hover:text-foreground -ml-2 flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 transition-colors",
+        path === item.href
+          ? "bg-secondary/50 text-foreground pl-2"
+          : "text-muted-foreground border-transparent",
+      )}
+      target={item.external ? "_blank" : ""}
+      rel={item.external ? "noreferrer" : ""}
+    >
+      {item.title}
+      {item.label && (
+        <span className="bg-info text-info-foreground rounded px-1.5 py-0.5 text-xs font-medium">
+          {item.label}
+        </span>
+      )}
+    </a>
+  ) : (
+    <span
+      className={cn(
+        "text-muted-foreground -ml-2 flex w-full cursor-not-allowed items-center justify-between gap-2 border border-transparent px-2 py-1.5 opacity-60",
+      )}
+    >
+      {item.title}
+      {item.label && (
+        <span className="bg-info text-info-foreground rounded px-1.5 py-0.5 text-xs font-medium">
+          {item.label}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function MainNav({ path }: { path: string; }) {
+  return (
+    <div className="mr-4 hidden md:flex">
+      <a href="/mile" className="px-6 flex items-center">
+        {/* <Circle className="size-3 mr-2" /> */}
+        <span className="font-mono text-lg font-black">Mile</span>
+      </a>
+      <nav className="flex items-center gap-6 pl-6 text-sm">
+        <a
+          href="/docs"
+          className={cn(
+            "hover:text-foreground transition-colors",
+            path.startsWith("/docs")
+              ? "text-foreground font-medium"
+              : "text-muted-foreground",
+          )}
+        >
+          Docs
+        </a>
+        <a
+          href="/components"
+          className={cn(
+            "hover:text-foreground transition-colors",
+            path?.startsWith("/components")
+              ? "text-foreground font-medium"
+              : "text-muted-foreground",
+          )}
+        >
+          Components
+        </a>
+        <a
+          href="/themes"
+          className={cn(
+            "hover:text-foreground transition-colors",
+            path?.startsWith("/themes")
+              ? "text-foreground font-medium"
+              : "text-muted-foreground",
+          )}
+        >
+          Themes
+        </a>
+      </nav>
+    </div>
+  );
+}
+
+const navConfig = {
+  mainNav: [
+    {
+      title: "Docs",
+      href: "/docs/getting-started",
+    },
+    {
+      title: "Components",
+      href: "/docs/components",
+    },
+    {
+      title: "Themes",
+      href: "/themes",
+    },
+  ],
+  sidebarNav: [
+    {
+      title: "Menu",
+      items: [
+        {
+          title: "Dashboard",
+          href: "/mile",
+        },
+        {
+          title: "Pages",
+          href: "/mile/pages",
+        },
+        {
+          title: "Search",
+          href: "/mile/search",
+        },
+        {
+          title: "Gallery",
+          href: "/mile/gallery",
+        },
+      ],
+    },
+    {
+      title: "Components",
+      items: [
+        {
+          title: "Accordion",
+          href: "/docs/components/accordion",
+        },
+        {
+          title: "Alert Dialog",
+          href: "/docs/components/alert-dialog",
+        },
+        {
+          title: "Alert",
+          href: "/docs/components/alert",
+        },
+        {
+          title: "Data Table",
+          href: "/docs/components/data-table",
+          disabled: true,
+          label: "Soon",
+        },
+        {
+          title: "Date Picker",
+          href: "/docs/components/date-picker",
+        },
+      ],
+    },
+  ],
+};

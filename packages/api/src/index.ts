@@ -2,8 +2,8 @@ import { Hono } from 'hono'
 import { handle } from 'hono/vercel'
 import { HTTPException } from "hono/http-exception";
 import { db } from './db/drizzle';
-import { pages as pagesTable, medias as mediasTable } from './db/schema';
-import { desc, eq } from 'drizzle-orm';
+import { pages as pagesTable, medias as mediasTable, SelectPage } from './db/schema';
+import { desc, eq, or, ilike } from 'drizzle-orm';
 import { z } from 'zod';
 import { handleRequest, type Router, route } from 'better-upload/server';
 import { cloudflare } from "better-upload/server/helpers";
@@ -74,12 +74,29 @@ export function MileAPI(options: MileAPIOptions) {
       // Get the custom response
       return err.getResponse();
     }
-    return c.json({ message: err.message ?? "Error" }, 400);
+    return c.json({ error: true, message: err.message ?? "Error" }, 400);
   });
 
   app.route('/medias', medias);
   app.route('/pages', pages);
   app.route('/page', page_by_slug);
+  app.get('/search', async (c) => {
+    const { q } = c.req.query();
+    if (!q || typeof q !== 'string') {
+      return c.json({ message: 'Query parameter "q" is required' }, 400);
+    }
+
+    const results: SelectPage[] = await db.select()
+      .from(pagesTable)
+      .where(
+        or(
+          ilike(pagesTable.title, `%${q}%`),
+          ilike(pagesTable.slug, `%${q}%`)
+        )
+      );
+
+    return c.json(results);
+  });
   app.post('/upload', (c) => {
     return handleRequest(c.req.raw, router);
   });
@@ -211,8 +228,10 @@ pages.delete('/:id', async (c) => {
 const createPageSchema = z.object({
   id: z.string(),
   slug: z.string(),
+  type: z.string(),
   title: z.string().optional(),
   content: z.string().optional(),
+  description: z.string().optional(),
   parent_id: z.string().optional(),
 });
 

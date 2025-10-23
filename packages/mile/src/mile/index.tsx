@@ -27,10 +27,13 @@ import { Field } from '@base-ui-components/react/field';
 import { Checkbox } from '@base-ui-components/react/checkbox';
 import slugify from '@sindresorhus/slugify';
 import { Combobox } from '@base-ui-components/react/combobox';
+import { LocalPageData, ParentPageValue, SlugInput } from "./shared";
 
 const HEADER_HEIGHT = 40;
 const NEXT_PUBLIC_HOST_URL = process.env.NEXT_PUBLIC_HOST_URL;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
+const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
+const fetcher = (key: string[]) => fetch(`${API}${key.join("")}`).then(res => res.json());
 
 const resolvePath = (paths: string[] = []) => {
   const hasPath = paths.length > 0;
@@ -42,9 +45,6 @@ const resolvePath = (paths: string[] = []) => {
     path: `/${(isEdit || isIframeContent ? [...paths].slice(0, paths.length - 1) : [...paths]).join("/")}`,
   };
 };
-
-const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
-const fetcher = (key: string[]) => fetch(`${API}${key.join("")}`).then(res => res.json());
 
 export function Mile({
   params,
@@ -75,7 +75,6 @@ function MileInner({
   isIframeContent: boolean;
   path: string
 }) {
-  // console.log({ isEdit, isIframeContent, path });
   let { data: page_data, error: pageError, isLoading: pageIsLoading } = useSWR([`/pages`, path], fetcher);
 
   if (pageError) return <div>failed to load</div>
@@ -182,7 +181,7 @@ function MileReady({
   if (isEdit) {
     return (
       <>
-        <EditorProvider page_info={page_data} tree={tree} setData={setDataAndSend} setLastOperation={setLastOperation}>
+        <EditorProvider page_data={page_data} tree={tree} setData={setDataAndSend} setLastOperation={setLastOperation}>
           <MileFrame
             title={page_data?.title ?? "Title"}
             data={data}
@@ -1160,7 +1159,7 @@ function MileHeader({
   return (
     <div className="mile-header h-[40px] bg-white" style={{ zIndex: 2 }}>
       <div className="mile-headLeft">
-        <a href="/mile/dashboard">Dashboard</a>
+        <a href="/mile/pages" className="text-sm flex items-center gap-x-1 [&_svg]:text-zinc-400 hover:[&_svg]:text-zinc-900"><ChevronLeft size={16} /> Pages</a>
         <Divider />
         <button
           onClick={() => {
@@ -1331,26 +1330,7 @@ function MileHeaderEditPageInfo({ title }: { title?: string }) {
   )
 }
 
-type ParentPageValue = {
-  id: string;
-  value: string;
-  label: string;
-}
 
-type LocalPageMetaData = Omit<PageMetaData, "slug"> & {
-  own_slug: string;
-  parent?: ParentPageValue | null;
-}
-
-function buildParentItems(parents: any[]): ParentPageValue[] {
-  return parents.map((e) => {
-    return {
-      id: e.id,
-      value: e.slug,
-      label: e.title,
-    }
-  })
-}
 
 function getParentValue(parent?: PageData) {
   if (!parent) return undefined;
@@ -1372,23 +1352,24 @@ function getOwnSlug(page_slug: string, parent: ParentPageValue | undefined) {
   }
 }
 
-function buildLocalPageInfo(page_info: PageMetaData, parent_page?: PageData): LocalPageMetaData {
-  console.log('page_info', page_info);
-  console.log('parent_page', parent_page);
-  const parent_value = page_info.parent_id ? getParentValue(parent_page) : undefined;
-  const own_slug = getOwnSlug(page_info.slug, parent_value);
+function buildLocalPageData(page_data: PageData, parent_page?: PageData): LocalPageData {
+  const parent_value = page_data.parent_id ? getParentValue(parent_page) : undefined;
+  const own_slug = getOwnSlug(page_data.slug, parent_value);
   return {
-    id: page_info.id,
-    title: page_info.title,
+    id: page_data.id,
+    title: page_data.title,
+    type: page_data.type,
     own_slug,
     parent: parent_value,
-    parent_id: page_info.parent_id,
+    parent_id: page_data.parent_id,
+    content: page_data.content,
+    description: page_data.description,
   }
 }
 
 function EditPageInfoModal({ close, setLocalTitle }: any) {
   const editor = useEditor();
-  const { data: parent_page, error: parentError, isLoading: parentIsLoading } = useSWR(editor.page_info.parent_id ? [`/pages/`, editor.page_info.parent_id] : null, fetcher);
+  const { data: parent_page, error: parentError, isLoading: parentIsLoading } = useSWR(editor.page_data.parent_id ? [`/pages/`, editor.page_data.parent_id] : null, fetcher);
   if (parentIsLoading) return <div>loading...</div>
   if (parentError) return <div>error loading parent page data</div>
   // if (!parent_page) return <div>no parent page data</div>
@@ -1431,7 +1412,7 @@ function savePage(id: string, data: { [k: string]: any }) {
 
 function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
   const editor = useEditor();
-  const [pageData, setPageData] = useState<LocalPageMetaData>(() => buildLocalPageInfo(editor.page_info, parent_page));
+  const [pageData, setPageData] = useState<LocalPageData>(() => buildLocalPageData(editor.page_data, parent_page));
   const [error, setError] = useState<string | null>(null);
   console.log('pageData', pageData);
 
@@ -1440,6 +1421,12 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
     setLocalTitle(value)
     setPageData((e) => {
       return { ...e, title: value };
+    });
+  }
+  function handleTypeChange(event: any) {
+    const value = event.target.value;
+    setPageData((e) => {
+      return { ...e, type: value };
     });
   }
 
@@ -1455,16 +1442,28 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
     });
   }
 
+  function handleContentChange(v: string) {
+    setPageData((e) => {
+      return { ...e, content: v };
+    });
+  }
+
+  function handleMetaDescriptionChange(v: string) {
+    setPageData((e) => {
+      return { ...e, description: v };
+    });
+  }
+
   function handleAutoSlug() {
     setPageData((e) => {
       if (!e.title) {
         return e;
       }
-      return { ...e, slug: `/${slugify(e.title)}` };
+      return { ...e, own_slug: `/${slugify(e.title)}` };
     });
   }
 
-  async function handleEditPage() {
+  async function handleSavePage() {
     // const pageId = generateId();
     // validate
     if (pageData.title === "") {
@@ -1484,10 +1483,10 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
       return;
     }
     setError(null);
-    function buildPageSlug(data: LocalPageMetaData) {
+    function buildPageSlug(data: LocalPageData) {
       return data.parent ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}` : data.own_slug;
     }
-    function buildPageParentId(data: LocalPageMetaData) {
+    function buildPageParentId(data: LocalPageData) {
       if (data.parent) {
         if (data.parent.value === "/" || data.parent.value === "") {
           return undefined
@@ -1501,14 +1500,15 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
       title: pageData.title?.trim(),
       slug: buildPageSlug(pageData),
       parent_id: buildPageParentId(pageData),
-      // description
+      content: (pageData.content as string).trim(),
+      description: pageData.description,
       // keywords
       // llm
       // no_index
       // no_follow
     }
     console.log('payload', payload);
-    await savePage(editor.page_info.id, payload)
+    await savePage(editor.page_data.id, payload)
       .then((e) => {
         console.log('e', e);
         close();
@@ -1521,92 +1521,80 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
   }
 
   return (
-    <div className="flex py-8 h-full">
-      <div className="w-full flex flex-col items-center gap-y-4">
-        <div className="w-full">
-          <label htmlFor="title" className="font-semibold text-sm">Title</label>
-          <Input
-            id="title"
-            value={pageData.title}
-            onChange={handleTitleChange}
-            placeholder="e.g. About us"
-          />
-          <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
-        </div>
-        <div className="w-full relative">
-          <SlugInput pageData={pageData} handleParentSlugChange={handleParentSlugChange} handleOwnSlugChange={handleOwnSlugChange} />
-          <div className="absolute right-0 -top-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                handleAutoSlug();
-              }}
-              className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
-            >
-              Auto
-            </button>
+    <div className="flex flex-col py-8 /h-full">
+      <div className="space-y-4">
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
+            <label htmlFor="title" className="font-semibold text-sm">Title</label>
+            <Input
+              id="title"
+              value={pageData.title}
+              onChange={handleTitleChange}
+              placeholder="e.g. About us"
+            />
+            <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
+          </div>
+          <div className="w-full">
+            <label htmlFor="type" className="font-semibold text-sm">Type</label>
+            <Input
+              id="type"
+              value={pageData.type}
+              onChange={handleTypeChange}
+              placeholder="e.g. page or post"
+            />
+            <div className="mt-1 text-xs text-zinc-600">"page" or "post"</div>
           </div>
         </div>
-        <div className="mt-4 w-full">
-          {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
-          <Button
-            onClick={handleEditPage}
-            className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
-          >
-            Save
-          </Button>
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full relative">
+            <SlugInput pageData={pageData} handleParentSlugChange={handleParentSlugChange} handleOwnSlugChange={handleOwnSlugChange} hideCurrentPageInParentPicker={true} />
+            <div className="absolute right-0 -top-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  handleAutoSlug();
+                }}
+                className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
+              >
+                Auto
+              </button>
+            </div>
+          </div>
         </div>
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
+            <label htmlFor="metadescription" className="font-semibold text-sm">Meta Description</label>
+            <Field.Control
+              id="metadescription"
+              value={pageData.description}
+              onValueChange={handleMetaDescriptionChange}
+              render={<textarea rows={4} className={textareaClasses} />}
+            />
+          </div>
+        </div>
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
+            <label htmlFor="content" className="font-semibold text-sm">Content</label>
+            <Field.Control
+              id="content"
+              value={pageData.content as string}
+              onValueChange={handleContentChange}
+              render={<textarea rows={4} className={textareaClasses} />}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 w-full">
+        {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
+        <Button
+          onClick={handleSavePage}
+          className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
+        >
+          Save
+        </Button>
       </div>
     </div>
   );
-}
-
-function SlugInput({ pageData, handleParentSlugChange, handleOwnSlugChange }: { pageData: LocalPageMetaData; handleParentSlugChange: (v?: ParentPageValue | null) => void; handleOwnSlugChange: (event: any) => void }) {
-  const { data: all_pages, error: parentsError, isLoading: parentsIsLoading } = useSWR([`/pages`], fetcher);
-  const memoParents = useMemo(() => {
-    if (all_pages && all_pages.length > 0) {
-      const parents = all_pages
-        .filter((e: any) => {
-          // exclude the self page
-          return e.slug !== `${pageData.parent?.value}${pageData.own_slug}`
-        })
-        .map((e: any) => {
-          if (e.slug === "/") {
-            return { ...e, title: "Root" }
-          }
-          return e;
-        }).sort((a: any, b: any) => {
-          if (a.slug === "/") return -1;
-          if (b.slug === "/") return 1;
-          return 0; // keep original order otherwise
-        });
-      return buildParentItems(parents);
-    }
-    return [];
-  }, [all_pages, pageData.parent?.value, pageData.own_slug]);
-
-  // value is pageData.parent but we need to get from memoParents 
-  // to get the referentially equal object so that the Combobox list item is highlighted
-  const value = memoParents.find(e => e.value === pageData.parent?.value) ?? null;
-
-  return (
-    <div className="flex flex-col gap-y-3">
-      <div className="flex flex-col gap-y-1">
-        <label htmlFor="slug" className="font-semibold text-sm">Slug</label>
-        <div className="">
-          <code className="text-sm text-zinc-700"><span className="bg-blue-100">{pageData.parent?.value ? pageData.parent.value === "/" ? "" : pageData.parent.value : ""}</span>{`${pageData.own_slug}`}</code>
-        </div>
-        <Input
-          id="slug"
-          value={pageData.own_slug}
-          onChange={handleOwnSlugChange}
-          placeholder="e.g. /about-us"
-        />
-      </div>
-
-      {memoParents.length > 0 && <ParentPicker items={memoParents} value={value} setValue={handleParentSlugChange} />}
-    </div>
-  )
 }
 
 function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; value: ParentPageValue | null | undefined; setValue: (v: ParentPageValue | null | undefined) => void; }) {
@@ -1616,7 +1604,7 @@ function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; va
     <div className="flex flex-col gap-y-1">
       <h3 className="font-semibold text-sm">Parent page</h3>
       <Combobox.Root items={items} value={value} onValueChange={(v) => setValue(v)}>
-        <Combobox.Trigger className="flex pr-3 pl-3.5 h-9 /w-[120px] rounded-md border border-zinc-200 items-center justify-between gap-3 text-base text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 data-[popup-open]:bg-zinc-100 cursor-default">
+        <Combobox.Trigger className="flex pr-3 pl-3.5 h-9 rounded-md border border-zinc-200 items-center justify-between gap-3 text-base text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 data-[popup-open]:bg-zinc-100 cursor-default">
           <div className="">
             <div className="text-sm truncate">{value && value.label ? value.label : "Select.."}</div>
           </div>
@@ -1641,7 +1629,7 @@ function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; va
                 No parent pages found.
               </Combobox.Empty>
               <Combobox.List className="overflow-y-auto scroll-py-2 py-2 overscroll-contain max-h-[min(calc(24rem-var(--input-container-height)),calc(var(--available-height)-var(--input-container-height)))] empty:p-0">
-                {(item: any) => {
+                {(item: ParentPageValue) => {
                   return (
                     <Combobox.Item
                       key={item.value}
@@ -1662,7 +1650,6 @@ function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; va
             </Combobox.Popup>
           </Combobox.Positioner>
         </Combobox.Portal>
-        <div className="mt-1 text-xs text-zinc-600">The URL of the page starts with / (typically from the title)</div>
       </Combobox.Root>
     </div>
   )
@@ -1786,7 +1773,7 @@ function MediaFilesGrid({ data, selectedFileId, handleSelectFile }: { data: any[
 }
 
 function getImageUrl(key: string) {
-  return `${process.env.NEXT_PUBLIC_IMAGE_URL}/${key}`;
+  return `${NEXT_PUBLIC_IMAGE_URL}/${key}`;
 }
 
 function getFileName(filepath: string) {

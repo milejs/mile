@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from "react";
 import { useMileProvider } from "./client";
 import { invariant } from "@/lib/invariant";
-import { Action, Actions, Config, HistoryEntry, MileClient, MileEditor, MileHistoryManager, MilePersister, Operation, PageMetaData, Schema, SchemaTypeDefinition, SetData, SetOperation, TreeData, NodeData, Trigger, Components } from "@milejs/types";
+import { Action, Actions, Config, HistoryEntry, MileClient, MileEditor, MileHistoryManager, MilePersister, Operation, PageMetaData, Schema, SchemaTypeDefinition, SetData, SetOperation, TreeData, NodeData, Trigger, Components, PageData } from "@milejs/types";
 import { Tree } from "./tree";
 import { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/types/types";
 import { mutate } from "swr";
@@ -22,14 +22,14 @@ type EditorProviderProps = {
   tree: Tree;
   setData: SetData;
   setLastOperation: SetOperation;
-  page_info: PageMetaData;
+  page_data: PageData;
 };
-export function EditorProvider({ page_info, children, tree, setData, setLastOperation }: EditorProviderProps) {
+export function EditorProvider({ page_data, children, tree, setData, setLastOperation }: EditorProviderProps) {
   const mile = useMileProvider();
   invariant(mile);
   const editor = useMemo(() => {
-    return new Editor(mile, tree, page_info, setData, setLastOperation);
-  }, [mile, page_info, tree, setData, setLastOperation]);
+    return new Editor(mile, tree, page_data, setData, setLastOperation);
+  }, [mile, page_data, tree, setData, setLastOperation]);
   return (
     <EditorContext value={editor}>{children}</EditorContext>
   );
@@ -202,7 +202,8 @@ export class Editor implements MileEditor {
   mile: MileClient;
   config: Config;
   tree: Tree;
-  page_info: PageMetaData;
+  // stores page_data that has page metadata (page content is in here but we manage it through editor's tree instead)
+  page_data: PageData;
   setData: SetData;
   setLastOperation: SetOperation;
   history: HistoryManager = new HistoryManager();
@@ -214,12 +215,12 @@ export class Editor implements MileEditor {
   breakpoint: "desktop" | "tablet" | "mobile";
   is_disabled: boolean;
 
-  constructor(mile: MileClient, tree: Tree, page_info: PageMetaData, setData: SetData, setLastOperation: SetOperation) {
+  constructor(mile: MileClient, tree: Tree, page_data: PageData, setData: SetData, setLastOperation: SetOperation) {
     this.is_disabled = false;
     this.mile = mile;
     this.config = mile.config;
     this.tree = tree;
-    this.page_info = page_info;
+    this.page_data = page_data;
     this.setData = setData;
     this.setLastOperation = setLastOperation;
     this.actions = initializeActions(actions, mile.config.actions);
@@ -254,7 +255,7 @@ export class Editor implements MileEditor {
     this.is_disabled = true;
     this.forceReRender();
     try {
-      const result = await this.persister.save(this.page_info.id, this.page_info, this.tree.data, this.config.components);
+      const result = await this.persister.save(this.page_data.id, this.page_data, this.tree.data, this.config.components);
       this.is_disabled = false;
       this.forceReRender();
       toast.success("Saved successfully");
@@ -453,7 +454,7 @@ class Persister implements MilePersister {
     this.editor = editor;
   }
 
-  async save(id: string, page_info: PageMetaData, content: TreeData, components?: Components | undefined) {
+  async save(id: string, page_data: PageData, content: TreeData, components?: Components | undefined) {
     // convert json to mdx string
     const mdxstring = treeToMDXstring(content, components);
     console.log('mdxstring', mdxstring);
@@ -464,7 +465,7 @@ class Persister implements MilePersister {
         const resp = await fetch(`${API}/pages/${id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...page_info, content: mdxstring }),
+          body: JSON.stringify({ ...page_data, content: mdxstring }),
         });
         if (!resp.ok) {
           const error = new Error("An error occurred while saving the page.");
