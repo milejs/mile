@@ -1,7 +1,28 @@
-'use client';
+"use client";
 
-import { ComponentData, Components, Config, FieldDefinition, MileClient, MileComponentProps, MileRegistry, MileSchema as MileSchemaType, Schema, SchemaTypeDefinition } from "@milejs/types";
-import React, { ComponentType, createContext, ReactNode, useContext, useEffect, useMemo } from "react";
+import {
+  ComponentData,
+  Components,
+  Config,
+  FieldDefinition,
+  MileClient,
+  MileComponentProps,
+  MileRegistry,
+  MileSchema as MileSchemaType,
+  NodeData,
+  Schema,
+  SchemaTypeDefinition,
+  TreeData,
+} from "@milejs/types";
+import React, {
+  ComponentType,
+  createContext,
+  JSX,
+  ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+} from "react";
 import { invariant } from "@/lib/invariant";
 
 export function ClientComponent(props: MileComponentProps) {
@@ -11,7 +32,10 @@ export function ClientComponent(props: MileComponentProps) {
   if (!c) throw new Error(`Render: component not found: ${type}`);
   let Comp: React.ComponentType<any> | undefined;
   if (typeof c.component === "function") {
-    console.log("resolving client component for app ======: shared component", type);
+    console.log(
+      "resolving client component for app ======: shared component",
+      type,
+    );
     Comp = c.component;
   }
   // if (typeof c.component === "function") {
@@ -58,6 +82,11 @@ export function useMileProvider() {
   return c;
 }
 
+function initializeSchema(userSchema?: Schema): Schema {
+  if (!userSchema) return internalSchema;
+  return [...internalSchema, ...userSchema];
+}
+
 class MileSchema implements MileSchemaType {
   user_schema: Schema;
   schema: Schema;
@@ -87,7 +116,7 @@ class MileSchema implements MileSchemaType {
     }
   }
   resolveField(field: FieldDefinition): FieldDefinition | SchemaTypeDefinition {
-    throw new Error("Method not implemented.")
+    throw new Error("Method not implemented.");
   }
   // resolveField(field: FieldDefinition) {
   //   if (isBuiltinSchemaType(field.type)) {
@@ -137,7 +166,7 @@ const internalSchema = [
         name: "is_external",
         title: "External",
       },
-    ]
+    ],
   },
   {
     type: "image",
@@ -154,14 +183,63 @@ const internalSchema = [
         name: "alt_text",
         title: "Alt Text",
       },
-    ]
+    ],
   },
-]
+  {
+    type: "heading",
+    name: "heading",
+    title: "Heading",
+    fields: [],
+    isMarkdown: true,
+  },
+  {
+    type: "paragraph",
+    name: "paragraph",
+    title: "Paragraph",
+    fields: [],
+    isMarkdown: true,
+  },
+  {
+    type: "text",
+    name: "text",
+    title: "Text",
+    fields: [],
+    isMarkdown: true,
+  },
+];
 
-function initializeSchema(userSchema?: Schema): Schema {
-  if (!userSchema) return internalSchema;
-  return [...internalSchema, ...userSchema];
-}
+// markdown components
+const builtinComponents: Components = {
+  heading: {
+    name: "heading",
+    component: Heading,
+  },
+  paragraph: {
+    name: "paragraph",
+    component: Paragraph,
+  },
+  strong: {
+    name: "strong",
+    component: Strong,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  link: {
+    name: "link",
+    component: Link,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  text: {
+    name: "text",
+    component: Text,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+};
 
 class Mile implements MileClient {
   config: Config;
@@ -172,7 +250,7 @@ class Mile implements MileClient {
   constructor(config: Config, optionComponents?: any) {
     this.config = config;
     if (optionComponents) this.userOptions = optionComponents;
-    this.registry = new Registry(config?.components);
+    this.registry = new Registry(config.components);
     if (!this.config.schema) {
       throw new Error("config.schema is required");
     }
@@ -188,6 +266,73 @@ class Mile implements MileClient {
   }
 }
 
+function getHeadingClasses(level: number) {
+  switch (level) {
+    case 1:
+      return "text-3xl";
+    case 2:
+      return "text-2xl";
+    case 3:
+      return "text-xl";
+    case 4:
+      return "text-lg";
+    case 5:
+      return "text-base";
+    case 6:
+      return "text-sm";
+    default:
+      return "text-base";
+  }
+}
+
+function Heading(props: any) {
+  const { depth = 1 } = props;
+  const level = Math.min(Math.max(depth, 1), 6);
+  const Tag = `h${level}` as keyof JSX.IntrinsicElements;
+  return (
+    <MarkdownBlockContainer>
+      <Tag className={`text-left font-bold ${getHeadingClasses(level)}`}>
+        {props.children}
+      </Tag>
+    </MarkdownBlockContainer>
+  );
+}
+
+function Paragraph(props: any) {
+  return (
+    <MarkdownBlockContainer>
+      <p className="text-left">{props.children}</p>
+    </MarkdownBlockContainer>
+  );
+}
+
+function Strong(props: any) {
+  return <span className="font-bold">{props.children}</span>;
+}
+
+function Text(props: any) {
+  return <span className="">dummy text</span>;
+}
+
+function Link(props: any) {
+  return (
+    <a
+      href={props?.href}
+      className="underline text-blue-600 hover:text-blue-700"
+    >
+      {props.children}
+    </a>
+  );
+}
+
+function MarkdownBlockContainer(props: any) {
+  return (
+    <div className="relative px-4 md:px-0 max-w-5xl mx-auto">
+      {props.children}
+    </div>
+  );
+}
+
 class Registry implements MileRegistry {
   components: Components = {};
 
@@ -195,45 +340,50 @@ class Registry implements MileRegistry {
     if (!user_components) {
       return;
     }
-    this.registerComponents(user_components);
+    this.registerComponents(builtinComponents);
+    this.registerComponents(user_components, true);
   }
 
   toString() {
     return JSON.stringify(this.components);
   }
 
-  registerComponents(components: Components) {
-    if (!components) throw new Error("Registering components failed: no components");
-    // name and componentData.name must be unique
+  registerComponents(components: Components, is_user_component?: boolean) {
+    if (!components)
+      throw new Error("Registering components failed: no components");
+    // key and componentData.name must be unique
     for (const key in components) {
       const c = components[key];
       if (!c) throw new Error("Component data not found");
-      this.registerComponent(key, c);
+      this.registerComponent(key, c, is_user_component);
     }
   }
 
-  registerComponent(name: string, componentData: ComponentData) {
-    if (!componentData) {
-      throw new Error(`Registering component failed: no component data for ${name}`);
-    }
+  registerComponent(
+    name: string,
+    componentData: ComponentData,
+    is_user_component?: boolean,
+  ) {
+    // key must match component's name
     if (name !== componentData.name) {
       throw new Error(
         `Registering component failed: component data key doesn't match the name ${name} ${JSON.stringify(componentData)}`,
       );
     }
-    // name and componentData.name must be unique
+    // name must be unique
     if (this.components[name]) {
-      console.warn(`%cComponent '${name}' already exists.`, "color:red;font-size:24px");
-    }
-    // name and componentData.name must be unique
-    for (const key in this.components) {
-      const c = this.mustGetComponent(key);
-      invariant(key === c.name);
-      if (key === name || key === componentData.name) {
-        console.warn(`Duplicate component name found: ${key}`);
-      }
+      console.warn(
+        `%cComponent '${name}' already exists.`,
+        "color:red;font-size:24px",
+      );
     }
     this.components[name] = componentData;
+    if (is_user_component) {
+      this.components[name].settings = {
+        ...this.components[name].settings,
+        isUserComponent: true,
+      };
+    }
   }
 
   hasComponent(name: string) {

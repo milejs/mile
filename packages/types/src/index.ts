@@ -6,7 +6,9 @@ import { ComponentType, ReactElement, ReactNode, RefObject } from "react";
 export interface MileOptions {
   options: OptionComponents;
   schema: MileSchema;
-  resolveOptionFromField(field: FieldDefinition): React.ComponentType<FieldOptionProps>;
+  resolveOptionFromField(
+    field: FieldDefinition,
+  ): React.ComponentType<FieldOptionProps>;
 }
 
 export interface FieldOptionProps {
@@ -36,6 +38,8 @@ export type ComponentData = {
   settings?: {
     /** tell Render not to wrap this component with Dnd */
     noDndWrap?: boolean;
+    isInlineContent?: boolean;
+    isUserComponent?: boolean;
   };
   icon?: {
     path?: string;
@@ -57,6 +61,7 @@ export interface MileClient {
   config: any;
   userOptions: any;
   registry: MileRegistry;
+  schema: MileSchema;
   setConfig(config: any): void;
   setUserOptions(optionComponents: any): void;
 }
@@ -71,9 +76,9 @@ export interface MileRegistry {
 }
 
 type GithubStorage = {
-  kind: "github",
+  kind: "github";
   repo: string;
-}
+};
 
 export type Config = {
   storage: GithubStorage;
@@ -82,10 +87,17 @@ export type Config = {
   components?: Components;
 };
 
-export type SetData = React.Dispatch<React.SetStateAction<TreeData | undefined>>;
-export type SetOperation = React.Dispatch<React.SetStateAction<Operation | null>>;
+// export type SetData = React.Dispatch<React.SetStateAction<TreeData | undefined>>;
+export type SetData = (
+  value: React.SetStateAction<TreeData | undefined>,
+  shouldSend?: boolean,
+) => void;
+export type SetOperation = React.Dispatch<
+  React.SetStateAction<Operation | null>
+>;
 
 export interface MileEditor {
+  activeNodeId: string | null;
   mile: MileClient;
   config: Config;
   tree: MileTree;
@@ -103,6 +115,7 @@ export interface MileEditor {
   is_disabled: boolean;
   setZoom(level: number): void;
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile"): void;
+  mergeMarkdownData(node_id: string, md: string): void;
   save(): void;
   updateData(data: TreeData, lastOperation?: Operation): void;
   findNode(id: string): NodeData | null;
@@ -141,7 +154,9 @@ export type PageData = {
   updated_at?: number;
 };
 
-export type PageMetaData = Omit<PageData, "content"> & { _isSlugDirty?: boolean };
+export type PageMetaData = Omit<PageData, "content"> & {
+  _isSlugDirty?: boolean;
+};
 
 export type TreeData = {
   [key: string]: NodeData;
@@ -377,11 +392,11 @@ export interface MilePersister {
     id: string,
     pageData: PageData,
     content: TreeData,
-    components?: Components | undefined
+    components: Components,
   ): Promise<
     | {
-      message: any;
-    }
+        message: any;
+      }
     | undefined
   >;
 }
@@ -407,7 +422,9 @@ export type Operation = {
 type ConditionalProperty = boolean | ConditionalPropertyCallback | undefined;
 
 /** @public */
-export declare type ConditionalPropertyCallback = (context: ConditionalPropertyCallbackContext) => boolean;
+export declare type ConditionalPropertyCallback = (
+  context: ConditionalPropertyCallbackContext,
+) => boolean;
 
 /** @public */
 export declare interface ConditionalPropertyCallbackContext {
@@ -430,6 +447,8 @@ interface BaseSchemaDefinition {
   isHighlight?: boolean;
   isResponsive?: boolean;
   thumbnail?: string;
+  isMarkdown?: boolean;
+  getInitialNodeData?: (node_id: string) => NodeData;
 }
 
 interface Group {
@@ -451,8 +470,8 @@ interface BaseOptionType {
   };
 }
 
-interface SectionOptions extends BaseOptionType { }
-interface RowOptions extends BaseOptionType { }
+interface SectionOptions extends BaseOptionType {}
+interface RowOptions extends BaseOptionType {}
 
 type InitialValueProperty<Value> = Value | undefined;
 
@@ -503,7 +522,7 @@ interface EnumListProps<V = unknown> {
   direction?: "horizontal" | "vertical";
 }
 
-interface StringOptions extends EnumListProps<string> { }
+interface StringOptions extends EnumListProps<string> {}
 
 export interface StringDefinition extends BaseSchemaDefinition {
   type: "string";
@@ -519,7 +538,10 @@ type ArrayOfEntry<T> = Omit<T, "name" | "hidden"> & {
 };
 
 type IntrinsicArrayOfDefinition = {
-  [K in keyof BuiltInDefinitions]: Omit<ArrayOfEntry<BuiltInDefinitions[K]>, "validation" | "initialValue"> & {
+  [K in keyof BuiltInDefinitions]: Omit<
+    ArrayOfEntry<BuiltInDefinitions[K]>,
+    "validation" | "initialValue"
+  > & {
     // validation?: SchemaValidationValue;
     initialValue?: InitialValueProperty<any>;
   };
@@ -528,7 +550,9 @@ type IntrinsicArrayOfDefinition = {
 type ArrayOfType<
   TType extends BuiltInTypeName = BuiltInTypeName,
   TAlias extends BuiltInTypeName | undefined = undefined,
-> = IntrinsicArrayOfDefinition[TType] | ArrayOfEntry<TypeAliasDefinition<string, TAlias>>;
+> =
+  | IntrinsicArrayOfDefinition[TType]
+  | ArrayOfEntry<TypeAliasDefinition<string, TAlias>>;
 
 interface ArrayOptions<V = unknown> {
   list?: TitledListValue<V>[] | V[];
@@ -559,11 +583,15 @@ interface FieldDefinitionBase {
   group?: string | string[];
 }
 
-interface TypeAliasDefinition<TType extends string, TAlias extends BuiltInTypeName | undefined>
-  extends BaseSchemaDefinition {
+interface TypeAliasDefinition<
+  TType extends string,
+  TAlias extends BuiltInTypeName | undefined,
+> extends BaseSchemaDefinition {
   name?: string;
   type: TType;
-  options?: TAlias extends BuiltInTypeName ? BuiltInDefinitions[TAlias]["options"] : unknown;
+  options?: TAlias extends BuiltInTypeName
+    ? BuiltInDefinitions[TAlias]["options"]
+    : unknown;
   // validation?: SchemaValidationValue;
   initialValue?: InitialValueProperty<any>;
   // preview?: PreviewConfig;
@@ -581,7 +609,10 @@ interface TypeAliasDefinition<TType extends string, TAlias extends BuiltInTypeNa
 }
 
 type InlineFieldDefinition = {
-  [K in keyof BuiltInDefinitions]: Omit<BuiltInDefinitions[K], "initialValue" | "validation"> & {
+  [K in keyof BuiltInDefinitions]: Omit<
+    BuiltInDefinitions[K],
+    "initialValue" | "validation"
+  > & {
     // validation?: SchemaValidationValue;
     initialValue?: InitialValueProperty<any>;
   };
@@ -590,7 +621,8 @@ type InlineFieldDefinition = {
 export type FieldDefinition<
   TType extends BuiltInTypeName = BuiltInTypeName,
   TAlias extends BuiltInTypeName | undefined = undefined,
-> = (InlineFieldDefinition[TType] | TypeAliasDefinition<string, TAlias>) & FieldDefinitionBase;
+> = (InlineFieldDefinition[TType] | TypeAliasDefinition<string, TAlias>) &
+  FieldDefinitionBase;
 
 // ["string", "number", "boolean", "url", "date", "richtext"];
 interface BuiltInDefinitions {
@@ -603,13 +635,11 @@ interface BuiltInDefinitions {
 
 type BuiltInTypeName = BuiltInDefinitions[keyof BuiltInDefinitions]["type"];
 
-export type SchemaTypeDefinition<TType extends BuiltInTypeName = BuiltInTypeName> =
-  | BuiltInDefinitions[BuiltInTypeName]
-  | TypeAliasDefinition<string, TType>;
+export type SchemaTypeDefinition<
+  TType extends BuiltInTypeName = BuiltInTypeName,
+> = BuiltInDefinitions[BuiltInTypeName] | TypeAliasDefinition<string, TType>;
 
 export type Schema = SchemaTypeDefinition[];
-
-
 
 /************************************************************
  * Router
@@ -633,4 +663,3 @@ export type RouterLike = {
   replace(href: string, options?: NavigateOptions): void;
   prefetch(href: string, options?: PrefetchOptions): void;
 };
-

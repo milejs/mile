@@ -1,10 +1,48 @@
 import "../mile.css";
 
-import { use, useEffect, useMemo, useReducer, useRef, useState, SetStateAction, useCallback, startTransition, useId } from "react";
-import { FieldDefinition, MileEditor, MileSchema, NodeData, Operation, PageData, PageMetaData, RouterLike, Schema, SchemaTypeDefinition, TreeData } from "@milejs/types";
+import {
+  use,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  SetStateAction,
+  useCallback,
+  startTransition,
+  useId,
+  useImperativeHandle,
+} from "react";
+import {
+  FieldDefinition,
+  MileEditor,
+  MileSchema,
+  NodeData,
+  Operation,
+  PageData,
+  PageMetaData,
+  RouterLike,
+  Schema,
+  SchemaTypeDefinition,
+  TreeData,
+} from "@milejs/types";
 import { tinykeys } from "@/lib/tinykeys";
 import { flushSync } from "react-dom";
-import { CheckIcon, ChevronLeft, ChevronRight, ChevronsUpDownIcon, ImagesIcon, LaptopIcon, PencilIcon, PlusIcon, SmartphoneIcon, SquareArrowOutUpRight, TabletIcon, TrashIcon, Upload } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDownIcon,
+  ImagesIcon,
+  LaptopIcon,
+  PencilIcon,
+  PlusIcon,
+  SmartphoneIcon,
+  SquareArrowOutUpRight,
+  TabletIcon,
+  TrashIcon,
+  Upload,
+} from "lucide-react";
 import { invariant } from "@/lib/invariant";
 import { Preview } from "./preview";
 import { createChannel } from "bidc";
@@ -14,31 +52,53 @@ import { EditorProvider, useEditor } from "./editor";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { Input } from "@/components/ui/input";
 import { Dashboard } from "./dashboard";
-import useSWR, { mutate } from 'swr';
-import { Popover } from '@base-ui-components/react/popover';
+import useSWR, { mutate } from "swr";
+import { Popover } from "@base-ui-components/react/popover";
 import { mdxToTree } from "./data";
 import { generateId } from "@/lib/generate-id";
 import { toast, Toaster } from "sonner";
 import { Uploader, Uploaders } from "@/components/ui/uploader";
 import { Button } from "@/components/ui/button";
-import { Dialog } from '@base-ui-components/react/dialog';
+import { Dialog } from "@base-ui-components/react/dialog";
 import { filesize } from "./utils";
-import { Field } from '@base-ui-components/react/field';
-import { Checkbox } from '@base-ui-components/react/checkbox';
-import slugify from '@sindresorhus/slugify';
-import { Combobox } from '@base-ui-components/react/combobox';
+import { Field } from "@base-ui-components/react/field";
+import { Checkbox } from "@base-ui-components/react/checkbox";
+import slugify from "@sindresorhus/slugify";
+import { Combobox } from "@base-ui-components/react/combobox";
 import { LocalPageData, ParentPageValue, SlugInput } from "./shared";
+// editor
+import {
+  BasicTextStyleButton,
+  BlockTypeSelect,
+  ColorStyleButton,
+  CreateLinkButton,
+  FileCaptionButton,
+  FileReplaceButton,
+  FormattingToolbar,
+  FormattingToolbarController,
+  NestBlockButton,
+  TextAlignButton,
+  UnnestBlockButton,
+  useCreateBlockNote,
+} from "@blocknote/react";
+import { BlockNoteView } from "@blocknote/mantine"; // Or, you can use ariakit, shadcn, etc.
+import "@blocknote/mantine/style.css"; // Default styles for the mantine editor
+import "@blocknote/core/fonts/inter.css"; // Include the included Inter font
+import { App } from "./app";
 
 const HEADER_HEIGHT = 40;
 const NEXT_PUBLIC_HOST_URL = process.env.NEXT_PUBLIC_HOST_URL;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
-const fetcher = (key: string[]) => fetch(`${API}${key.join("")}`).then(res => res.json());
+const fetcher = (key: string[]) =>
+  fetch(`${API}${key.join("")}`).then((res) => res.json());
 
 const resolvePath = (paths: string[] = []) => {
   const hasPath = paths.length > 0;
   const isEdit = hasPath ? paths[paths.length - 1] === "edit" : false;
-  const isIframeContent = hasPath ? paths[paths.length - 1] === "__iframe_content__" : false;
+  const isIframeContent = hasPath
+    ? paths[paths.length - 1] === "__iframe_content__"
+    : false;
   return {
     isEdit,
     isIframeContent,
@@ -51,19 +111,19 @@ export function Mile({
   searchParams,
 }: {
   params: Promise<{ milePath?: string[] }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { milePath } = use(params);
   const { isEdit, isIframeContent, path } = resolvePath(milePath);
   const search = use(searchParams);
 
   if (!isEdit && !isIframeContent) {
-    return <Dashboard path={path} search={search} />
+    return <Dashboard path={path} search={search} />;
   }
 
   return (
     <MileInner isEdit={isEdit} isIframeContent={isIframeContent} path={path} />
-  )
+  );
 }
 
 function MileInner({
@@ -73,14 +133,21 @@ function MileInner({
 }: {
   isEdit: boolean;
   isIframeContent: boolean;
-  path: string
+  path: string;
 }) {
-  let { data: page_data, error: pageError, isLoading: pageIsLoading } = useSWR([`/pages`, path], fetcher);
+  console.log("path", path);
 
-  if (pageError) return <div>failed to load</div>
-  if (pageIsLoading) return <div>loading...</div>
+  let {
+    data: page_data,
+    error: pageError,
+    isLoading: pageIsLoading,
+  } = useSWR([`/pages`, path], fetcher);
+  // console.log("MileInner", page_data, pageError, pageIsLoading);
+
+  if (pageError) return <div>failed to load</div>;
+  if (pageIsLoading) return <div>loading...</div>;
   if (!page_data) {
-    return <div>no data</div>
+    return <div>no data</div>;
   }
   /**
    * {
@@ -101,7 +168,12 @@ function MileInner({
    */
 
   return (
-    <MileReady page_data={page_data} isEdit={isEdit} isIframeContent={isIframeContent} path={path} />
+    <MileReady
+      page_data={page_data}
+      isEdit={isEdit}
+      isIframeContent={isIframeContent}
+      path={path}
+    />
   );
 }
 
@@ -114,13 +186,14 @@ function MileReady({
   isEdit: boolean;
   isIframeContent: boolean;
   path: string;
-  page_data: PageData
+  page_data: PageData;
 }) {
-  console.log({ isEdit, isIframeContent, path });
+  // console.log({ isEdit, isIframeContent, path, page_data });
   const tree = useMemo(() => {
     if (page_data && page_data.content) {
       if (typeof page_data.content === "string") {
         const { result, error } = mdxToTree(page_data.content);
+        // console.log('result', result);
         return new Tree(result.content);
       } else {
         return new Tree(page_data.content ?? {});
@@ -133,7 +206,7 @@ function MileReady({
         props: {},
         options: {},
         children: [],
-      }
+      },
     });
   }, [page_data]);
   const [data, setData] = useState<TreeData | undefined>(() => tree?.data);
@@ -145,47 +218,52 @@ function MileReady({
   useEffect(() => {
     if (!frameRef.current) return;
     if (!frameRef.current.contentWindow) return;
-
     // Create channel for parent->iframe communication
     const channel = createChannel(frameRef.current.contentWindow);
     channelRef.current = channel;
-
-    const timeout = setTimeout(async () => {
-      await channel.receive((data) => {
-        console.log('receive data', data);
-      });
-    }, 500);
-
     return () => {
-      clearTimeout(timeout);
       channel.cleanup();
-    }
+    };
   }, []);
 
-  const setDataAndSend = useCallback(function setDataAndSend(value: SetStateAction<TreeData | undefined>) {
-    if (!value) {
-      console.log('no data');
-      return;
-    }
-    setData(value);
-    channelRef.current?.send({
-      kind: "update_data",
-      data: value,
-    });
-  }, [setData]);
+  const setDataAndSend = useCallback(
+    function setDataAndSend(
+      value: SetStateAction<TreeData | undefined>,
+      shouldSend = true,
+    ) {
+      if (!value) {
+        console.log("no data");
+        return;
+      }
+      setData(value);
+      if (shouldSend) {
+        channelRef.current?.send({
+          kind: "update_data",
+          data: value,
+        });
+      }
+    },
+    [setData],
+  );
 
   // console.log('page_data ----', page_data);
-  // console.log('data', data);
+  // console.log("MileReady render ---- data", data);
   // console.log('tree', tree);
 
   if (isEdit) {
     return (
       <>
-        <EditorProvider page_data={page_data} tree={tree} setData={setDataAndSend} setLastOperation={setLastOperation}>
+        <EditorProvider
+          page_data={page_data}
+          tree={tree}
+          setData={setDataAndSend}
+          setLastOperation={setLastOperation}
+        >
           <MileFrame
             title={page_data?.title ?? "Title"}
             data={data}
             frameRef={frameRef}
+            channelRef={channelRef}
             iframeSrc={`${process.env.NEXT_PUBLIC_HOST_URL}/mile${path}/__iframe_content__`}
           />
         </EditorProvider>
@@ -195,7 +273,7 @@ function MileReady({
   }
 
   if (isIframeContent) {
-    return <Preview slug={path} data={data} />;
+    return <Preview slug={path} />;
   }
 
   return null;
@@ -261,14 +339,118 @@ function iframeReducer(state: IframeState, action: IframeAction) {
 }
 
 type IFrame = HTMLIFrameElement & {
-  contentWindow:
-  | Window
-  | null
-  | undefined;
+  contentWindow: Window | null | undefined;
 };
 
-export function MileFrame({ data, iframeSrc, frameRef, title }: { frameRef: React.RefObject<IFrame | null>; data: TreeData | undefined, title?: string; iframeSrc: string; }) {
+/**
+ * App Reducer
+ */
+enum AppActionType {
+  DeselectNode = "DeselectNode",
+  SelectNode = "SelectNode",
+  SelectMarkdownNode = "SelectMarkdownNode",
+  OpenMarkdownEditor = "OpenMarkdownEditor",
+  CloseMarkdownEditor = "CloseMarkdownEditor",
+}
+type AppAction = {
+  type: AppActionType;
+  payload?: any;
+};
+type AppState = {
+  activeNodeId: string | null;
+  isMarkdownEditorOpen: boolean;
+};
+const initialAppState: AppState = {
+  activeNodeId: null,
+  isMarkdownEditorOpen: false,
+};
+
+function appReducer(state: AppState, action: AppAction): AppState {
+  switch (action.type) {
+    case AppActionType.SelectNode: {
+      return { ...state, activeNodeId: action.payload.id };
+    }
+    case AppActionType.SelectMarkdownNode: {
+      return {
+        ...state,
+        activeNodeId: action.payload.id,
+        isMarkdownEditorOpen: true,
+      };
+    }
+    case AppActionType.DeselectNode: {
+      return { ...state, activeNodeId: null, isMarkdownEditorOpen: false };
+    }
+    case AppActionType.OpenMarkdownEditor: {
+      return { ...state, isMarkdownEditorOpen: true };
+    }
+    case AppActionType.CloseMarkdownEditor: {
+      return { ...state, activeNodeId: null, isMarkdownEditorOpen: false };
+    }
+    default: {
+      throw new Error(`Unhandled action type: ${action.type}`);
+    }
+  }
+}
+
+export function MileFrame({
+  data,
+  iframeSrc,
+  frameRef,
+  channelRef,
+  title,
+}: {
+  frameRef: React.RefObject<IFrame | null>;
+  channelRef: React.RefObject<any | null>;
+  data: TreeData | undefined;
+  title?: string;
+  iframeSrc: string;
+}) {
   const editor = useEditor();
+  const mile = useMileProvider();
+  const [iframe_state, dispatch_iframe] = useReducer(
+    iframeReducer,
+    initialIframeState,
+  );
+  const [state, dispatch] = useReducer(appReducer, initialAppState);
+  const editorRef = useRef<{
+    getDocument: () => any;
+    getMarkdown: () => string;
+  } | null>(null);
+
+  useEffect(() => {
+    const timeout = setTimeout(async () => {
+      await channelRef.current?.receive((message: any) => {
+        // setup receive handler
+        if (message?.kind === "selectNode") {
+          const schema = mile.schema.get(message.data.type);
+          if (schema.isMarkdown) {
+            dispatch({
+              type: AppActionType.SelectMarkdownNode,
+              payload: { id: message.data.id },
+            });
+          } else {
+            dispatch({
+              type: AppActionType.SelectNode,
+              payload: { id: message.data.id },
+            });
+          }
+        }
+
+        if (message?.kind === "request_data") {
+          channelRef.current?.send({
+            kind: "update_data",
+            data: data,
+          });
+        }
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [frameRef, channelRef, editor, data, mile.schema]);
+
+  // shortcut
   useEffect(() => {
     const unsubscribe = tinykeys(window, {
       "$mod+S": (e: Event) => {
@@ -289,47 +471,283 @@ export function MileFrame({ data, iframeSrc, frameRef, title }: { frameRef: Reac
     };
   }, [editor]);
 
-  const [state, dispatch] = useReducer(iframeReducer, initialIframeState);
+  function handleDoneClick() {
+    const md = editorRef.current?.getMarkdown();
+    if (state.activeNodeId && md) {
+      editor.mergeMarkdownData(state.activeNodeId, md);
+    }
+    dispatch({ type: AppActionType.DeselectNode });
+  }
+
+  function handleDiscardClick() {
+    dispatch({ type: AppActionType.DeselectNode });
+  }
+
+  function handleOpenChange(v: boolean) {
+    if (v) {
+      dispatch({ type: AppActionType.OpenMarkdownEditor });
+    } else {
+      dispatch({ type: AppActionType.CloseMarkdownEditor });
+    }
+  }
+
+  console.log("data", data);
 
   return (
     <div className="flex flex-col h-screen">
-      <MileHeader title={title} frameRef={frameRef} state={state} dispatch={dispatch} />
-      <MileContent data={data} iframeSrc={iframeSrc} frameRef={frameRef} state={state} dispatch={dispatch} />
-      {/* <SettingsModal frameRef={frameRef} />
-      <Library frameRef={frameRef} /> */}
+      <MileHeader
+        title={title}
+        frameRef={frameRef}
+        iframe_state={iframe_state}
+        dispatch_iframe={dispatch_iframe}
+      />
+      <MileContent
+        data={data}
+        iframeSrc={iframeSrc}
+        frameRef={frameRef}
+        iframe_state={iframe_state}
+        dispatch_iframe={dispatch_iframe}
+        state={state}
+        dispatch={dispatch}
+      />
+      <Dialog.Root
+        open={state.isMarkdownEditorOpen}
+        onOpenChange={handleOpenChange}
+        dismissible={false}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
+          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 min-h-[200px] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+            <div className="mb-4 flex flex-row justify-between items-center">
+              <Dialog.Title className="text-lg font-medium">Edit</Dialog.Title>
+              <div className="flex flex-row items-center gap-x-2">
+                <Button
+                  onClick={handleDiscardClick}
+                  className="px-3 py-1 rounded text-sm"
+                  variant="secondary"
+                  size="sm"
+                >
+                  Discard
+                </Button>
+                <Button
+                  onClick={handleDoneClick}
+                  className="px-3 py-1 rounded text-sm"
+                  size="sm"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-y-auto h-full pb-20">
+              {state.activeNodeId && (
+                <OverlayTextEditor
+                  key={state.activeNodeId}
+                  ref={editorRef}
+                  activeNodeId={state.activeNodeId}
+                  initialContent={buildTextEditorInitialContentForSingleNode(
+                    state.activeNodeId,
+                    data,
+                    mile.schema,
+                  )}
+                  close={() => {
+                    dispatch({ type: AppActionType.CloseMarkdownEditor });
+                  }}
+                />
+              )}
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
+  );
+}
+
+function buildTextEditorInitialContentForSingleNode(
+  node_id: string | null,
+  data: TreeData | undefined,
+  schema: MileSchema,
+) {
+  const node = node_id && data ? data[node_id] : null;
+  console.log("buildTextEditorInitialContentForSingleNode node", node);
+  if (!node) return [];
+
+  // this should handle built-in node type from blocknote
+  // type: paragraph | heading | quote | bulletListItem | numberedListItem | checkListItem |
+  // toggleListItem | image | video | table | codeBlock | audio | file
+  return [
+    {
+      id: node?.id || "",
+      type: node?.type || "",
+      props: node?.props || {},
+      content: buildInlineContent(node?.children || [], data) || [], // {type, text, styles}
+      children: [],
+    },
+  ];
+}
+
+function buildInlineContent(children: string[], data: TreeData | undefined) {
+  if (!data) return [];
+  return children.map((child_id) => {
+    const node = data[child_id];
+    if (node.type === "text") {
+      return {
+        type: "text",
+        text: node.props?.value,
+        styles: {},
+      };
+    } else if (node.type === "strong") {
+      return {
+        type: "text",
+        text: node.children
+          ? data[node.children[0]].props?.value || ""
+          : "bad text",
+        styles: { bold: true },
+      };
+    } else if (node.type === "link") {
+      if (node.children) {
+        return {
+          type: "link",
+          content: [
+            {
+              type: "text",
+              // TODO: should we loop over children?
+              text: data[node.children[0]].props?.value || "",
+              styles: {},
+            },
+          ],
+          href: node.props?.href ?? "",
+        };
+      }
+      return {
+        type: "link",
+        content: [
+          {
+            type: "text",
+            text: "bad link",
+            styles: {},
+          },
+        ],
+        href: "",
+      };
+    } else {
+      throw new Error(`Unsupported node type: ${node.type}`);
+    }
+  });
+}
+
+function OverlayTextEditor({
+  activeNodeId,
+  initialContent,
+  ref,
+  close,
+}: {
+  activeNodeId: string | null;
+  initialContent: any;
+  ref: React.RefObject<{
+    getDocument: () => any;
+    getMarkdown: () => string;
+  } | null>;
+  close: () => void;
+}) {
+  const editor = useCreateBlockNote({ initialContent });
+
+  useImperativeHandle(ref, () => {
+    return {
+      getDocument() {
+        return editor.document;
+      },
+      getMarkdown() {
+        return editor.blocksToMarkdownLossy();
+      },
+    };
+  }, [editor]);
+
+  return (
+    <BlockNoteView editor={editor} formattingToolbar={false} theme="light">
+      <FormattingToolbarController
+        formattingToolbar={() => (
+          <FormattingToolbar>
+            <BlockTypeSelect key={"blockTypeSelect"} />
+            <FileCaptionButton key={"fileCaptionButton"} />
+            <FileReplaceButton key={"replaceFileButton"} />
+            <BasicTextStyleButton
+              basicTextStyle={"bold"}
+              key={"boldStyleButton"}
+            />
+            <BasicTextStyleButton
+              basicTextStyle={"italic"}
+              key={"italicStyleButton"}
+            />
+            <BasicTextStyleButton
+              basicTextStyle={"underline"}
+              key={"underlineStyleButton"}
+            />
+            <BasicTextStyleButton
+              basicTextStyle={"strike"}
+              key={"strikeStyleButton"}
+            />
+            {/*<TextAlignButton
+              textAlignment={"left"}
+              key={"textAlignLeftButton"}
+            />
+            <TextAlignButton
+              textAlignment={"center"}
+              key={"textAlignCenterButton"}
+            />
+            <TextAlignButton
+              textAlignment={"right"}
+              key={"textAlignRightButton"}
+            />
+            <ColorStyleButton key={"colorStyleButton"} />
+            <NestBlockButton key={"nestBlockButton"} />
+            <UnnestBlockButton key={"unnestBlockButton"} />*/}
+            <CreateLinkButton key={"createLinkButton"} />
+          </FormattingToolbar>
+        )}
+      />
+    </BlockNoteView>
   );
 }
 
 function MileContent({
   iframeSrc,
   frameRef,
+  iframe_state,
+  dispatch_iframe,
+  data,
   state,
   dispatch,
-  data,
 }: {
   iframeSrc: string;
   frameRef: React.RefObject<IFrame | null>;
-  state: IframeState;
-  dispatch: React.ActionDispatch<[action: IframeAction]>;
+  iframe_state: IframeState;
+  dispatch_iframe: React.ActionDispatch<[action: IframeAction]>;
   data: TreeData | undefined;
+  state: AppState;
+  dispatch: React.ActionDispatch<[action: AppAction]>;
 }) {
-  const { zoom, pt, w, h } = state;
+  const { zoom, pt, w, h } = iframe_state;
   const [isOpen, setIsOpen] = useState(true);
 
   useEffect(() => {
     const iframeBodyHeight = window.innerHeight - HEADER_HEIGHT;
-    dispatch({ type: IframeActionType.SetWidthHeight, payload: { w: `100%`, h: `${iframeBodyHeight}px` } });
+    dispatch_iframe({
+      type: IframeActionType.SetWidthHeight,
+      payload: { w: `100%`, h: `${iframeBodyHeight}px` },
+    });
   }, []);
 
   useEffect(() => {
     function handleResize() {
       const iframeBodyHeight = window.innerHeight - HEADER_HEIGHT;
-      dispatch({ type: IframeActionType.SetWidthHeight, payload: { w: `100%`, h: `${iframeBodyHeight}px` } });
+      dispatch_iframe({
+        type: IframeActionType.SetWidthHeight,
+        payload: { w: `100%`, h: `${iframeBodyHeight}px` },
+      });
     }
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
     handleResize();
-    return () => window.removeEventListener('resize', handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   // workaround for drag and drop autoscrolling
@@ -359,19 +777,27 @@ function MileContent({
         const viewportHeight = window.innerHeight / zoom;
         const scrollPosition = document.body.scrollTop / zoom;
         flushSync(() => {
-          dispatch({ type: IframeActionType.SetHeight, payload: `${viewportHeight}px` });
+          dispatch_iframe({
+            type: IframeActionType.SetHeight,
+            payload: `${viewportHeight}px`,
+          });
         });
         if (frameRef.current?.contentDocument) {
-          frameRef.current.contentDocument.documentElement.scrollTop = scrollPosition;
+          frameRef.current.contentDocument.documentElement.scrollTop =
+            scrollPosition;
         }
         return;
       }
       if (type === "drag-ended") {
-        const scrollPosition = frameRef.current?.contentDocument?.documentElement.scrollTop;
+        const scrollPosition =
+          frameRef.current?.contentDocument?.documentElement.scrollTop;
         invariant(scrollPosition != null);
         const iframeBodyHeight = getIframeBodyHeight(frameRef.current, zoom);
         flushSync(() => {
-          dispatch({ type: IframeActionType.SetHeight, payload: `${iframeBodyHeight}px` });
+          dispatch_iframe({
+            type: IframeActionType.SetHeight,
+            payload: `${iframeBodyHeight}px`,
+          });
         });
         document.body.scrollTop = scrollPosition * zoom;
         return;
@@ -381,15 +807,22 @@ function MileContent({
     return () => {
       window.removeEventListener("message", handleMessage);
     };
-  }, [frameRef, zoom, dispatch]);
+  }, [frameRef, zoom, dispatch_iframe]);
 
   function toggleSidebar() {
-    setIsOpen(s => !s);
+    setIsOpen((s) => !s);
   }
 
   return (
-    <div className="flex grow h-(--h) mt-[40px]" style={{ ["--h" as string]: `${h}` }}>
-      <PanelGroup direction="horizontal" autoSaveId="mile-editor" className="relative">
+    <div
+      className="flex grow h-(--h) mt-[40px]"
+      style={{ ["--h" as string]: `${h}` }}
+    >
+      <PanelGroup
+        direction="horizontal"
+        autoSaveId="mile-editor"
+        className="relative"
+      >
         <Panel id="iframe" order={1} minSize={30}>
           <div className="artboard-inner h-full overflow-y-auto">
             <div className="">
@@ -407,17 +840,31 @@ function MileContent({
           </div>
         </Panel>
         <PanelResizeHandle className="w-[2px] bg-blue-200 hover:bg-blue-400" />
-        {isOpen && <Panel id="sidebar" order={2} defaultSize={20} minSize={15} maxSize={45} className="bg-slate-100">
-          <div className="h-full overflow-y-auto">
-            <Layers data={data} />
-          </div>
-        </Panel>}
+        {isOpen && (
+          <Panel
+            id="sidebar"
+            order={2}
+            defaultSize={20}
+            minSize={15}
+            maxSize={45}
+            className="bg-slate-100"
+          >
+            <div className="h-full overflow-y-auto">
+              <Layers data={data} state={state} dispatch={dispatch} />
+              {/*<NodeInspector data={data} />*/}
+            </div>
+          </Panel>
+        )}
         <div className="absolute right-1 top-1">
           <button
             className="size-5 rounded-md border border-slate-400 bg-white hover:bg-slate-200 transition-colors flex items-center justify-center"
             onClick={() => toggleSidebar()}
           >
-            {isOpen ? <ChevronRight color="black" size={14} /> : <ChevronLeft color="black" size={14} />}
+            {isOpen ? (
+              <ChevronRight color="black" size={14} />
+            ) : (
+              <ChevronLeft color="black" size={14} />
+            )}
           </button>
         </div>
       </PanelGroup>
@@ -432,40 +879,42 @@ function MileContent({
   );
 }
 
-function Layer({ item, mile_schema, setActiveItem }: { item: NodeData; mile_schema: MileSchema; setActiveItem: (id: string) => void; }) {
+function NodeInspector({ data }: { data: any }) {
   const editor = useEditor();
-  const schema = mile_schema.get(item.type);
-  async function handleDeleteNode() {
-    const action = {
-      type: "deleteNode",
-      name: "Delete node",
-      payload: { id: item.id },
-    };
-    editor.performAction(action);
+  const mile = useMileProvider();
+  if (editor.activeNodeId === null) {
+    return <div className="">Select a node to inspect.</div>;
+  }
+
+  const node = data[editor.activeNodeId];
+  console.log("Inspector", editor.activeNodeId, node, data);
+  const schema = mile.schema.get(node.type);
+
+  if (schema.isMarkdown) {
+    return <EditMarkdown node={node} />;
   }
 
   return (
-    <button
-      onClick={() => {
-        setActiveItem(item.id);
-      }}
-      className="w-full flex items-center justify-between text-left px-4 py-1 cursor-pointer hover:bg-slate-200 transition-colors"
-    >
-      <div className="text-sm">{schema.title ?? schema.name}</div>
-      <div
-        className=""
-        onClick={async (e) => {
-          e.stopPropagation();
-          await handleDeleteNode();
-        }}
-      >
-        <TrashIcon size={12} />
-      </div>
-    </button>
-  )
+    <div className="px-4 py-4">
+      <EditNode node={node} />
+    </div>
+  );
 }
 
-const primitiveTypes = ["string", "number", "boolean", "url", "image_url", "date", "richtext"];
+function EditMarkdown({ node }: { node: NodeData }) {
+  return <div className="">Edit markdown</div>;
+}
+
+const primitiveTypes = [
+  "string",
+  "number",
+  "boolean",
+  "url",
+  "image_url",
+  "date",
+  "richtext",
+  "heading",
+];
 
 function isPrimitiveType(type: string) {
   return primitiveTypes.includes(type);
@@ -487,8 +936,10 @@ function getPrimitiveComponent(type: string) {
       return EditDateComponent;
     case "richtext":
       return EditRichtextComponent;
+    case "heading":
+      return EditHeadingComponent;
     default:
-      throw new Error(`Unsupported primitive component: ${type}`)
+      throw new Error(`Unsupported primitive component: ${type}`);
   }
 }
 
@@ -499,7 +950,7 @@ type EditComponentProps = {
   state: any;
   handleChange: (changes: Change[] | Change) => void;
   field: FieldDefinition;
-}
+};
 
 function EditRichtextComponent({ editor, node, field }: EditComponentProps) {
   return (
@@ -507,7 +958,7 @@ function EditRichtextComponent({ editor, node, field }: EditComponentProps) {
       <label className="text-sm font-semibold">{field.title}</label>
       <textarea />
     </div>
-  )
+  );
 }
 
 function EditDateComponent({ editor, node, field }: EditComponentProps) {
@@ -516,10 +967,17 @@ function EditDateComponent({ editor, node, field }: EditComponentProps) {
       <label className="text-sm font-semibold">{field.title}</label>
       <input type="date" />
     </div>
-  )
+  );
 }
 
-function EditUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
+function EditUrlComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
   const value = getFieldValue(state, path);
 
   function handleInputChange(e: any) {
@@ -532,24 +990,37 @@ function EditUrlComponent({ editor, node, path, state, handleChange, field }: Ed
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
-      <Input type="text" className="border" value={value} onChange={handleInputChange} disabled={editor.is_disabled} />
+      <Input
+        type="text"
+        className="border"
+        value={value}
+        onChange={handleInputChange}
+        disabled={editor.is_disabled}
+      />
     </div>
-  )
+  );
 }
 
 function getAltTextPath(path: string[]): string[] {
   if (
     path.length >= 2 &&
-    path[path.length - 2] === 'image' &&
-    path[path.length - 1] === 'image_url'
+    path[path.length - 2] === "image" &&
+    path[path.length - 1] === "image_url"
   ) {
-    return [...path.slice(0, -1), 'alt_text'];
+    return [...path.slice(0, -1), "alt_text"];
   }
 
   return [];
 }
 
-function EditImageUrlComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
+function EditImageUrlComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
   const [selectedFileId, setSelectedFileId] = useState("");
   const [open, setOpen] = useState(false);
   const { data, error } = useMediaFile(selectedFileId);
@@ -563,7 +1034,9 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
   function handleConfirmFile(file_id: string) {
     setSelectedFileId(file_id);
     if (!data) {
-      toast.error(`Selecting file failed. Please choose different file. Or refresh the page and try agian.`)
+      toast.error(
+        `Selecting file failed. Please choose different file. Or refresh the page and try agian.`,
+      );
       return;
     }
     const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${data.filepath}`;
@@ -603,7 +1076,7 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
             type: upload.file.type,
             size: upload.file.size,
             filepath: upload.file.objectKey,
-          }
+          },
         ]),
       });
       if (!resp.ok) {
@@ -618,7 +1091,7 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
       }
       const result = await resp.json();
       return prev ? [...prev, ...result] : result;
-    })
+    });
   }
 
   return (
@@ -630,18 +1103,36 @@ function EditImageUrlComponent({ editor, node, path, state, handleChange, field 
         </div>
       ) : null}
       <div className="flex items-center gap-x-2">
-        <Uploader is_disabled={editor.is_disabled} onSuccess={handleUploadSuccess} label={value ? "Change image" : "Upload image"} />
-        <ImageGallery is_disabled={editor.is_disabled} open={open} setOpen={setOpen} handleConfirmFile={handleConfirmFile} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+        <Uploader
+          is_disabled={editor.is_disabled}
+          onSuccess={handleUploadSuccess}
+          label={value ? "Change image" : "Upload image"}
+        />
+        <ImageGallery
+          is_disabled={editor.is_disabled}
+          open={open}
+          setOpen={setOpen}
+          handleConfirmFile={handleConfirmFile}
+          selectedFileId={selectedFileId}
+          handleSelectFile={handleSelectFile}
+        />
       </div>
     </div>
-  )
+  );
 }
 
-function EditBooleanComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
+function EditBooleanComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
   const value = getFieldValue(state, path);
   const [local, setLocal] = useState(value);
 
-  function handleInputChange(checked: boolean | 'indeterminate') {
+  function handleInputChange(checked: boolean | "indeterminate") {
     setLocal(checked);
     startTransition(() => {
       handleChange({ path, value: checked });
@@ -651,7 +1142,11 @@ function EditBooleanComponent({ editor, node, path, state, handleChange, field }
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold flex items-center gap-x-2">
-        <Checkbox.Root checked={local} onCheckedChange={handleInputChange} className="flex size-5 items-center justify-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-800 data-[checked]:bg-gray-900 data-[unchecked]:border data-[unchecked]:border-gray-300">
+        <Checkbox.Root
+          checked={local}
+          onCheckedChange={handleInputChange}
+          className="flex size-5 items-center justify-center rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-800 data-[checked]:bg-gray-900 data-[unchecked]:border data-[unchecked]:border-gray-300"
+        >
           <Checkbox.Indicator className="flex text-gray-50 data-[unchecked]:hidden">
             <CheckIcon className="size-3" />
           </Checkbox.Indicator>
@@ -659,7 +1154,7 @@ function EditBooleanComponent({ editor, node, path, state, handleChange, field }
         {field.title}
       </label>
     </div>
-  )
+  );
 }
 
 function EditNumberComponent({ editor, node, field }: EditComponentProps) {
@@ -668,7 +1163,7 @@ function EditNumberComponent({ editor, node, field }: EditComponentProps) {
       <label className="text-sm font-semibold">{field.title}</label>
       <Input type="text" />
     </div>
-  )
+  );
 }
 
 function getFieldValue(state: any, path: string[]) {
@@ -683,7 +1178,14 @@ function getFieldValue(state: any, path: string[]) {
   return getFieldValue(state[first], rest);
 }
 
-function EditStringComponent({ editor, node, path, state, handleChange, field }: EditComponentProps) {
+function EditStringComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
   const value = getFieldValue(state, path);
 
   function handleInputChange(e: any) {
@@ -696,9 +1198,47 @@ function EditStringComponent({ editor, node, path, state, handleChange, field }:
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
-      <Input type="text" className="border" value={value} onChange={handleInputChange} disabled={editor.is_disabled} />
+      <Input
+        type="text"
+        className="border"
+        value={value}
+        onChange={handleInputChange}
+        disabled={editor.is_disabled}
+      />
     </div>
-  )
+  );
+}
+
+function EditHeadingComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
+  const value = getFieldValue(state, path);
+  console.log("value", value);
+
+  function handleInputChange(e: any) {
+    const nextValue = e.target.value;
+    startTransition(() => {
+      handleChange({ path, value: nextValue });
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-y-1">
+      <label className="text-sm font-semibold">{field.title}</label>
+      <Input
+        type="text"
+        className="border"
+        value={value}
+        onChange={handleInputChange}
+        disabled={editor.is_disabled}
+      />
+    </div>
+  );
 }
 
 /*************************************************************
@@ -735,7 +1275,10 @@ function getDefaultValueForType(type: string): any {
   }
 }
 
-function initializeFields(fields: any, schema: MileSchema): Record<string, any> {
+function initializeFields(
+  fields: any,
+  schema: MileSchema,
+): Record<string, any> {
   // console.log('initializeFields', fields, schema);
   return fields.reduce(
     (acc: Record<string, any>, field: any) => {
@@ -753,7 +1296,9 @@ function initializeFields(fields: any, schema: MileSchema): Record<string, any> 
 }
 
 function createInitialEmptyValue(field: any, schema: MileSchema) {
-  const initialFields = field.fields ? initializeFields(field.fields, schema) : getDefaultValueForType(field.type);
+  const initialFields = field.fields
+    ? initializeFields(field.fields, schema)
+    : getDefaultValueForType(field.type);
   if (field.isResponsive) {
     return {
       mobile: { ...initialFields },
@@ -790,7 +1335,13 @@ function updateNestedState(
   if (field.isResponsive) {
     return {
       ...state,
-      [breakpoint]: updateNestedStateRec(state[breakpoint], path, value, field, breakpoint),
+      [breakpoint]: updateNestedStateRec(
+        state[breakpoint],
+        path,
+        value,
+        field,
+        breakpoint,
+      ),
     };
   }
   return updateNestedStateRec(state, path, value, field, breakpoint);
@@ -807,7 +1358,11 @@ function updateNestedStateRec(
   if (path.length === 0) {
     return value;
   }
-  invariant(typeof state !== "string" && typeof state !== "number" && typeof state !== "boolean");
+  invariant(
+    typeof state !== "string" &&
+      typeof state !== "number" &&
+      typeof state !== "boolean",
+  );
   const [key, ...restPath] = path;
   invariant(key);
   return {
@@ -820,16 +1375,51 @@ function updateNestedStateRec(
  * End: Edit Component Update State
  */
 
-function EditPrimitiveField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (changes: Change[] | Change) => void; field: FieldDefinition; }) {
+function EditPrimitiveField({
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: {
+  node: NodeData;
+  path: string[];
+  state: any;
+  handleChange: (changes: Change[] | Change) => void;
+  field: FieldDefinition;
+}) {
   const editor = useEditor();
-  const [, forceUpdate] = useReducer(x => x + 1, 0);
+  const [, forceUpdate] = useReducer((x) => x + 1, 0);
   const is_disabled = editor.is_disabled;
-  useEffect(() => { forceUpdate() }, [is_disabled])
+  useEffect(() => {
+    forceUpdate();
+  }, [is_disabled]);
   const EditComponent = getPrimitiveComponent(field.type);
-  return <EditComponent editor={editor} node={node} path={path} state={state} handleChange={handleChange} field={field} />
+  return (
+    <EditComponent
+      editor={editor}
+      node={node}
+      path={path}
+      state={state}
+      handleChange={handleChange}
+      field={field}
+    />
+  );
 }
 
-function EditField({ node, path, state, handleChange, field }: { node: NodeData; path: string[]; state: any; handleChange: (changes: Change[] | Change) => void; field: FieldDefinition; }) {
+function EditField({
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: {
+  node: NodeData;
+  path: string[];
+  state: any;
+  handleChange: (changes: Change[] | Change) => void;
+  field: FieldDefinition;
+}) {
   const mile = useMileProvider();
 
   // console.log('EditField', path, field.type, state);
@@ -844,7 +1434,7 @@ function EditField({ node, path, state, handleChange, field }: { node: NodeData;
         handleChange={handleChange}
         field={field}
       />
-    )
+    );
   }
 
   const schema = mile.schema.get(type);
@@ -862,22 +1452,36 @@ function EditField({ node, path, state, handleChange, field }: { node: NodeData;
         fields={schema.fields}
       />
     </div>
-  )
+  );
 }
 
-function EditFields({ node, path, state, handleChange, fields }: { node: NodeData; path: string[]; state: any; handleChange: (changes: Change[] | Change) => void; fields: FieldDefinition[] | undefined; }) {
-  // console.log('EditFields', path);
+function EditFields({
+  node,
+  path,
+  state,
+  handleChange,
+  fields,
+}: {
+  node: NodeData;
+  path: string[];
+  state: any;
+  handleChange: (changes: Change[] | Change) => void;
+  fields: FieldDefinition[] | undefined;
+}) {
+  console.log("EditFields", {
+    node,
+    path,
+    state,
+    handleChange,
+    fields,
+  });
   if (!fields) {
-    return (
-      <div className="">
-        No fields defined in schema
-      </div>
-    )
+    return <div className="">No fields defined in schema</div>;
   }
 
   return (
     <div className="space-y-6">
-      {fields.map(e => {
+      {fields.map((e) => {
         return (
           <EditField
             key={e.name}
@@ -887,37 +1491,49 @@ function EditFields({ node, path, state, handleChange, fields }: { node: NodeDat
             handleChange={handleChange}
             field={e}
           />
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
 type Change = { path: string[]; value: any };
 
-function EditNode({ node }: { node: NodeData; }) {
+function EditNode({ node }: { node: NodeData }) {
   const editor = useEditor();
   const mile = useMileProvider();
   const schema = mile.schema.get(node.type);
+
   if (!schema.fields) {
-    console.log('no fields');
+    console.log("no fields");
     return null;
   }
 
   const treenode = editor.getNode(node.id);
   const optionValue = treenode.options; // undefined or option value
 
-  const [initialValue] = useState(() => createInitialValue(optionValue, schema, mile.schema));
-  const [state, setState] = useState(() => createInitialValue(optionValue, schema, mile.schema));
-  console.log('EditNode', editor, node, schema, optionValue, state);
+  const [initialValue] = useState(() =>
+    createInitialValue(optionValue, schema, mile.schema),
+  );
+  const [state, setState] = useState(() =>
+    createInitialValue(optionValue, schema, mile.schema),
+  );
+  console.log("EditNode", editor, node, schema, optionValue, state);
 
   const handleChange = (changes: Change[] | Change) => {
     const changeList = Array.isArray(changes) ? changes : [changes];
 
     const updatedState = changeList.reduce(
       (accState, { path, value }) =>
-        updateState(accState, path, value, schema, editor.breakpoint, mile.schema),
-      state
+        updateState(
+          accState,
+          path,
+          value,
+          schema,
+          editor.breakpoint,
+          mile.schema,
+        ),
+      state,
     );
 
     // use updated state
@@ -928,23 +1544,8 @@ function EditNode({ node }: { node: NodeData; }) {
         name: `Update node option (${schema.name})`,
         payload: { nodeId: treenode.id, value: updatedState, initialValue },
       });
-    })
+    });
   };
-
-  // const handleChange = (path: string[], v: any) => {
-  //   // if (isSettingDirty && isSettingDirty.current === false) {
-  //   //   isSettingDirty.current = true;
-  //   // }
-  //   // console.log("update----", state, path, v, schema, editor.breakpoint);
-  //   const value = updateState(state, path, v, schema, editor.breakpoint, mile.schema);
-  //   console.log('updating value', state, path, v, value);
-  //   editor.perform({
-  //     type: "updateNodeOption",
-  //     name: `Update node option (${schema.name})`,
-  //     payload: { nodeId: treenode.id, value, initialValue },
-  //   });
-  //   setState(value);
-  // };
 
   return (
     <div className="space-y-3">
@@ -957,35 +1558,48 @@ function EditNode({ node }: { node: NodeData; }) {
         fields={schema.fields}
       />
     </div>
-  )
+  );
 }
 
-function Layers({ data }: { data: TreeData | undefined; }) {
-  const [activeItem, setActiveItem] = useState<string | null>(null);
+function Layers({
+  data,
+  state,
+  dispatch,
+}: {
+  data: TreeData | undefined;
+  state: AppState;
+  dispatch: React.ActionDispatch<[action: AppAction]>;
+}) {
   function handleBackClick() {
-    setActiveItem(null);
+    dispatch({ type: AppActionType.DeselectNode });
   }
 
   if (!data) return null;
-  const layers = data.root?.children?.map(e => {
+  const nodes = data.root?.children?.map((e) => {
     return data[e];
   });
 
-  if (activeItem !== null) {
+  if (state.activeNodeId !== null) {
     return (
       <EditNodeSettings
         onBackClick={handleBackClick}
-        node={data[activeItem]}
+        node={data[state.activeNodeId]}
       />
-    )
+    );
   }
 
-  return (
-    <LayersInner layers={layers} setActiveItem={setActiveItem} />
-  )
+  return <LayersInner nodes={nodes} state={state} dispatch={dispatch} />;
 }
 
-function LayersInner({ layers, setActiveItem }: { layers: NodeData[] | undefined; setActiveItem: (v: string | null) => void; }) {
+function LayersInner({
+  nodes,
+  state,
+  dispatch,
+}: {
+  nodes: NodeData[] | undefined;
+  state: AppState;
+  dispatch: React.ActionDispatch<[action: AppAction]>;
+}) {
   const mile = useMileProvider();
   const [open, setOpen] = useState(false);
 
@@ -1005,9 +1619,15 @@ function LayersInner({ layers, setActiveItem }: { layers: NodeData[] | undefined
                 <Popover.Arrow className="data-[side=bottom]:top-[-8px] data-[side=left]:right-[-13px] data-[side=left]:rotate-90 data-[side=right]:left-[-13px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-8px] data-[side=top]:rotate-180">
                   <ArrowSvg />
                 </Popover.Arrow>
-                <Popover.Title className="text-base font-medium">Add Component</Popover.Title>
+                <Popover.Title className="text-base font-medium">
+                  Add Component
+                </Popover.Title>
                 <div className="mt-6 space-y-4">
-                  <ComponentPicker schema={mile.schema} close={() => setOpen(false)} setActiveItem={setActiveItem} />
+                  <ComponentPicker
+                    schema={mile.schema}
+                    close={() => setOpen(false)}
+                    dispatch={dispatch}
+                  />
                 </div>
               </Popover.Popup>
             </Popover.Positioner>
@@ -1015,106 +1635,169 @@ function LayersInner({ layers, setActiveItem }: { layers: NodeData[] | undefined
         </Popover.Root>
       </div>
       <div className="divide-y-1 divide-slate-300 border-y border-slate-300">
-        {(layers ?? []).map(e => {
+        {(nodes ?? []).map((e) => {
           return (
-            <Layer key={e.id} item={e} mile_schema={mile.schema} setActiveItem={setActiveItem} />
-          )
+            <Layer
+              key={e.id}
+              node={e}
+              mile_schema={mile.schema}
+              dispatch={dispatch}
+            />
+          );
         })}
       </div>
     </div>
-  )
+  );
 }
 
-function buildNewNodePayload(type: string) {
-  switch (type) {
-    case "hero": {
-      const nodeId = generateId();
-      return {
-        id: "root",
-        mode: "last-child",
-        nodeId,
-        nodes: {
-          [nodeId]: {
-            id: nodeId,
-            type: "hero",
-            props: {
-              className: "",
-            },
-            options: undefined,
-          },
-        }
-      }
-    }
-    default: {
-      throw new Error("Unsupported node type")
-    }
+function Layer({
+  node,
+  mile_schema,
+  dispatch,
+}: {
+  node: NodeData;
+  mile_schema: MileSchema;
+  dispatch: React.ActionDispatch<[action: AppAction]>;
+}) {
+  const editor = useEditor();
+  const schema = mile_schema.get(node.type);
+
+  function handleDeleteNode() {
+    const action = {
+      type: "deleteNode",
+      name: "Delete node",
+      payload: { id: node.id },
+    };
+    editor.performAction(action);
   }
+
+  return (
+    <button
+      onClick={() => {
+        if (schema.isMarkdown) {
+          dispatch({
+            type: AppActionType.SelectMarkdownNode,
+            payload: { id: node.id },
+          });
+        } else {
+          dispatch({
+            type: AppActionType.SelectNode,
+            payload: { id: node.id },
+          });
+        }
+      }}
+      className="w-full flex items-center justify-between text-left px-4 py-1 cursor-pointer hover:bg-slate-200 transition-colors"
+    >
+      <div className="text-sm flex items-center gap-x-1">
+        {schema.isMarkdown ? (
+          <span className="text-[8px] uppercase px-1 py-0.5 bg-zinc-400/80 rounded-sm text-white font-bold">
+            MD
+          </span>
+        ) : null}
+        {schema.title ?? schema.name}
+      </div>
+      <div
+        className=""
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDeleteNode();
+        }}
+      >
+        <TrashIcon size={12} />
+      </div>
+    </button>
+  );
 }
 
-function ComponentPicker({ schema, close, setActiveItem }: { schema: MileSchema; close: () => void; setActiveItem: (v: string | null) => void }) {
+function buildNewNodePayload(schema: SchemaTypeDefinition) {
+  const nodeId = generateId();
+  const getInitialNodeData = schema.getInitialNodeData;
+  if (!getInitialNodeData) {
+    throw new Error(
+      `buildNewNodePayload: ${schema.type}. "getInitialNodeData" function not found in mile.config.tsx file`,
+    );
+  }
+
+  return {
+    id: "root",
+    // add new node to the end of root node
+    mode: "last-child",
+    nodeId,
+    nodes: {
+      [nodeId]: getInitialNodeData(nodeId),
+    },
+  };
+}
+
+function ComponentPicker({
+  schema,
+  close,
+  dispatch,
+}: {
+  schema: MileSchema;
+  close: () => void;
+  dispatch: React.ActionDispatch<[action: AppAction]>;
+}) {
   const editor = useEditor();
   const user_schema = schema.user_schema;
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-      {user_schema.map(e => {
+      {user_schema.map((e) => {
         function handleClick() {
-          const payload = buildNewNodePayload(e.type)
+          const payload = buildNewNodePayload(e);
           editor.perform({
             type: "addNode",
             name: "Add Node",
             payload,
           });
           close();
-          setActiveItem(payload.nodeId);
+          dispatch({
+            type: AppActionType.SelectNode,
+            payload: {
+              id: payload.nodeId,
+            },
+          });
         }
         return (
-          <div className="py-2 px-2 bg-zinc-100 border border-zinc-200 space-y-2" key={e.type}>
+          <div
+            className="py-2 px-2 bg-zinc-100 border border-zinc-200 space-y-2"
+            key={e.type}
+          >
             <button onClick={handleClick}>
               <div className="">
                 <img src={e.thumbnail} alt="" className="" />
               </div>
-              <h4 className="font-semibold text-sm text-center">
-                {e.title}
-              </h4>
+              <h4 className="font-semibold text-sm text-center">{e.title}</h4>
             </button>
           </div>
-        )
+        );
       })}
     </div>
-  )
-}
-
-function ArrowSvg(props: React.ComponentProps<'svg'>) {
-  return (
-    <svg width="20" height="10" viewBox="0 0 20 10" fill="none" {...props}>
-      <path
-        d="M9.66437 2.60207L4.80758 6.97318C4.07308 7.63423 3.11989 8 2.13172 8H0V10H20V8H18.5349C17.5468 8 16.5936 7.63423 15.8591 6.97318L11.0023 2.60207C10.622 2.2598 10.0447 2.25979 9.66437 2.60207Z"
-        className="fill-[canvas]"
-      />
-      <path
-        d="M8.99542 1.85876C9.75604 1.17425 10.9106 1.17422 11.6713 1.85878L16.5281 6.22989C17.0789 6.72568 17.7938 7.00001 18.5349 7.00001L15.89 7L11.0023 2.60207C10.622 2.2598 10.0447 2.2598 9.66436 2.60207L4.77734 7L2.13171 7.00001C2.87284 7.00001 3.58774 6.72568 4.13861 6.22989L8.99542 1.85876Z"
-        className="fill-gray-200"
-      />
-      <path
-        d="M10.3333 3.34539L5.47654 7.71648C4.55842 8.54279 3.36693 9 2.13172 9H0V8H2.13172C3.11989 8 4.07308 7.63423 4.80758 6.97318L9.66437 2.60207C10.0447 2.25979 10.622 2.2598 11.0023 2.60207L15.8591 6.97318C16.5936 7.63423 17.5468 8 18.5349 8H20V9H18.5349C17.2998 9 16.1083 8.54278 15.1901 7.71648L10.3333 3.34539Z"
-        className=""
-      />
-    </svg>
   );
 }
 
-function EditNodeSettings({ onBackClick, node }: { onBackClick: () => void; node: NodeData }) {
+function EditNodeSettings({
+  onBackClick,
+  node,
+}: {
+  onBackClick: () => void;
+  node: NodeData;
+}) {
   return (
     <div className="py-4">
-      <button onClick={onBackClick} className="ml-4 pl-2 pr-3 py-1 flex items-center gap-x-1 bg-slate-600 hover:bg-slate-700 transition-colors rounded-full text-white text-[10px] uppercase tracking-wider">
-        <ChevronLeft size={12} />Back
+      <button
+        onClick={onBackClick}
+        className="ml-4 pl-2 pr-3 py-1 flex items-center gap-x-1 bg-slate-600 hover:bg-slate-700 transition-colors rounded-full text-white text-[10px] uppercase tracking-wider"
+      >
+        <ChevronLeft size={12} />
+        Back
       </button>
       <div className="mt-4 px-4">
         <EditNode node={node} />
       </div>
     </div>
-  )
+  );
 }
 
 function getIframeBodyHeight(iframe: HTMLIFrameElement | null, zoom: number) {
@@ -1143,13 +1826,13 @@ function getViewportWidthString() {
 function MileHeader({
   title,
   frameRef,
-  state,
-  dispatch,
+  iframe_state,
+  dispatch_iframe,
 }: {
   title?: string;
   frameRef: React.RefObject<IFrame | null>;
-  state: IframeState;
-  dispatch: React.ActionDispatch<[action: IframeAction]>;
+  iframe_state: IframeState;
+  dispatch_iframe: React.ActionDispatch<[action: IframeAction]>;
 }) {
   const editor = useEditor();
   function handleSavePage() {
@@ -1159,7 +1842,12 @@ function MileHeader({
   return (
     <div className="mile-header h-[40px] bg-white" style={{ zIndex: 2 }}>
       <div className="mile-headLeft">
-        <a href="/mile/pages" className="text-sm flex items-center gap-x-1 [&_svg]:text-zinc-400 hover:[&_svg]:text-zinc-900"><ChevronLeft size={16} /> Pages</a>
+        <a
+          href="/mile/pages"
+          className="text-sm flex items-center gap-x-1 [&_svg]:text-zinc-400 hover:[&_svg]:text-zinc-900"
+        >
+          <ChevronLeft size={16} /> Pages
+        </a>
         <Divider />
         <button
           onClick={() => {
@@ -1187,7 +1875,7 @@ function MileHeader({
                 const thisZoom = 0.5;
                 const iframeBodyHeight = getIframeBodyHeight(frameRef.current, thisZoom);
                 const iframeWidth = getViewportWidthString();
-                dispatch({
+                dispatch_iframe({
                   type: IframeActionType.SetState,
                   payload: {
                     zoom: thisZoom,
@@ -1201,7 +1889,7 @@ function MileHeader({
               } else {
                 const iframeWidth = getViewportWidthString();
                 const iframeBodyHeight = getIframeBodyHeight(frameRef.current, 1);
-                dispatch({
+                dispatch_iframe({
                   type: IframeActionType.SetState,
                   payload: {
                     zoom: 1,
@@ -1219,16 +1907,19 @@ function MileHeader({
           </button> */}
           <button
             type="button"
-            className={`mile-controls-item w-[26px] ${state.breakpoint === "desktop" ? "bg-indigo-100" : ""}`}
+            className={`mile-controls-item w-[26px] ${iframe_state.breakpoint === "desktop" ? "bg-indigo-100" : ""}`}
             onClick={() => {
               flushSync(() => {
-                dispatch({
+                dispatch_iframe({
                   type: IframeActionType.SetBreakpointDesktop,
                   payload: { w: getViewportWidthString() },
                 });
               });
-              const iframeBodyHeight = getIframeBodyHeight(frameRef.current, state.zoom);
-              dispatch({
+              const iframeBodyHeight = getIframeBodyHeight(
+                frameRef.current,
+                iframe_state.zoom,
+              );
+              dispatch_iframe({
                 type: IframeActionType.SetHeight,
                 payload: `${iframeBodyHeight}px`,
               });
@@ -1239,37 +1930,39 @@ function MileHeader({
           </button>
           <button
             type="button"
-            className={`mile-controls-item w-[26px] ${state.breakpoint === "tablet" ? "bg-indigo-100" : ""}`}
+            className={`mile-controls-item w-[26px] ${iframe_state.breakpoint === "tablet" ? "bg-indigo-100" : ""}`}
             onClick={() => {
               flushSync(() => {
-                dispatch({
+                dispatch_iframe({
                   type: IframeActionType.SetBreakpointTablet,
                   payload: { w: "768px" },
                 });
                 editor.setBreakpoint("tablet");
               });
-              // const iframeBodyHeight = getIframeBodyHeight(frameRef.current, state.zoom);
-              // dispatch({
+              // const iframeBodyHeight = getIframeBodyHeight(frameRef.current, iframe_state.zoom);
+              // dispatch_iframe({
               //   type: IframeActionType.SetHeight,
               //   payload: `${iframeBodyHeight}px`,
               // });
-
             }}
           >
             <TabletIcon />
           </button>
           <button
             type="button"
-            className={`mile-controls-item w-[26px] ${state.breakpoint === "mobile" ? "bg-indigo-100" : ""}`}
+            className={`mile-controls-item w-[26px] ${iframe_state.breakpoint === "mobile" ? "bg-indigo-100" : ""}`}
             onClick={() => {
               flushSync(() => {
-                dispatch({
+                dispatch_iframe({
                   type: IframeActionType.SetBreakpointMobile,
                   payload: { w: "390px" },
                 });
               });
-              const iframeBodyHeight = getIframeBodyHeight(frameRef.current, state.zoom);
-              dispatch({
+              const iframeBodyHeight = getIframeBodyHeight(
+                frameRef.current,
+                iframe_state.zoom,
+              );
+              dispatch_iframe({
                 type: IframeActionType.SetHeight,
                 payload: `${iframeBodyHeight}px`,
               });
@@ -1309,11 +2002,18 @@ function MileHeaderEditPageInfo({ title }: { title?: string }) {
     <div className="mile-headCenter">
       <div className="text-sm">{localTitle ?? "Untitled"}</div>
       <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
-        <Dialog.Trigger render={() => (
-          <button onClick={() => { setIsOpen(true) }} className="px-2 select-none flex items-center gap-x-1 text-xs rounded bg-zinc-100 hover:bg-zinc-300 border border-zinc-200">
-            <PencilIcon width={10} /> Edit
-          </button>
-        )} />
+        <Dialog.Trigger
+          render={() => (
+            <button
+              onClick={() => {
+                setIsOpen(true);
+              }}
+              className="px-2 select-none flex items-center gap-x-1 text-xs rounded bg-zinc-100 hover:bg-zinc-300 border border-zinc-200"
+            >
+              <PencilIcon width={10} /> Edit
+            </button>
+          )}
+        />
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
           <Dialog.Popup className="fixed top-[40px] bottom-0 /top-1/2 /left-1/2 w-lg max-w-[calc(100vw-3rem)] /-translate-x-1/2 /-translate-y-1/2 /rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 /data-[ending-style]:scale-90 data-[ending-style]:-translate-x-6 data-[ending-style]:opacity-0 /data-[starting-style]:scale-90 data-[starting-style]:-translate-x-6 data-[starting-style]:opacity-0">
@@ -1321,16 +2021,19 @@ function MileHeaderEditPageInfo({ title }: { title?: string }) {
               Edit Page Data
             </Dialog.Title>
             <div className="overflow-y-auto h-full">
-              <EditPageInfoModal close={() => { setIsOpen(false) }} setLocalTitle={setLocalTitle} />
+              <EditPageInfoModal
+                close={() => {
+                  setIsOpen(false);
+                }}
+                setLocalTitle={setLocalTitle}
+              />
             </div>
           </Dialog.Popup>
         </Dialog.Portal>
       </Dialog.Root>
     </div>
-  )
+  );
 }
-
-
 
 function getParentValue(parent?: PageData) {
   if (!parent) return undefined;
@@ -1338,7 +2041,7 @@ function getParentValue(parent?: PageData) {
     id: parent.id,
     value: parent.slug,
     label: parent.title ?? "Untitled",
-  }
+  };
 }
 function getOwnSlug(page_slug: string, parent: ParentPageValue | undefined) {
   if (parent) {
@@ -1352,8 +2055,13 @@ function getOwnSlug(page_slug: string, parent: ParentPageValue | undefined) {
   }
 }
 
-function buildLocalPageData(page_data: PageData, parent_page?: PageData): LocalPageData {
-  const parent_value = page_data.parent_id ? getParentValue(parent_page) : undefined;
+function buildLocalPageData(
+  page_data: PageData,
+  parent_page?: PageData,
+): LocalPageData {
+  const parent_value = page_data.parent_id
+    ? getParentValue(parent_page)
+    : undefined;
   const own_slug = getOwnSlug(page_data.slug, parent_value);
   return {
     id: page_data.id,
@@ -1364,24 +2072,35 @@ function buildLocalPageData(page_data: PageData, parent_page?: PageData): LocalP
     parent_id: page_data.parent_id,
     content: page_data.content,
     description: page_data.description,
-  }
+  };
 }
 
 function EditPageInfoModal({ close, setLocalTitle }: any) {
   const editor = useEditor();
-  const { data: parent_page, error: parentError, isLoading: parentIsLoading } = useSWR(editor.page_data.parent_id ? [`/pages/`, editor.page_data.parent_id] : null, fetcher);
-  if (parentIsLoading) return <div>loading...</div>
-  if (parentError) return <div>error loading parent page data</div>
+  const {
+    data: parent_page,
+    error: parentError,
+    isLoading: parentIsLoading,
+  } = useSWR(
+    editor.page_data.parent_id ? [`/pages/`, editor.page_data.parent_id] : null,
+    fetcher,
+  );
+  if (parentIsLoading) return <div>loading...</div>;
+  if (parentError) return <div>error loading parent page data</div>;
   // if (!parent_page) return <div>no parent page data</div>
 
   return (
-    <EditPageInfoModalReady parent_page={parent_page} close={close} setLocalTitle={setLocalTitle} />
+    <EditPageInfoModalReady
+      parent_page={parent_page}
+      close={close}
+      setLocalTitle={setLocalTitle}
+    />
   );
 }
 
 function savePage(id: string, data: { [k: string]: any }) {
   return mutate(
-    ["/pages"],
+    ["/pages", `/${id}`],
     async (pages: any) => {
       // const resp = await fetch(`${API}/pages`, {
       //   method: "POST",
@@ -1412,13 +2131,15 @@ function savePage(id: string, data: { [k: string]: any }) {
 
 function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
   const editor = useEditor();
-  const [pageData, setPageData] = useState<LocalPageData>(() => buildLocalPageData(editor.page_data, parent_page));
+  const [pageData, setPageData] = useState<LocalPageData>(() =>
+    buildLocalPageData(editor.page_data, parent_page),
+  );
   const [error, setError] = useState<string | null>(null);
-  console.log('pageData', pageData);
+  console.log("pageData", pageData);
 
   function handleTitleChange(event: any) {
     const value = event.target.value;
-    setLocalTitle(value)
+    setLocalTitle(value);
     setPageData((e) => {
       return { ...e, title: value };
     });
@@ -1484,12 +2205,14 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
     }
     setError(null);
     function buildPageSlug(data: LocalPageData) {
-      return data.parent ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}` : data.own_slug;
+      return data.parent
+        ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}`
+        : data.own_slug;
     }
     function buildPageParentId(data: LocalPageData) {
       if (data.parent) {
         if (data.parent.value === "/" || data.parent.value === "") {
-          return undefined
+          return undefined;
         }
         return data.parent.id;
       }
@@ -1500,22 +2223,24 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
       title: pageData.title?.trim(),
       slug: buildPageSlug(pageData),
       parent_id: buildPageParentId(pageData),
-      content: (pageData.content as string).trim(),
+      content: pageData.content as string,
       description: pageData.description,
       // keywords
       // llm
       // no_index
       // no_follow
-    }
-    console.log('payload', payload);
+    };
+    console.log("payload", payload);
     await savePage(editor.page_data.id, payload)
       .then((e) => {
-        console.log('e', e);
+        console.log("e", e);
         close();
         window.location.reload();
       })
       .catch((e) => {
-        let message = e.info?.message ? `${e.message} ${e.info.message}` : e.message;
+        let message = e.info?.message
+          ? `${e.message} ${e.info.message}`
+          : e.message;
         setError(message);
       });
   }
@@ -1525,17 +2250,23 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
       <div className="space-y-4">
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
-            <label htmlFor="title" className="font-semibold text-sm">Title</label>
+            <label htmlFor="title" className="font-semibold text-sm">
+              Title
+            </label>
             <Input
               id="title"
               value={pageData.title}
               onChange={handleTitleChange}
               placeholder="e.g. About us"
             />
-            <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
+            <div className="mt-1 text-xs text-zinc-600">
+              Title of the page displayed on the browser
+            </div>
           </div>
           <div className="w-full">
-            <label htmlFor="type" className="font-semibold text-sm">Type</label>
+            <label htmlFor="type" className="font-semibold text-sm">
+              Type
+            </label>
             <Input
               id="type"
               value={pageData.type}
@@ -1547,7 +2278,12 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
         </div>
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full relative">
-            <SlugInput pageData={pageData} handleParentSlugChange={handleParentSlugChange} handleOwnSlugChange={handleOwnSlugChange} hideCurrentPageInParentPicker={true} />
+            <SlugInput
+              pageData={pageData}
+              handleParentSlugChange={handleParentSlugChange}
+              handleOwnSlugChange={handleOwnSlugChange}
+              hideCurrentPageInParentPicker={true}
+            />
             <div className="absolute right-0 -top-1.5">
               <button
                 type="button"
@@ -1563,7 +2299,9 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
         </div>
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
-            <label htmlFor="metadescription" className="font-semibold text-sm">Meta Description</label>
+            <label htmlFor="metadescription" className="font-semibold text-sm">
+              Meta Description
+            </label>
             <Field.Control
               id="metadescription"
               value={pageData.description}
@@ -1574,7 +2312,9 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
         </div>
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
-            <label htmlFor="content" className="font-semibold text-sm">Content</label>
+            <label htmlFor="content" className="font-semibold text-sm">
+              Content
+            </label>
             <Field.Control
               id="content"
               value={pageData.content as string}
@@ -1585,7 +2325,9 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
         </div>
       </div>
       <div className="mt-4 w-full">
-        {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
+        {error ? (
+          <div className="mb-2 text-xs text-red-600">{error}</div>
+        ) : null}
         <Button
           onClick={handleSavePage}
           className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
@@ -1597,16 +2339,30 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
   );
 }
 
-function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; value: ParentPageValue | null | undefined; setValue: (v: ParentPageValue | null | undefined) => void; }) {
+function ParentPicker({
+  items,
+  value,
+  setValue,
+}: {
+  items: ParentPageValue[];
+  value: ParentPageValue | null | undefined;
+  setValue: (v: ParentPageValue | null | undefined) => void;
+}) {
   const comboboxid = useId();
 
   return (
     <div className="flex flex-col gap-y-1">
       <h3 className="font-semibold text-sm">Parent page</h3>
-      <Combobox.Root items={items} value={value} onValueChange={(v) => setValue(v)}>
+      <Combobox.Root
+        items={items}
+        value={value}
+        onValueChange={(v) => setValue(v)}
+      >
         <Combobox.Trigger className="flex pr-3 pl-3.5 h-9 rounded-md border border-zinc-200 items-center justify-between gap-3 text-base text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 data-[popup-open]:bg-zinc-100 cursor-default">
           <div className="">
-            <div className="text-sm truncate">{value && value.label ? value.label : "Select.."}</div>
+            <div className="text-sm truncate">
+              {value && value.label ? value.label : "Select.."}
+            </div>
           </div>
           <Combobox.Icon className="flex">
             <ChevronsUpDownIcon size={14} />
@@ -1640,11 +2396,15 @@ function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; va
                         <CheckIcon className="size-3" />
                       </Combobox.ItemIndicator>
                       <div className="col-start-2 flex items-start gap-x-1.5">
-                        <span className="font-medium">{item.label ?? "Unknown"}</span>
-                        <span className="text-xs text-zinc-500">{item.value ?? ""}</span>
+                        <span className="font-medium">
+                          {item.label ?? "Unknown"}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {item.value ?? ""}
+                        </span>
                       </div>
                     </Combobox.Item>
-                  )
+                  );
                 }}
               </Combobox.List>
             </Combobox.Popup>
@@ -1652,7 +2412,7 @@ function ParentPicker({ items, value, setValue }: { items: ParentPageValue[]; va
         </Combobox.Portal>
       </Combobox.Root>
     </div>
-  )
+  );
 }
 
 function Divider() {
@@ -1668,8 +2428,8 @@ function handleUploadsSuccess(upload: any) {
       type: e.type,
       size: e.size,
       filepath: e.objectKey,
-    }
-  })
+    };
+  });
   mutate(`/medias`, async (prev: any) => {
     const resp = await fetch(`${API}/medias`, {
       method: "POST",
@@ -1688,25 +2448,48 @@ function handleUploadsSuccess(upload: any) {
     }
     const result = await resp.json();
     return prev ? [...prev, ...result] : result;
-  })
+  });
 }
 
-function ImageGallery({ open, setOpen, selectedFileId, handleSelectFile, handleConfirmFile, is_disabled }: { open: boolean; setOpen: (v: boolean) => void; selectedFileId: string; handleSelectFile: (file_id: string) => void; handleConfirmFile: (file_id: string) => void; is_disabled: boolean; }) {
+function ImageGallery({
+  open,
+  setOpen,
+  selectedFileId,
+  handleSelectFile,
+  handleConfirmFile,
+  is_disabled,
+}: {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  selectedFileId: string;
+  handleSelectFile: (file_id: string) => void;
+  handleConfirmFile: (file_id: string) => void;
+  is_disabled: boolean;
+}) {
   const [isPending, setIsPending] = useState(false);
   const { isValidating } = useMediaFile(selectedFileId);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger
-        render={<Button disabled={is_disabled} className="cursor-pointer"><ImagesIcon /> Gallery</Button>}
+        render={
+          <Button disabled={is_disabled} className="cursor-pointer">
+            <ImagesIcon /> Gallery
+          </Button>
+        }
       />
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
         <Dialog.Popup className="flex flex-col justify-between fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-full max-h-6/7 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-gray-50 outline-1 outline-gray-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
           <div className="py-2 px-3 flex items-center justify-between">
             <div className="flex items-center gap-x-4">
-              <Dialog.Title className="text-lg font-medium">Gallery</Dialog.Title>
-              <Uploaders onSuccess={handleUploadsSuccess} label={"Upload files"} />
+              <Dialog.Title className="text-lg font-medium">
+                Gallery
+              </Dialog.Title>
+              <Uploaders
+                onSuccess={handleUploadsSuccess}
+                label={"Upload files"}
+              />
             </div>
             <div className="flex gap-4">
               <Dialog.Close className="flex h-9 text-xs items-center justify-center rounded-md border border-gray-200 bg-gray-50 px-3 font-medium text-gray-900 select-none hover:bg-gray-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-gray-100">
@@ -1716,10 +2499,16 @@ function ImageGallery({ open, setOpen, selectedFileId, handleSelectFile, handleC
           </div>
           <div className="px-3 grid grid-cols-[1fr_300px] gap-2 grow overflow-hidden">
             <div className="overflow-y-auto">
-              <MediaFiles selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+              <MediaFiles
+                selectedFileId={selectedFileId}
+                handleSelectFile={handleSelectFile}
+              />
             </div>
             <div className="overflow-y-auto pt-4 pb-8 px-4 bg-gray-100">
-              <MediaMetadata selectedFileId={selectedFileId} setIsPending={setIsPending} />
+              <MediaMetadata
+                selectedFileId={selectedFileId}
+                setIsPending={setIsPending}
+              />
             </div>
           </div>
           <div className="py-2 px-3 bg-zinc-200 rounded-b-lg flex justify-end">
@@ -1736,7 +2525,7 @@ function ImageGallery({ open, setOpen, selectedFileId, handleSelectFile, handleC
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
-  )
+  );
 }
 
 function fetchStringKey(key: string) {
@@ -1747,26 +2536,49 @@ function useMediaFiles() {
   return useSWR(`/medias`, fetchStringKey);
 }
 
-function MediaFiles({ selectedFileId, handleSelectFile }: { selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+function MediaFiles({
+  selectedFileId,
+  handleSelectFile,
+}: {
+  selectedFileId: string;
+  handleSelectFile: (fileId: string) => void;
+}) {
   const { data, error, isLoading } = useMediaFiles();
   if (error || data?.error) return <div>failed to load</div>;
   if (isLoading) return <div>loading...</div>;
   // console.log('data', data);
   return (
     <div className="">
-      <MediaFilesGrid data={data} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+      <MediaFilesGrid
+        data={data}
+        selectedFileId={selectedFileId}
+        handleSelectFile={handleSelectFile}
+      />
     </div>
-  )
+  );
 }
 
-function MediaFilesGrid({ data, selectedFileId, handleSelectFile }: { data: any[]; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+function MediaFilesGrid({
+  data,
+  selectedFileId,
+  handleSelectFile,
+}: {
+  data: any[];
+  selectedFileId: string;
+  handleSelectFile: (fileId: string) => void;
+}) {
   if (!data || data.length === 0) {
     return <div className="">No files</div>;
   }
   return (
     <div className="grid grid-cols-4 gap-4 items-start">
       {data.map((e: any) => (
-        <MediaFileCard data={e} key={e.filepath} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+        <MediaFileCard
+          data={e}
+          key={e.filepath}
+          selectedFileId={selectedFileId}
+          handleSelectFile={handleSelectFile}
+        />
       ))}
     </div>
   );
@@ -1780,7 +2592,15 @@ function getFileName(filepath: string) {
   return filepath.split("/").at(-1) ?? "Unknown name";
 }
 
-function MediaFileCard({ data, selectedFileId, handleSelectFile }: { data: any; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+function MediaFileCard({
+  data,
+  selectedFileId,
+  handleSelectFile,
+}: {
+  data: any;
+  selectedFileId: string;
+  handleSelectFile: (fileId: string) => void;
+}) {
   return (
     <button
       className={`bg-white flex w-full flex-col border ${selectedFileId === data.id ? "border-zinc-500" : "border-zinc-300"} hover:border-zinc-400`}
@@ -1788,11 +2608,19 @@ function MediaFileCard({ data, selectedFileId, handleSelectFile }: { data: any; 
         handleSelectFile(data.id);
       }}
     >
-      <div className={`py-5 ${selectedFileId === data.id ? "bg-blue-100" : "bg-zinc-100"} h-[180px] flex justify-center`}>
-        <img src={getImageUrl(data.filepath)} alt="" className="max-h-full max-w-full object-contain" />
+      <div
+        className={`py-5 ${selectedFileId === data.id ? "bg-blue-100" : "bg-zinc-100"} h-[180px] flex justify-center`}
+      >
+        <img
+          src={getImageUrl(data.filepath)}
+          alt=""
+          className="max-h-full max-w-full object-contain"
+        />
       </div>
       <div className="px-2 py-2">
-        <div className="text-sm leading-4 select-text">{getFileName(data.filepath)}</div>
+        <div className="text-sm leading-4 select-text">
+          {getFileName(data.filepath)}
+        </div>
       </div>
     </button>
   );
@@ -1802,7 +2630,13 @@ function useMediaFile(media_id?: string) {
   return useSWR(media_id ? `/medias/${media_id}` : null, fetchStringKey);
 }
 
-function MediaMetadata({ selectedFileId, setIsPending }: { selectedFileId: string; setIsPending: (v: boolean) => void; }) {
+function MediaMetadata({
+  selectedFileId,
+  setIsPending,
+}: {
+  selectedFileId: string;
+  setIsPending: (v: boolean) => void;
+}) {
   const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
   if (error || data?.error) return <div>failed to load</div>;
   if (isLoading) return <div>loading...</div>;
@@ -1819,13 +2653,27 @@ function MediaMetadata({ selectedFileId, setIsPending }: { selectedFileId: strin
     );
   }
   if (data.type.startsWith("image/")) {
-    return <ImageDetails selectedFileId={selectedFileId} data={data} setIsPending={setIsPending} />;
+    return (
+      <ImageDetails
+        selectedFileId={selectedFileId}
+        data={data}
+        setIsPending={setIsPending}
+      />
+    );
   }
 
   return null;
 }
 
-function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: string; data: any; setIsPending: (v: boolean) => void; }) {
+function ImageDetails({
+  selectedFileId,
+  data,
+  setIsPending,
+}: {
+  selectedFileId: string;
+  data: any;
+  setIsPending: (v: boolean) => void;
+}) {
   return (
     <div className="">
       <h2 className="mb-4 font-semibold">Media details</h2>
@@ -1837,13 +2685,20 @@ function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: 
         <div className="mb-4 text-xs">
           <h3 className="mb-1.5 font-medium">{data.filepath}</h3>
           <div className="mb-0.5">{filesize(data.size)}</div>
-          <div className="text-gray-500">{new Date(data.created_at).toString()}</div>
+          <div className="text-gray-500">
+            {new Date(data.created_at).toString()}
+          </div>
         </div>
       </div>
 
       <div className="flex flex-col gap-y-3">
         <div className="">
-          <TextAreaImageAltText key={`alt_${selectedFileId}`} fileId={data.id} defaultValue={data.alt} setIsPending={setIsPending} />
+          <TextAreaImageAltText
+            key={`alt_${selectedFileId}`}
+            fileId={data.id}
+            defaultValue={data.alt}
+            setIsPending={setIsPending}
+          />
         </div>
         <div className="">
           <InputImageTitle
@@ -1854,7 +2709,12 @@ function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: 
           />
         </div>
         <div className="">
-          <TextAreaImageCaption key={`caption_${selectedFileId}`} fileId={data.id} defaultValue={data.caption} setIsPending={setIsPending} />
+          <TextAreaImageCaption
+            key={`caption_${selectedFileId}`}
+            fileId={data.id}
+            defaultValue={data.caption}
+            setIsPending={setIsPending}
+          />
         </div>
         <div className="">
           <ImageURL defaultValue={getImageUrl(data.filepath)} />
@@ -1867,13 +2727,23 @@ function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: 
 function ImageURL({ defaultValue }: any) {
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">File url</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        File url
+      </label>
       <Input readOnly defaultValue={defaultValue} className="truncate" />
     </div>
   );
 }
 
-function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+function TextAreaImageCaption({
+  fileId,
+  defaultValue,
+  setIsPending,
+}: {
+  fileId: string;
+  defaultValue: string | null;
+  setIsPending: (v: boolean) => void;
+}) {
   const [isDirty, setIsDirty] = useState(false);
   const [value, setValue] = useState("");
   function handleBlur() {
@@ -1891,7 +2761,9 @@ function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: 
 
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">Caption</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        Caption
+      </label>
       <Field.Control
         defaultValue={defaultValue ?? undefined}
         onBlur={handleBlur}
@@ -1902,9 +2774,18 @@ function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: 
   );
 }
 
-const textareaClasses = "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive"
+const textareaClasses =
+  "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive";
 
-function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+function InputImageTitle({
+  fileId,
+  defaultValue,
+  setIsPending,
+}: {
+  fileId: string;
+  defaultValue: string | null;
+  setIsPending: (v: boolean) => void;
+}) {
   const [isDirty, setIsDirty] = useState(false);
   const [value, setValue] = useState("");
   function handleBlur() {
@@ -1922,7 +2803,9 @@ function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: strin
 
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">Title</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        Title
+      </label>
       <Input
         defaultValue={defaultValue ?? undefined}
         onBlur={handleBlur}
@@ -1933,7 +2816,15 @@ function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: strin
   );
 }
 
-function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+function TextAreaImageAltText({
+  fileId,
+  defaultValue,
+  setIsPending,
+}: {
+  fileId: string;
+  defaultValue: string | null;
+  setIsPending: (v: boolean) => void;
+}) {
   const [isDirty, setIsDirty] = useState(false);
   const [value, setValue] = useState(defaultValue ?? "");
   function handleBlur() {
@@ -1951,7 +2842,9 @@ function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: 
   }
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">Alt text</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        Alt text
+      </label>
       <Field.Control
         value={value}
         onBlur={handleBlur}
@@ -1965,16 +2858,20 @@ function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: 
   );
 }
 
-function updateFileMetadata(file_id: string, data: { [k: string]: string }, done: () => void) {
+function updateFileMetadata(
+  file_id: string,
+  data: { [k: string]: string },
+  done: () => void,
+) {
   updateMediaMetadata(`${API}/medias/${file_id}`, data)
-    .then(e => {
+    .then((e) => {
       mutate((k: string) => k === `/medias/${file_id}` || k === "/medias");
       done();
     })
-    .catch(e => {
-      console.error('error', e);
+    .catch((e) => {
+      console.error("error", e);
       done();
-    })
+    });
 }
 
 async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
@@ -1985,3 +2882,52 @@ async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
   }).then((r) => r.json());
 }
 
+function ArrowSvg(props: React.ComponentProps<"svg">) {
+  return (
+    <svg width="20" height="10" viewBox="0 0 20 10" fill="none" {...props}>
+      <path
+        d="M9.66437 2.60207L4.80758 6.97318C4.07308 7.63423 3.11989 8 2.13172 8H0V10H20V8H18.5349C17.5468 8 16.5936 7.63423 15.8591 6.97318L11.0023 2.60207C10.622 2.2598 10.0447 2.25979 9.66437 2.60207Z"
+        className="fill-[canvas]"
+      />
+      <path
+        d="M8.99542 1.85876C9.75604 1.17425 10.9106 1.17422 11.6713 1.85878L16.5281 6.22989C17.0789 6.72568 17.7938 7.00001 18.5349 7.00001L15.89 7L11.0023 2.60207C10.622 2.2598 10.0447 2.2598 9.66436 2.60207L4.77734 7L2.13171 7.00001C2.87284 7.00001 3.58774 6.72568 4.13861 6.22989L8.99542 1.85876Z"
+        className="fill-gray-200"
+      />
+      <path
+        d="M10.3333 3.34539L5.47654 7.71648C4.55842 8.54279 3.36693 9 2.13172 9H0V8H2.13172C3.11989 8 4.07308 7.63423 4.80758 6.97318L9.66437 2.60207C10.0447 2.25979 10.622 2.2598 11.0023 2.60207L15.8591 6.97318C16.5936 7.63423 17.5468 8 18.5349 8H20V9H18.5349C17.2998 9 16.1083 8.54278 15.1901 7.71648L10.3333 3.34539Z"
+        className=""
+      />
+    </svg>
+  );
+}
+
+const markdownTags = [
+  "heading",
+  "paragraph",
+  "list",
+  "listItem",
+  "text",
+  "inlineCode",
+  "code",
+  "strong",
+  "emphasis",
+  "blockquote",
+  "link",
+  "image",
+  "thematicBreak",
+  "html",
+  "break",
+  "delete",
+  "footnoteDefinition",
+  "footnoteReference",
+  "definition",
+  "imageReference",
+  "linkReference",
+  "table",
+  "tableRow",
+  "tableCell",
+];
+
+function isMarkdown(type: string) {
+  return markdownTags.includes(type);
+}

@@ -1,11 +1,33 @@
 import { createContext, useContext, useMemo } from "react";
 import { useMileProvider } from "./client";
 import { invariant } from "@/lib/invariant";
-import { Action, Actions, Config, HistoryEntry, MileClient, MileEditor, MileHistoryManager, MilePersister, Operation, PageMetaData, Schema, SchemaTypeDefinition, SetData, SetOperation, TreeData, NodeData, Trigger, Components, PageData } from "@milejs/types";
+import {
+  Action,
+  Actions,
+  Config,
+  HistoryEntry,
+  MileClient,
+  MileEditor,
+  MileHistoryManager,
+  MilePersister,
+  Operation,
+  PageMetaData,
+  Schema,
+  SchemaTypeDefinition,
+  SetData,
+  SetOperation,
+  TreeData,
+  NodeData,
+  Trigger,
+  Components,
+  PageData,
+  MileSchema,
+} from "@milejs/types";
 import { Tree } from "./tree";
 import { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/types/types";
 import { mutate } from "swr";
 import { toast } from "sonner";
+import { mdxToTree } from "./data";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
@@ -24,15 +46,19 @@ type EditorProviderProps = {
   setLastOperation: SetOperation;
   page_data: PageData;
 };
-export function EditorProvider({ page_data, children, tree, setData, setLastOperation }: EditorProviderProps) {
+export function EditorProvider({
+  page_data,
+  children,
+  tree,
+  setData,
+  setLastOperation,
+}: EditorProviderProps) {
   const mile = useMileProvider();
   invariant(mile);
   const editor = useMemo(() => {
     return new Editor(mile, tree, page_data, setData, setLastOperation);
   }, [mile, page_data, tree, setData, setLastOperation]);
-  return (
-    <EditorContext value={editor}>{children}</EditorContext>
-  );
+  return <EditorContext value={editor}>{children}</EditorContext>;
 }
 
 // class EditorSchema implements MileEditorSchema {
@@ -90,45 +116,82 @@ export function EditorProvider({ page_data, children, tree, setData, setLastOper
 const actions: Actions = {
   reorderSection(
     editor,
-    payload: { dragId: string; dropId: string; closestEdgeOfDrop: Edge | null; trigger: Trigger },
+    payload: {
+      dragId: string;
+      dropId: string;
+      closestEdgeOfDrop: Edge | null;
+      trigger: Trigger;
+    },
   ): Action | undefined {
     const { dragId, dropId, closestEdgeOfDrop, trigger } = payload;
     if (dragId === dropId) return;
-    const result = editor.tree.reorderSection(dragId, dropId, closestEdgeOfDrop);
-    editor.updateData(result.data, { trigger, outcome: { type: "section-reorder", targetId: dragId } });
+    const result = editor.tree.reorderSection(
+      dragId,
+      dropId,
+      closestEdgeOfDrop,
+    );
+    editor.updateData(result.data, {
+      trigger,
+      outcome: { type: "section-reorder", targetId: dragId },
+    });
     return result.reverseAction;
   },
 
   moveRow(
     editor,
-    payload: { dragId: string; dropId: string; closestEdgeOfDrop: Edge | null; trigger: Trigger },
+    payload: {
+      dragId: string;
+      dropId: string;
+      closestEdgeOfDrop: Edge | null;
+      trigger: Trigger;
+    },
   ): Action | undefined {
     const { dragId, dropId, closestEdgeOfDrop, trigger } = payload;
     if (dragId === dropId) return;
     const result = editor.tree.moveRow(dragId, dropId, closestEdgeOfDrop);
-    editor.updateData(result.data, { trigger, outcome: { type: "move-row", targetId: dragId } });
+    editor.updateData(result.data, {
+      trigger,
+      outcome: { type: "move-row", targetId: dragId },
+    });
     return result.reverseAction;
   },
 
   moveNode(
     editor,
-    payload: { dragId: string; dropId: string; closestEdgeOfDrop: Edge | null; trigger: Trigger },
+    payload: {
+      dragId: string;
+      dropId: string;
+      closestEdgeOfDrop: Edge | null;
+      trigger: Trigger;
+    },
   ): Action | undefined {
     const { dragId, dropId, closestEdgeOfDrop, trigger } = payload;
     if (dragId === dropId) return;
     const result = editor.tree.moveNode(dragId, dropId, closestEdgeOfDrop);
-    editor.updateData(result.data, { trigger, outcome: { type: "move-node", targetId: dragId } });
+    editor.updateData(result.data, {
+      trigger,
+      outcome: { type: "move-node", targetId: dragId },
+    });
     return result.reverseAction;
   },
 
-  duplicateNode(editor, payload: { id: string; newNodeId: string; nodes: Record<string, NodeData> }): Action | undefined {
+  duplicateNode(
+    editor,
+    payload: { id: string; newNodeId: string; nodes: Record<string, NodeData> },
+  ): Action | undefined {
     const { id, newNodeId, nodes } = payload;
     const result = editor.tree.duplicateNode(id, newNodeId, nodes);
-    editor.updateData(result.data, { trigger: "pointer", outcome: { type: "duplicate-node", targetId: result.id } });
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "duplicate-node", targetId: result.id },
+    });
     return result.reverseAction;
   },
 
-  deleteDuplicatedNode(editor, payload: { id: string; prevNodeId?: string }): Action | undefined {
+  deleteDuplicatedNode(
+    editor,
+    payload: { id: string; prevNodeId?: string },
+  ): Action | undefined {
     const { id, prevNodeId } = payload;
     const result = editor.tree.deleteDuplicatedNode(id, prevNodeId);
     editor.updateData(result.data, {
@@ -140,18 +203,29 @@ const actions: Actions = {
 
   addNode(
     editor,
-    payload: { id: string; nodeId: string; mode?: string; nodes: Record<string, NodeData> },
+    payload: {
+      id: string;
+      nodeId: string;
+      mode?: string;
+      nodes: Record<string, NodeData>;
+    },
   ): Action | undefined {
     const { id, nodeId, mode, nodes } = payload;
     const result = editor.tree.addNode(id, nodeId, nodes, mode);
-    editor.updateData(result.data, { trigger: "pointer", outcome: { type: "add-node", targetId: result.id } });
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "add-node", targetId: result.id },
+    });
     return result.reverseAction;
   },
 
   deleteNode(editor, payload: { id: string }): Action | undefined {
     const { id } = payload;
     const result = editor.tree.deleteNode(id);
-    editor.updateData(result.data, { trigger: "pointer", outcome: { type: "delete-node", targetId: result.id } });
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "delete-node", targetId: result.id },
+    });
     return result.reverseAction;
   },
 
@@ -161,7 +235,10 @@ const actions: Actions = {
   ): Action | undefined {
     const { nodeId, value, initialValue } = payload;
     const result = editor.tree.updateNodeOption(nodeId, value, initialValue);
-    editor.updateData(result.data, { trigger: "pointer", outcome: { type: "update-node-option", targetId: nodeId } });
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "update-node-option", targetId: nodeId },
+    });
     return result.reverseAction;
   },
 
@@ -177,14 +254,27 @@ const actions: Actions = {
   ): Action | undefined {
     const { id, type, mode, nodeId, nodes } = payload;
     const result = editor.tree.insertNewElement(id, type, mode, nodeId, nodes);
-    editor.updateData(result.data, { trigger: "pointer", outcome: { type: "insert-new-element", targetId: result.id } });
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "insert-new-element", targetId: result.id },
+    });
     return result.reverseAction;
   },
 
-  deleteNewElement(editor, payload: { id: string; type: string; insertPrevious?: NodeData | undefined }): Action | undefined {
+  deleteNewElement(
+    editor,
+    payload: {
+      id: string;
+      type: string;
+      insertPrevious?: NodeData | undefined;
+    },
+  ): Action | undefined {
     const { id, type, insertPrevious } = payload;
     const result = editor.tree.deleteNewElement(id, type, insertPrevious);
-    editor.updateData(result.data, { trigger: "pointer", outcome: { type: "delete-new-element", targetId: result.id } });
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "delete-new-element", targetId: result.id },
+    });
     return result.reverseAction;
   },
 };
@@ -199,6 +289,7 @@ function initializeSchema(schema: Schema, userSchema?: Schema): Schema {
 }
 
 export class Editor implements MileEditor {
+  activeNodeId: string | null;
   mile: MileClient;
   config: Config;
   tree: Tree;
@@ -215,7 +306,14 @@ export class Editor implements MileEditor {
   breakpoint: "desktop" | "tablet" | "mobile";
   is_disabled: boolean;
 
-  constructor(mile: MileClient, tree: Tree, page_data: PageData, setData: SetData, setLastOperation: SetOperation) {
+  constructor(
+    mile: MileClient,
+    tree: Tree,
+    page_data: PageData,
+    setData: SetData,
+    setLastOperation: SetOperation,
+  ) {
+    this.activeNodeId = null;
     this.is_disabled = false;
     this.mile = mile;
     this.config = mile.config;
@@ -231,6 +329,17 @@ export class Editor implements MileEditor {
     // });
     this.zoom = 1;
     this.breakpoint = "desktop";
+    console.log("Editor ctor mile.registry", this.mile.registry);
+  }
+
+  selectNode(id: string) {
+    this.activeNodeId = id;
+    this.forceReRender(false);
+  }
+
+  deselectNode(id: string) {
+    this.activeNodeId = null;
+    this.forceReRender(false);
   }
 
   setZoom(level: number) {
@@ -245,17 +354,90 @@ export class Editor implements MileEditor {
     this.forceReRender();
   }
 
-  forceReRender() {
+  forceReRender(shouldSend = true) {
     // force re-render
     const newData = { ...this.tree.data };
-    this.setData(newData);
+    this.setData(newData, shouldSend);
+  }
+
+  mergeMarkdownData(node_id: string, md: string) {
+    console.log("------ mergeData", node_id, md);
+    const current_node = this.getNode(node_id);
+    const markdown = mdxToTree(md);
+    const content = markdown.result.content;
+    const markdown_root = content.root;
+    if (markdown_root && markdown_root.children.length === 0) {
+      // mardown has no data to update
+      return;
+    }
+
+    // process markdown
+    // - ensure start_node has same type as current node
+    // - get index of the current_node in the root's children array
+    // - swap start_node's children array with current_node's children array
+    let tree = this.tree.data;
+    invariant(tree.root.children);
+    const index = tree.root.children.indexOf(current_node.id);
+    invariant(index !== undefined && index !== -1, "current_node not found");
+    const __id = markdown_root.children[0];
+    const start_node = content[__id];
+    invariant(
+      start_node && start_node.type === current_node.type,
+      "node type mismatch",
+    );
+
+    tree = {
+      ...tree,
+      // replace the current children array of the current node to the new one from markdown
+      // and delete the old one
+      [node_id]: {
+        ...current_node,
+        children: [...start_node.children],
+      },
+      // update root children
+      // markdown root children: [s,x,y] // s is start_node
+      // current root children: [a,b,c,d] // c is the node_id at `index`
+      // new root children: [a,b,c,x,y,d] // preserve c, add x and y
+      root: {
+        ...tree.root,
+        children: [
+          ...tree.root.children!.slice(0, index),
+          current_node.id, // keep current_node's id
+          ...markdown_root.children.slice(1), // first child is the start_node, so we skip it
+          ...tree.root.children!.slice(index + 1),
+        ],
+      },
+    };
+
+    // delete the old current_node's children nodes
+    if (current_node.children) {
+      for (const child_id of current_node.children) {
+        delete tree[child_id];
+      }
+    }
+
+    // take everything from markdown's content except the start_node and the root
+    const { [__id]: _, root, ...rest } = content;
+    // add them to the tree
+    const new_tree = {
+      ...tree,
+      ...rest,
+    };
+
+    this.tree.updateTreeData(new_tree);
+    this.updateData(new_tree);
   }
 
   async save() {
     this.is_disabled = true;
     this.forceReRender();
     try {
-      const result = await this.persister.save(this.page_data.id, this.page_data, this.tree.data, this.config.components);
+      const result = await this.persister.save(
+        this.page_data.id,
+        this.page_data,
+        this.tree.data,
+        this.mile.registry.components,
+      );
       this.is_disabled = false;
       this.forceReRender();
       toast.success("Saved successfully");
@@ -312,7 +494,11 @@ export class HistoryManager implements MileHistoryManager {
   private undoStack: HistoryEntry[];
   private redoStack: HistoryEntry[];
   private coalesceState: CoalescingState;
-  constructor(undoStack = [], redoStack = [], coalesceState: CoalescingState = { type: CoalescingType.NOT_IN_COALESCE }) {
+  constructor(
+    undoStack = [],
+    redoStack = [],
+    coalesceState: CoalescingState = { type: CoalescingType.NOT_IN_COALESCE },
+  ) {
     this.redoStack = redoStack;
     this.undoStack = undoStack;
     this.coalesceState = coalesceState;
@@ -335,7 +521,10 @@ export class HistoryManager implements MileHistoryManager {
   };
 
   commitCoalescing = () => {
-    if (this.coalesceState.type === CoalescingType.NOT_IN_COALESCE || this.coalesceState.entry == null) {
+    if (
+      this.coalesceState.type === CoalescingType.NOT_IN_COALESCE ||
+      this.coalesceState.entry == null
+    ) {
       return;
     }
     const actionToCommit = this.coalesceState.entry;
@@ -411,40 +600,136 @@ export class HistoryManager implements MileHistoryManager {
     }
   }
  */
-function treeToMDXstring(data: TreeData, components?: Components | undefined) {
+function treeToMDXstring(data: TreeData, components: Components) {
   const lines: string[] = [];
+  if (!components) {
+    return "";
+  }
 
-  function renderComponent(componentId: string) {
-    const component = data[componentId];
-    if (!component) return;
+  // mutate lines
+  function renderNode(
+    componentId: string,
+    data: TreeData,
+    components: Components,
+  ) {
+    const node = data[componentId];
+    console.log("renderNode", componentId, node);
+    if (!node) return;
 
-    const { id, type, props = {}, options = {} } = component;
-    if (id !== "root") {
-      invariant(components && components[type], `Unknown component type: ${type}`);
-      // Convert props safely (only use className for now)
-      const className = props.className ?? '';
-
-      // Serialize options object as inline JS
-      const optionsString = JSON.stringify(options)
-        .replace(/"([^"]+)":/g, '$1:') // remove quotes from keys
-        .replace(/"/g, '"'); // keep quotes for string values
-
-      // Get componentName i.e. <Hero />
-      const componentName = components[type].component.name;
-
-      const line = optionsString === "{}"
-        ? `<${componentName} id="${id}" type="${type}" className="${className}" />`
-        : `<${componentName} id="${id}" type="${type}" className="${className}" options={${optionsString}} />`;
-
-      lines.push(line);
+    if (node.id !== "root") {
+      const str = serializeNode(node, components, data);
+      lines.push(str);
     }
+    const shouldProcessChildren = node.type === "root";
     // Recursively render children if any
-    if (component.children && component.children.length > 0) {
-      component.children.forEach(childId => renderComponent(childId));
+    if (shouldProcessChildren && node.children && node.children.length > 0) {
+      node.children.forEach((childId) => renderNode(childId, data, components));
     }
   }
-  renderComponent('root');
-  return lines.join('\n');
+  renderNode("root", data, components);
+  return lines.join("\n");
+}
+
+function serializeNode(node: NodeData, components: Components, data: TreeData) {
+  const type = node.type;
+  console.log("serializeNode for type: ", type);
+  const component = components[type];
+  console.log("component", component);
+
+  invariant(component, `serializeNode: Unknown component type: ${type}`);
+  if (component.settings?.isUserComponent) {
+    return serializeUserComponentNode(node, components, data);
+  }
+  switch (type) {
+    case "paragraph": {
+      return serializeParagraphNode(node, components, data);
+    }
+    case "heading": {
+      return serializeHeadingNode(node, components, data);
+    }
+    case "strong": {
+      return serializeStrongNode(node, components, data);
+    }
+    case "text": {
+      return serializeTextNode(node, components, data);
+    }
+    default: {
+      throw new Error(`serializeNode: Unknown component type: ${type}`);
+    }
+  }
+}
+
+function serializeParagraphNode(
+  node: NodeData,
+  components: Components,
+  data: TreeData,
+) {
+  const { id, type, props = {}, options = {}, children = [] } = node;
+  let text = "";
+  for (let i = 0; i < children.length; i++) {
+    const child = data[children[i]];
+    text += serializeNode(child, components, data);
+  }
+  return `${text}\n`;
+}
+
+function getDirectTextFromChildren(children: string[], data: TreeData) {
+  const text_node_id = children.length > 0 ? children[0] : null;
+  const text_node = text_node_id ? data[text_node_id] : null;
+  return text_node ? text_node.props?.value : "";
+}
+
+function serializeHeadingNode(
+  node: NodeData,
+  components: Components,
+  data: TreeData,
+) {
+  const { id, type, props = {}, options = {}, children = [] } = node;
+  const depth = (props.depth as number) ?? 1;
+  const text = getDirectTextFromChildren(children, data);
+  return `${"#".repeat(depth)} ${text}\n`;
+}
+
+function serializeStrongNode(
+  node: NodeData,
+  components: Components,
+  data: TreeData,
+) {
+  const { id, type, props = {}, options = {}, children = [] } = node;
+  const depth = (props.depth as number) ?? 1;
+  const text = getDirectTextFromChildren(children, data);
+  return `**${text}**`;
+}
+
+function serializeTextNode(
+  node: NodeData,
+  components: Components,
+  data: TreeData,
+) {
+  const { id, type, props = {}, options = {}, children = [] } = node;
+  const text = props?.value;
+  return `${text}`;
+}
+
+function serializeUserComponentNode(
+  node: NodeData,
+  components: Components,
+  data: TreeData,
+) {
+  const { id, type, props = {}, options = {} } = node;
+  // Get componentName i.e. <Hero />
+  const componentName = components[type].component.name;
+  // Convert props safely (only use className for now)
+  const className = props.className ?? "";
+  // Serialize options object as inline JS
+  const optionsString = JSON.stringify(options)
+    .replace(/"([^"]+)":/g, "$1:") // remove quotes from keys
+    .replace(/"/g, '"'); // keep quotes for string values
+  const str =
+    optionsString === "{}"
+      ? `<${componentName} id="${id}" type="${type}" className="${className}" />\n`
+      : `<${componentName} id="${id}" type="${type}" className="${className}" options={${optionsString}} />\n`;
+  return str;
 }
 
 class Persister implements MilePersister {
@@ -454,10 +739,24 @@ class Persister implements MilePersister {
     this.editor = editor;
   }
 
-  async save(id: string, page_data: PageData, content: TreeData, components?: Components | undefined) {
+  async save(
+    id: string,
+    page_data: PageData,
+    content: TreeData,
+    components: Components,
+  ) {
+    console.log("save", page_data, content);
+
     // convert json to mdx string
-    const mdxstring = treeToMDXstring(content, components);
-    console.log('mdxstring', mdxstring);
+    let mdxstring = "";
+    try {
+      mdxstring = treeToMDXstring(content, components);
+    } catch (error) {
+      console.error("Error converting tree to MDX", error);
+      throw error;
+    }
+
+    console.log("mdxstring", mdxstring);
 
     return mutate(
       [`/pages`, `/${id}`],
@@ -503,4 +802,3 @@ interface NotInCoalesce {
 }
 
 type CoalescingState = InCoalesce | NotInCoalesce;
-

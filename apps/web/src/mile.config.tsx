@@ -41,7 +41,15 @@ export const mileconfig: Config = {
           name: "link",
           title: "Link",
         },
-      ]
+      ],
+      getInitialNodeData: (node_id) => ({
+        id: node_id,
+        type: "hero",
+        props: {
+          className: "",
+        },
+        options: undefined,
+      }),
     },
     {
       type: "lead",
@@ -69,7 +77,7 @@ export const mileconfig: Config = {
           name: "link",
           title: "Link",
         },
-      ]
+      ],
     },
     {
       type: "banner_blue",
@@ -97,7 +105,7 @@ export const mileconfig: Config = {
           name: "link",
           title: "Link",
         },
-      ]
+      ],
     },
   ],
   // specify your components that will be rendered in editor
