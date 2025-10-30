@@ -78,6 +78,14 @@ export const mileconfig: Config = {
           title: "Link",
         },
       ],
+      getInitialNodeData: (node_id) => ({
+        id: node_id,
+        type: "lead",
+        props: {
+          className: "",
+        },
+        options: undefined,
+      }),
     },
     {
       type: "banner_blue",

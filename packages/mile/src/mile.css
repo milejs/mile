@@ -1,6 +1,3 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-
 /* @custom-variant dark (&:is(.dark *)); */
 
 :root {
@@ -268,9 +265,8 @@
 }
 
 .mile-canvas-root {
-  /* width: 100vw; */
-  /* height: 100vh; */
-  /* transform-origin: top; */
+  /*width: 100vw;*/
+  /*height: 100vh;*/
 }
 
 /* iframe */
@@ -332,7 +328,10 @@
   position: relative;
 }
 
-/* editor */
+/*
+Editor
+- generic styles
+*/
 .bn-container {
   position: relative;
 }
@@ -340,6 +339,7 @@
 .bn-container:not(.bn-comment-editor),
 .bn-editor {
   height: 100%;
+  --bn-colors-editor-text: black;
 }
 
 .bn-container:not(.bn-comment-editor) .bn-editor {
@@ -356,4 +356,54 @@
 .bn-editor a {
   color: revert;
   text-decoration: revert;
+}
+
+/*
+Editor
+- sidebar richtext
+*/
+.bn-container[data-theming-sidebar] .bn-editor {
+  padding-inline: 20px;
+  color: black;
+}
+
+.bn-container[data-theming-sidebar] .bn-block {
+  margin-bottom: 8px;
+}
+
+.bn-container[data-theming-sidebar]
+  .bn-block-content[data-content-type="heading"]
+  h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+}
+.bn-container[data-theming-sidebar]
+  .bn-block-content[data-content-type="heading"]
+  h2 {
+  font-size: 1.675rem;
+  line-height: 1.3;
+}
+.bn-container[data-theming-sidebar]
+  .bn-block-content[data-content-type="heading"]
+  h3 {
+  font-size: 1.475rem;
+  line-height: 1.33;
+}
+.bn-container[data-theming-sidebar]
+  .bn-block-content[data-content-type="heading"]
+  h4 {
+  font-size: 1.25rem;
+  line-height: 1.35;
+}
+.bn-container[data-theming-sidebar]
+  .bn-block-content[data-content-type="heading"]
+  h5 {
+  font-size: 1.1rem;
+  line-height: 1.36;
+}
+.bn-container[data-theming-sidebar]
+  .bn-block-content[data-content-type="heading"]
+  h6 {
+  font-size: 1rem;
+  line-height: 1.37;
 }

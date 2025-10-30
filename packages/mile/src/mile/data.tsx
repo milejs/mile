@@ -159,7 +159,7 @@ export function mdxToTree(source: string) {
     .use(remarkMdx);
 
   const ast = processor.parse(content);
-  console.log("ast", ast);
+  // console.log("ast", ast);
 
   const nodesMap: Record<string, any> = {
     root: {

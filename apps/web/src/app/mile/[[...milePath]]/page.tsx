@@ -5,12 +5,18 @@ import { Mile } from "@milejs/core";
 import { MileProvider } from "@milejs/core/client";
 import { mileconfig } from "../../../mile.config";
 
-export default function Page({ params, searchParams }: { params: Promise<{ milePath?: string[] }>; searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
-	return (
-		<MileProvider config={mileconfig}>
-			<Mile params={params} searchParams={searchParams} />
-		</MileProvider>
-	);
+export default function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ milePath?: string[] }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  return (
+    <MileProvider config={mileconfig}>
+      <Mile params={params} searchParams={searchParams} />
+    </MileProvider>
+  );
 }
 
 // function getData() {

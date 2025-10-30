@@ -329,7 +329,7 @@ export class Editor implements MileEditor {
     // });
     this.zoom = 1;
     this.breakpoint = "desktop";
-    console.log("Editor ctor mile.registry", this.mile.registry);
+    // console.log("Editor ctor mile.registry", this.mile.registry);
   }
 
   selectNode(id: string) {
@@ -441,6 +441,7 @@ export class Editor implements MileEditor {
       this.is_disabled = false;
       this.forceReRender();
       toast.success("Saved successfully");
+      window.location.reload();
       return { ok: true, error: undefined };
     } catch (error) {
       this.is_disabled = false;

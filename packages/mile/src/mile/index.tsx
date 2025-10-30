@@ -85,6 +85,13 @@ import { BlockNoteView } from "@blocknote/mantine"; // Or, you can use ariakit, 
 import "@blocknote/mantine/style.css"; // Default styles for the mantine editor
 import "@blocknote/core/fonts/inter.css"; // Include the included Inter font
 import { App } from "./app";
+import {
+  BlockNoteEditor,
+  BlockNoteSchema,
+  createHeadingBlockSpec,
+} from "@blocknote/core";
+
+export { BlockNoteView, useCreateBlockNote };
 
 const HEADER_HEIGHT = 40;
 const NEXT_PUBLIC_HOST_URL = process.env.NEXT_PUBLIC_HOST_URL;
@@ -135,8 +142,6 @@ function MileInner({
   isIframeContent: boolean;
   path: string;
 }) {
-  console.log("path", path);
-
   let {
     data: page_data,
     error: pageError,
@@ -392,7 +397,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
-export function MileFrame({
+function MileFrame({
   data,
   iframeSrc,
   frameRef,
@@ -491,7 +496,7 @@ export function MileFrame({
     }
   }
 
-  console.log("data", data);
+  // console.log("data", data);
 
   return (
     <div className="flex flex-col h-screen">
@@ -649,7 +654,19 @@ function OverlayTextEditor({
   } | null>;
   close: () => void;
 }) {
-  const editor = useCreateBlockNote({ initialContent });
+  const editor = useCreateBlockNote({
+    schema: BlockNoteSchema.create().extend({
+      blockSpecs: {
+        heading: createHeadingBlockSpec({
+          // Disables toggleable headings.
+          allowToggleHeadings: false,
+          // Sets the allowed heading levels.
+          levels: [1, 2, 3, 4, 5, 6],
+        }),
+      },
+    }),
+    initialContent,
+  });
 
   useImperativeHandle(ref, () => {
     return {
@@ -813,6 +830,79 @@ function MileContent({
     setIsOpen((s) => !s);
   }
 
+  // const handlePanelResize = (size: number, prevSize: number | undefined) => {
+  //   setPanelSize(size);
+  // };
+
+  // return (
+  //   <div
+  //     className="flex grow h-(--h) mt-[40px]"
+  //     style={{ ["--h" as string]: `${h}` }}
+  //   >
+  //     <div
+  //       direction="horizontal"
+  //       autoSaveId="mile-editor"
+  //       className="relative flex items-start w-full h-full"
+  //     >
+  //       <div id="iframe" order={1} minSize={30} className="w-full h-full grow">
+  //         <div className="artboard-inner h-full overflow-y-auto">
+  //           <div className="">
+  //             <div className="mile-canvas-root">
+  //               <iframe
+  //                 ref={frameRef}
+  //                 id="mileframe"
+  //                 src={iframeSrc}
+  //                 title="mileframe"
+  //                 className="mile-iframe"
+  //                 style={{ width: w, height: h, margin: "0 auto" }}
+  //               />
+  //             </div>
+  //           </div>
+  //         </div>
+  //       </div>
+  //       <div className="w-[2px] bg-blue-200 hover:bg-blue-400" />
+  //       {isOpen && (
+  //         <div
+  //           id="sidebar"
+  //           order={2}
+  //           defaultSize={20}
+  //           minSize={15}
+  //           maxSize={65}
+  //           className="bg-slate-100 w-[300px] h-full"
+  //         >
+  //           <div className="h-full overflow-y-auto">
+  //             <Layers data={data} state={state} dispatch={dispatch} />
+  //             {/*<NodeInspector data={data} />*/}
+  //           </div>
+  //         </div>
+  //       )}
+  //       <div className="absolute right-1 top-1">
+  //         <button
+  //           className="size-5 rounded-md border border-slate-400 bg-white hover:bg-slate-200 transition-colors flex items-center justify-center"
+  //           onClick={() => toggleSidebar()}
+  //         >
+  //           {isOpen ? (
+  //             <ChevronRight color="black" size={14} />
+  //           ) : (
+  //             <ChevronLeft color="black" size={14} />
+  //           )}
+  //         </button>
+  //       </div>
+  //     </div>
+  //     <div className="mile-controls">
+  //       <div className="mile-controls-right">
+  //         <div className="">tool 4</div>
+  //         <div className="">tool 5</div>
+  //         <div className="">tool 6</div>
+  //       </div>
+  //     </div>
+  //   </div>
+  // );
+
+  // FIX: "react-resizable-panels" bug
+  // Iframe stops scrolling after resizing via handle
+  // https://github.com/bvaughn/react-resizable-panels/issues/419
+
   return (
     <div
       className="flex grow h-(--h) mt-[40px]"
@@ -821,22 +911,18 @@ function MileContent({
       <PanelGroup
         direction="horizontal"
         autoSaveId="mile-editor"
-        className="relative"
+        className="relative h-full"
       >
         <Panel id="iframe" order={1} minSize={30}>
-          <div className="artboard-inner h-full overflow-y-auto">
-            <div className="">
-              <div className="mile-canvas-root">
-                <iframe
-                  ref={frameRef}
-                  id="mileframe"
-                  src={iframeSrc}
-                  title="mileframe"
-                  className="mile-iframe"
-                  style={{ width: w, height: h, margin: "0 auto" }}
-                />
-              </div>
-            </div>
+          <div className="artboard-inner h-full overflow-y-auto min-h-0">
+            <iframe
+              ref={frameRef}
+              id="mileframe"
+              src={iframeSrc}
+              title="mileframe"
+              className="mile-iframe"
+              style={{ width: w, height: h, margin: "0 auto" }}
+            />
           </div>
         </Panel>
         <PanelResizeHandle className="w-[2px] bg-blue-200 hover:bg-blue-400" />
@@ -846,8 +932,8 @@ function MileContent({
             order={2}
             defaultSize={20}
             minSize={15}
-            maxSize={45}
-            className="bg-slate-100"
+            maxSize={65}
+            className="bg-slate-100 h-full"
           >
             <div className="h-full overflow-y-auto">
               <Layers data={data} state={state} dispatch={dispatch} />
@@ -879,27 +965,27 @@ function MileContent({
   );
 }
 
-function NodeInspector({ data }: { data: any }) {
-  const editor = useEditor();
-  const mile = useMileProvider();
-  if (editor.activeNodeId === null) {
-    return <div className="">Select a node to inspect.</div>;
-  }
+// function NodeInspector({ data }: { data: any }) {
+//   const editor = useEditor();
+//   const mile = useMileProvider();
+//   if (editor.activeNodeId === null) {
+//     return <div className="">Select a node to inspect.</div>;
+//   }
 
-  const node = data[editor.activeNodeId];
-  console.log("Inspector", editor.activeNodeId, node, data);
-  const schema = mile.schema.get(node.type);
+//   const node = data[editor.activeNodeId];
+//   console.log("Inspector", editor.activeNodeId, node, data);
+//   const schema = mile.schema.get(node.type);
 
-  if (schema.isMarkdown) {
-    return <EditMarkdown node={node} />;
-  }
+//   if (schema.isMarkdown) {
+//     return <EditMarkdown node={node} />;
+//   }
 
-  return (
-    <div className="px-4 py-4">
-      <EditNode node={node} />
-    </div>
-  );
-}
+//   return (
+//     <div className="px-4 py-4">
+//       <EditNode node={node} />
+//     </div>
+//   );
+// }
 
 function EditMarkdown({ node }: { node: NodeData }) {
   return <div className="">Edit markdown</div>;
@@ -952,11 +1038,42 @@ type EditComponentProps = {
   field: FieldDefinition;
 };
 
-function EditRichtextComponent({ editor, node, field }: EditComponentProps) {
+function EditRichtextComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
+  const value = getFieldValue(state, path);
+
+  const bn_editor = useCreateBlockNote({
+    initialContent:
+      value.length === 0
+        ? [
+            {
+              type: "paragraph",
+              content: "",
+            },
+          ]
+        : value,
+  });
+
+  function handleEditorChange(editor: BlockNoteEditor) {
+    const content = editor.document;
+    handleChange({ path, value: content });
+  }
+
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
-      <textarea />
+      <BlockNoteView
+        editor={bn_editor}
+        onChange={handleEditorChange}
+        theme="light"
+        data-theming-sidebar
+      />
     </div>
   );
 }
@@ -1267,7 +1384,7 @@ function getDefaultValueForType(type: string): any {
     case "image_url":
       return "";
     case "richtext":
-      return "";
+      return [];
     case "date":
       return new Date();
     default:
@@ -1468,13 +1585,13 @@ function EditFields({
   handleChange: (changes: Change[] | Change) => void;
   fields: FieldDefinition[] | undefined;
 }) {
-  console.log("EditFields", {
-    node,
-    path,
-    state,
-    handleChange,
-    fields,
-  });
+  // console.log("EditFields", {
+  //   node,
+  //   path,
+  //   state,
+  //   handleChange,
+  //   fields,
+  // });
   if (!fields) {
     return <div className="">No fields defined in schema</div>;
   }
@@ -1709,12 +1826,12 @@ function Layer({
   );
 }
 
-function buildNewNodePayload(schema: SchemaTypeDefinition) {
+function buildNewUserNodePayload(schema: SchemaTypeDefinition) {
   const nodeId = generateId();
   const getInitialNodeData = schema.getInitialNodeData;
   if (!getInitialNodeData) {
     throw new Error(
-      `buildNewNodePayload: ${schema.type}. "getInitialNodeData" function not found in mile.config.tsx file`,
+      `buildNewUserNodePayload: ${schema.type}. "getInitialNodeData" function not found in mile.config.tsx file`,
     );
   }
 
@@ -1745,7 +1862,7 @@ function ComponentPicker({
     <div className="grid grid-cols-2 gap-x-4 gap-y-5">
       {user_schema.map((e) => {
         function handleClick() {
-          const payload = buildNewNodePayload(e);
+          const payload = buildNewUserNodePayload(e);
           editor.perform({
             type: "addNode",
             name: "Add Node",
@@ -1835,7 +1952,7 @@ function MileHeader({
   dispatch_iframe: React.ActionDispatch<[action: IframeAction]>;
 }) {
   const editor = useEditor();
-  function handleSavePage() {
+  function handleHeaderSavePage() {
     editor.save();
   }
 
@@ -1985,7 +2102,7 @@ function MileHeader({
         <button
           type="button"
           className="px-2 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-          onClick={handleSavePage}
+          onClick={handleHeaderSavePage}
         >
           Save
         </button>

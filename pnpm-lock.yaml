@@ -334,6 +334,9 @@ importers:
       '@atlaskit/pragmatic-drag-and-drop-react-drop-indicator':
         specifier: ^3.2.7
         version: 3.2.7(@types/react@19.1.13)(react@19.1.1)
+      '@blocknote/core':
+        specifier: ^0.41.1
+        version: 0.41.1(@tiptap/extensions@3.8.0(@tiptap/core@3.8.0(@tiptap/pm@3.8.0))(@tiptap/pm@3.8.0))(@types/hast@3.0.4)
       '@types/react':
         specifier: '>=19'
         version: 19.1.13

@@ -1,5 +1,6 @@
 import { Featured } from "./featured";
 import { Hero } from "./hero";
+import { Lead } from "./lead";
 
 const components = {
   hero: {
@@ -9,6 +10,10 @@ const components = {
   featured: {
     name: "featured",
     component: Featured,
+  },
+  lead: {
+    name: "lead",
+    component: Lead,
   },
 };
 

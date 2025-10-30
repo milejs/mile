@@ -2,6 +2,7 @@ import { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
 import type React from "react";
 import { ComponentType, ReactElement, ReactNode, RefObject } from "react";
 // import type { MileToast, ToastQueue } from "./toast";
+export type { Block, InlineContent } from "@blocknote/core";
 
 export interface MileOptions {
   options: OptionComponents;

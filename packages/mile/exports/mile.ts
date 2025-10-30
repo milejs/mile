@@ -1,3 +1,3 @@
-import { Mile } from "../src/mile/index.tsx";
+import { Mile, BlockNoteView, useCreateBlockNote } from "../src/mile/index.tsx";
 
-export { Mile };
+export { Mile, BlockNoteView, useCreateBlockNote };
