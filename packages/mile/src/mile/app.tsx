@@ -1,10 +1,14 @@
 import { Suspense } from "react";
-import { type MDXComponents, MDXRemote, type MDXRemoteOptions } from "next-mdx-remote-client/rsc";
+import {
+  type MDXComponents,
+  MDXRemote,
+  type MDXRemoteOptions,
+} from "next-mdx-remote-client/rsc";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
 function getSlug(paths: string[] | undefined) {
-  return paths === undefined ? "/" : `/${paths.join("/")}`
+  return paths === undefined ? "/" : `/${paths.join("/")}`;
 }
 
 async function fetchPageBySlug(paths?: string[]) {
@@ -13,14 +17,20 @@ async function fetchPageBySlug(paths?: string[]) {
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text();
-    console.error('error fetching page', text);
+    console.error("error fetching page", text);
     return { ok: false };
   }
   const result = await res.json();
   return { ok: true, result };
 }
 
-export async function App({ params, components }: { params: Promise<{ mileApp?: string[] }>; components: MDXComponents }) {
+export async function App({
+  params,
+  components,
+}: {
+  params: Promise<{ mileApp?: string[] }>;
+  components: MDXComponents;
+}) {
   const mileApp = (await params).mileApp;
   const res = await fetchPageBySlug(mileApp);
   if (!res.ok) {
@@ -44,7 +54,7 @@ export async function App({ params, components }: { params: Promise<{ mileApp?: 
       "updated_at": "2025-10-06T03:17:31.923Z"
     }
    */
-  console.log('page_data', page_data);
+  console.log("page_data", page_data);
   if (!page_data) return <div className="">No content</div>;
 
   const options: MDXRemoteOptions = {
@@ -69,7 +79,7 @@ export async function App({ params, components }: { params: Promise<{ mileApp?: 
   );
 }
 
-function ErrorComponent({ error }: { error: Error | string; }) {
+function ErrorComponent({ error }: { error: Error | string }) {
   return (
     <div id="mdx-error">
       <pre style={{ color: "var(--error)" }}>
@@ -88,4 +98,3 @@ function LoadingComponent() {
     </div>
   );
 }
-

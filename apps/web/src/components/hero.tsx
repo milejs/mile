@@ -1,12 +1,8 @@
-"use client";
-
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
 import Link from "next/link";
-import { useState } from "react";
 
 export function Hero(props: MileComponentProps) {
-  const [state, setState] = useState(false);
   const { options } = props ?? {};
   const { title, btn_text, link, image } = options ?? {};
   return (

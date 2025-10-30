@@ -24,7 +24,7 @@ body {
   margin: 0;
 }
 
-/* blocknote */
+/* Richtext */
 .bn-container[data-theming-app] .bn-editor {
   padding: 0px;
   border: 0px;
@@ -33,6 +33,11 @@ body {
 
 .bn-container[data-theming-app] .bn-block {
   margin-bottom: 8px;
+}
+
+.bn-container[data-theming-app] .bn-block-content[data-content-type="heading"] {
+  font-weight: 700;
+  margin-bottom: 14px;
 }
 
 .bn-container[data-theming-app]
