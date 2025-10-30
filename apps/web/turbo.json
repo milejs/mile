@@ -1,13 +1,9 @@
 {
-  "extends": [
-    "//"
-  ],
+  "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**"
-      ],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "inputs": ["$TURBO_DEFAULT$", ".env"],
       "env": [
         "NEXT_PUBLIC_HOST_URL",
         "DATABASE_URL",

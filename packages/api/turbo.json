@@ -1,0 +1,31 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist"],
+      "inputs": ["$TURBO_DEFAULT$", ".env"],
+      "env": [
+        "POSTGRES_URL",
+        "POSTGRES_PRISMA_URL",
+        "DATABASE_URL_UNPOOLED",
+        "POSTGRES_URL_NON_POOLING",
+        "PGHOST",
+        "POSTGRES_USER",
+        "DATABASE_URL",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_DATABASE",
+        "PGPASSWORD",
+        "PGDATABASE",
+        "PGHOST_UNPOOLED",
+        "PGUSER",
+        "POSTGRES_URL_NO_SSL",
+        "POSTGRES_HOST",
+        "NEON_PROJECT_ID",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_BUCKET_NAME"
+      ]
+    }
+  }
+}
