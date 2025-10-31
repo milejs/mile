@@ -2,7 +2,7 @@
 
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
-import { Richtext } from "./DynamicRichtext";
+import { Richtext } from "./dynamic-richtext";
 
 export function Lead(props: MileComponentProps) {
   const { options } = props ?? {};
@@ -26,24 +26,7 @@ export function Lead(props: MileComponentProps) {
             />
           </div>
           <div className="sm:w-1/2 text-left">
-            <div
-              style={{
-                ["--font-size-h1" as string]: "2rem",
-                ["--line-height-h1" as string]: 1.2,
-                ["--font-size-h2" as string]: "1.675rem",
-                ["--line-height-h2" as string]: 1.3,
-                ["--font-size-h3" as string]: "1.475rem",
-                ["--line-height-h3" as string]: 1.33,
-                ["--font-size-h4" as string]: "1.25rem",
-                ["--line-height-h4" as string]: 1.35,
-                ["--font-size-h5" as string]: "1.1rem",
-                ["--line-height-h5" as string]: 1.36,
-                ["--font-size-h6" as string]: "1rem",
-                ["--line-height-h6" as string]: 1.37,
-              }}
-            >
-              <Richtext text={text} />
-            </div>
+            <Richtext text={text} className="richtext_lead" />
           </div>
         </div>
       </div>

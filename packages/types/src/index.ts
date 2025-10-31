@@ -76,13 +76,7 @@ export interface MileRegistry {
   mustGetComponent(name: string): ComponentData;
 }
 
-type GithubStorage = {
-  kind: "github";
-  repo: string;
-};
-
 export type Config = {
-  storage: GithubStorage;
   actions?: Actions;
   schema?: Schema;
   components?: Components;

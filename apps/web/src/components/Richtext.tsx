@@ -32,7 +32,13 @@ import { useEffect } from "react";
 
  * @param {text} text is richtext
  */
-export default function Richtext({ text }: { text: Block[] }) {
+export default function Richtext({
+  text,
+  className,
+}: {
+  text: Block[];
+  className?: string;
+}) {
   const editor = useCreateBlockNote({
     initialContent: text,
   });
@@ -47,7 +53,11 @@ export default function Richtext({ text }: { text: Block[] }) {
       editor={editor}
       editable={false}
       theme="light"
+      // see custom class name in global.css
+      // these are styles that each instance of Richtext can customize
+      className={className}
       // see custom styles with data-theming-app attribute in global.css
+      // these are styles that every instance of Richtext will share
       data-theming-app
     />
   );

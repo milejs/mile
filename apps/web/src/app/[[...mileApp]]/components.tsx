@@ -1,5 +1,6 @@
 import { Hero } from "../../components/hero";
 import { Lead } from "../../components/lead";
+import { BannerBlue } from "../../components/banner_blue";
 
 export const components = {
   h1: (props: React.ComponentPropsWithoutRef<"h1">) => (
@@ -39,6 +40,7 @@ export const components = {
   ),
   Hero,
   Lead,
+  BannerBlue,
 };
 
 function Heading(

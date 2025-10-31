@@ -1,6 +1,6 @@
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
-import Link from "next/link";
+import { Link } from "./links";
 
 export function Hero(props: MileComponentProps) {
   const { options } = props ?? {};
@@ -19,23 +19,7 @@ export function Hero(props: MileComponentProps) {
           <h1 className="text-6xl font-bold">{title ?? "Title goes here"}</h1>
         </div>
         <div className="min-w-[100px] sm:min-w-[220px] lg:min-w-[300px] shrink-0">
-          {link?.is_external ? (
-            <a
-              href={link?.url ?? "/"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block px-6 py-3 rounded-full bg-blue-500 text-white text-center font-semibold text-base"
-            >
-              {link?.link_text ?? "Button"}
-            </a>
-          ) : (
-            <Link
-              href={link?.url ?? "/"}
-              className="block px-6 py-3 rounded-full bg-blue-500 text-white text-center font-semibold text-base"
-            >
-              {link?.link_text ?? "Button"}
-            </Link>
-          )}
+          <Link {...link} />
         </div>
       </div>
     </div>

@@ -2,8 +2,7 @@
 
 import "@milejs/core/mile.css";
 import { Mile } from "@milejs/core";
-import { MileProvider } from "@milejs/core/client";
-import { mileconfig } from "../../../mile.config";
+import { Providers } from "../../providers";
 
 export default function Page({
   params,
@@ -13,9 +12,9 @@ export default function Page({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   return (
-    <MileProvider config={mileconfig}>
+    <Providers>
       <Mile params={params} searchParams={searchParams} />
-    </MileProvider>
+    </Providers>
   );
 }
 

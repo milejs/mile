@@ -23,7 +23,12 @@ async function fetchPageBySlug(paths?: string[]) {
   const result = await res.json();
   return { ok: true, result };
 }
-
+/**
+ * App renders the page. Supply mdx `source` string to MDXRemote.
+ *
+ * @param params - contains the url path mileApp?: string[]
+ * @param components - bag of components. see https://mdxjs.com/table-of-components/
+ */
 export async function App({
   params,
   components,
