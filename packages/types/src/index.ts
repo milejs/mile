@@ -154,7 +154,7 @@ export type PageMetaData = Omit<PageData, "content"> & {
 };
 
 export type TreeData = {
-  [key: string]: NodeData;
+  [id: string]: NodeData;
 };
 
 export interface MileTree {

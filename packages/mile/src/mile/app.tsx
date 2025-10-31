@@ -23,6 +23,7 @@ async function fetchPageBySlug(paths?: string[]) {
   const result = await res.json();
   return { ok: true, result };
 }
+
 /**
  * App renders the page. Supply mdx `source` string to MDXRemote.
  *

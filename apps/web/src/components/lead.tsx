@@ -1,5 +1,3 @@
-"use client";
-
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
 import { Richtext } from "./dynamic-richtext";

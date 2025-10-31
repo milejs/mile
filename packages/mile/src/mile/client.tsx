@@ -288,7 +288,7 @@ function getHeadingClasses(level: number) {
 function Heading(props: any) {
   const { depth = 1 } = props;
   const level = Math.min(Math.max(depth, 1), 6);
-  const Tag = `h${level}` as keyof JSX.IntrinsicElements;
+  const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   return (
     <MarkdownBlockContainer>
       <Tag className={`text-left font-bold ${getHeadingClasses(level)}`}>
@@ -372,10 +372,10 @@ class Registry implements MileRegistry {
     }
     // name must be unique
     if (this.components[name]) {
-      console.warn(
-        `%cComponent '${name}' already exists.`,
-        "color:red;font-size:24px",
-      );
+      // override existing component if it's a user component
+      if (!is_user_component) {
+        throw new Error(`Component '${name}' already exists`);
+      }
     }
     this.components[name] = componentData;
     if (is_user_component) {

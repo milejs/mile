@@ -8,9 +8,10 @@ export default function Page({
 }: {
   params: Promise<{ mileApp?: string[] }>;
 }) {
-  return (
-    <Providers>
-      <App params={params} components={components} />
-    </Providers>
-  );
+  // return (
+  //   <Providers>
+  //     <App params={params} components={components} />
+  //   </Providers>
+  // );
+  return <App params={params} components={components} />;
 }
