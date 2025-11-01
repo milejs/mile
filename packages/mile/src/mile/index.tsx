@@ -2090,7 +2090,7 @@ function MileHeader({
           </button>
         </div>
       </div>
-      <MileHeaderEditPageInfo title={title} />
+      <MileHeaderPageSettings title={title} />
       <div className="mile-headRight">
         <a
           type="button"
@@ -2111,7 +2111,7 @@ function MileHeader({
   );
 }
 
-function MileHeaderEditPageInfo({ title }: { title?: string }) {
+function MileHeaderPageSettings({ title }: { title?: string }) {
   const [localTitle, setLocalTitle] = useState(title);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -2138,7 +2138,7 @@ function MileHeaderEditPageInfo({ title }: { title?: string }) {
               Edit Page Data
             </Dialog.Title>
             <div className="overflow-y-auto h-full">
-              <EditPageInfoModal
+              <PageSettings
                 close={() => {
                   setIsOpen(false);
                 }}
@@ -2172,7 +2172,7 @@ function getOwnSlug(page_slug: string, parent: ParentPageValue | undefined) {
   }
 }
 
-function EditPageInfoModal({ close, setLocalTitle }: any) {
+function PageSettings({ close, setLocalTitle }: any) {
   const editor = useEditor();
   const {
     data: parent_page,
@@ -2187,7 +2187,7 @@ function EditPageInfoModal({ close, setLocalTitle }: any) {
   // if (!parent_page) return <div>no parent page data</div>
 
   return (
-    <EditPageInfoModalReady
+    <PageSettingsReady
       parent_page={parent_page}
       close={close}
       setLocalTitle={setLocalTitle}
@@ -2197,7 +2197,7 @@ function EditPageInfoModal({ close, setLocalTitle }: any) {
 
 function savePage(id: string, data: { [k: string]: any }) {
   return mutate(
-    ["/pages", `/${id}`],
+    ["/pages/", id],
     async () => {
       // const resp = await fetch(`${API}/pages`, {
       //   method: "POST",
@@ -2257,7 +2257,7 @@ function buildLocalPageData(
   };
 }
 
-function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
+function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
   const editor = useEditor();
   const [pageData, setPageData] = useState<LocalPageData>(() =>
     buildLocalPageData(editor.page_data, parent_page),
