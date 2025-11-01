@@ -11,7 +11,7 @@ function getSlug(paths: string[] | undefined) {
   return paths === undefined ? "/" : `/${paths.join("/")}`;
 }
 
-async function fetchPageBySlug(paths?: string[]) {
+export async function fetchPageBySlug(paths?: string[]) {
   const slug = getSlug(paths);
   const url = `${API}/page${slug}`;
   const res = await fetch(url);

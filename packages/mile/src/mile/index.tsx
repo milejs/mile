@@ -2172,26 +2172,6 @@ function getOwnSlug(page_slug: string, parent: ParentPageValue | undefined) {
   }
 }
 
-function buildLocalPageData(
-  page_data: PageData,
-  parent_page?: PageData,
-): LocalPageData {
-  const parent_value = page_data.parent_id
-    ? getParentValue(parent_page)
-    : undefined;
-  const own_slug = getOwnSlug(page_data.slug, parent_value);
-  return {
-    id: page_data.id,
-    title: page_data.title,
-    type: page_data.type,
-    own_slug,
-    parent: parent_value,
-    parent_id: page_data.parent_id,
-    content: page_data.content,
-    description: page_data.description,
-  };
-}
-
 function EditPageInfoModal({ close, setLocalTitle }: any) {
   const editor = useEditor();
   const {
@@ -2218,7 +2198,7 @@ function EditPageInfoModal({ close, setLocalTitle }: any) {
 function savePage(id: string, data: { [k: string]: any }) {
   return mutate(
     ["/pages", `/${id}`],
-    async (pages: any) => {
+    async () => {
       // const resp = await fetch(`${API}/pages`, {
       //   method: "POST",
       //   headers: { "Content-Type": "application/json" },
@@ -2240,10 +2220,41 @@ function savePage(id: string, data: { [k: string]: any }) {
         throw error;
       }
       const result = await resp.json();
-      return [...pages, result];
+      return result;
     },
     // { revalidate: false },
   );
+}
+
+function buildLocalPageData(
+  page_data: PageData,
+  parent_page?: PageData,
+): LocalPageData {
+  const { slug, ...rest } = page_data;
+
+  function convertNullToEmptyString(obj: any) {
+    return Object.keys(obj).reduce((acc, key) => {
+      if (["description", "keywords", "llm", "title"].includes(key)) {
+        // @ts-expect-error okk
+        acc[key] = obj[key] === null ? "" : obj[key];
+      } else {
+        // @ts-expect-error okk
+        acc[key] = obj[key];
+      }
+      return acc;
+    }, {});
+  }
+
+  const parent_value = page_data.parent_id
+    ? getParentValue(parent_page)
+    : undefined;
+  const own_slug = getOwnSlug(page_data.slug, parent_value);
+
+  return {
+    ...(convertNullToEmptyString(rest) as Omit<PageData, "slug">),
+    own_slug,
+    parent: parent_value,
+  };
 }
 
 function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
@@ -2252,7 +2263,7 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
     buildLocalPageData(editor.page_data, parent_page),
   );
   const [error, setError] = useState<string | null>(null);
-  console.log("pageData", pageData);
+  // console.log("pageData", pageData);
 
   function handleTitleChange(event: any) {
     const value = event.target.value;
@@ -2286,9 +2297,21 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
     });
   }
 
+  function handleKeywordsChange(v: string) {
+    setPageData((e) => {
+      return { ...e, keywords: v };
+    });
+  }
+
   function handleMetaDescriptionChange(v: string) {
     setPageData((e) => {
       return { ...e, description: v };
+    });
+  }
+
+  function handleOgImageChange(v: string) {
+    setPageData((e) => {
+      return { ...e, og_image_filepath: v };
     });
   }
 
@@ -2342,7 +2365,8 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
       parent_id: buildPageParentId(pageData),
       content: pageData.content as string,
       description: pageData.description,
-      // keywords
+      keywords: pageData.keywords,
+      og_image_filepath: pageData.og_image_filepath,
       // llm
       // no_index
       // no_follow
@@ -2429,6 +2453,34 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
         </div>
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
+            <label className="font-semibold text-sm">Open graph Image</label>
+            <PageOpenGraphImage
+              value={pageData.og_image_filepath}
+              onChange={handleOgImageChange}
+            />
+            <div className="mt-1 text-xs text-zinc-600">
+              Used in social media preview
+            </div>
+          </div>
+        </div>
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
+            <label htmlFor="keywords" className="font-semibold text-sm">
+              Keywords
+            </label>
+            <Field.Control
+              id="keywords"
+              value={pageData.keywords}
+              onValueChange={handleKeywordsChange}
+              render={<textarea rows={4} className={textareaClasses} />}
+            />
+            <div className="mt-1 text-xs text-zinc-600">
+              Comma-separated list of keywords for search engines
+            </div>
+          </div>
+        </div>
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
             <label htmlFor="content" className="font-semibold text-sm">
               Content
             </label>
@@ -2456,78 +2508,89 @@ function EditPageInfoModalReady({ parent_page, close, setLocalTitle }: any) {
   );
 }
 
-function ParentPicker({
-  items,
+function PageOpenGraphImage({
   value,
-  setValue,
+  onChange,
 }: {
-  items: ParentPageValue[];
-  value: ParentPageValue | null | undefined;
-  setValue: (v: ParentPageValue | null | undefined) => void;
+  value?: string;
+  onChange: (v: string) => void;
 }) {
-  const comboboxid = useId();
+  const [selectedFileId, setSelectedFileId] = useState("");
+  const [open, setOpen] = useState(false);
+  const { data, error } = useMediaFile(selectedFileId);
+
+  function handleSelectFile(file_id: string) {
+    setSelectedFileId(file_id);
+  }
+
+  function handleConfirmFile(file_id: string) {
+    setSelectedFileId(file_id);
+    if (!data) {
+      toast.error(
+        `Selecting file failed. Please choose different file. Or refresh the page and try agian.`,
+      );
+      return;
+    }
+    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${data.filepath}`;
+    onChange(image_url);
+    setOpen(false);
+  }
+
+  function handleUploadSuccess(upload: any) {
+    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectKey}`;
+    onChange(image_url);
+
+    // save db
+    mutate(`/medias`, async (prev: any) => {
+      const resp = await fetch(`${API}/medias`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([
+          {
+            id: generateId(),
+            type: upload.file.type,
+            size: upload.file.size,
+            filepath: upload.file.objectKey,
+          },
+        ]),
+      });
+      if (!resp.ok) {
+        const error = new Error("An error occurred while saving the images.");
+        const info = await resp.json();
+        console.error("Error saving images", info);
+        // @ts-expect-error okk
+        error.info = info;
+        // @ts-expect-error okk
+        error.status = resp.status;
+        throw error;
+      }
+      const result = await resp.json();
+      return prev ? [...prev, ...result] : result;
+    });
+  }
 
   return (
     <div className="flex flex-col gap-y-1">
-      <h3 className="font-semibold text-sm">Parent page</h3>
-      <Combobox.Root
-        items={items}
-        value={value}
-        onValueChange={(v) => setValue(v)}
-      >
-        <Combobox.Trigger className="flex pr-3 pl-3.5 h-9 rounded-md border border-zinc-200 items-center justify-between gap-3 text-base text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 data-[popup-open]:bg-zinc-100 cursor-default">
-          <div className="">
-            <div className="text-sm truncate">
-              {value && value.label ? value.label : "Select.."}
-            </div>
-          </div>
-          <Combobox.Icon className="flex">
-            <ChevronsUpDownIcon size={14} />
-          </Combobox.Icon>
-        </Combobox.Trigger>
-        <Combobox.Portal>
-          <Combobox.Positioner align="start" sideOffset={4}>
-            <Combobox.Popup
-              className="w-md [--input-container-height:3rem] origin-[var(--transform-origin)] max-w-[var(--available-width)] max-h-[24rem] rounded-lg bg-[canvas] shadow-lg shadow-zinc-200 text-zinc-900 outline-1 outline-zinc-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0"
-              aria-label="Select parent page"
-            >
-              <div className="w-full h-[var(--input-container-height)] text-center p-2">
-                <Combobox.Input
-                  id={comboboxid}
-                  placeholder="e.g. About us"
-                  className="h-9 w-full font-normal rounded-md border border-zinc-200 pl-3.5 text-sm text-zinc-900 focus:outline-2 focus:-outline-offset-1 focus:outline-blue-800"
-                />
-              </div>
-              <Combobox.Empty className="p-4 text-[0.925rem] leading-4 text-zinc-600 empty:m-0 empty:p-0">
-                No parent pages found.
-              </Combobox.Empty>
-              <Combobox.List className="overflow-y-auto scroll-py-2 py-2 overscroll-contain max-h-[min(calc(24rem-var(--input-container-height)),calc(var(--available-height)-var(--input-container-height)))] empty:p-0">
-                {(item: ParentPageValue) => {
-                  return (
-                    <Combobox.Item
-                      key={item.value}
-                      value={item}
-                      className="grid min-w-[var(--anchor-width)] cursor-default grid-cols-[0.75rem_1fr] items-start gap-2 py-2 pr-8 pl-4 text-sm leading-4 outline-none select-none data-[highlighted]:relative data-[highlighted]:z-0 data-[highlighted]:text-zinc-50 data-[highlighted]:before:absolute data-[highlighted]:before:inset-x-2 data-[highlighted]:before:inset-y-0 data-[highlighted]:before:z-[-1] data-[highlighted]:before:rounded-sm data-[highlighted]:before:bg-zinc-900"
-                    >
-                      <Combobox.ItemIndicator className="col-start-1">
-                        <CheckIcon className="size-3" />
-                      </Combobox.ItemIndicator>
-                      <div className="col-start-2 flex items-start gap-x-1.5">
-                        <span className="font-medium">
-                          {item.label ?? "Unknown"}
-                        </span>
-                        <span className="text-xs text-zinc-500">
-                          {item.value ?? ""}
-                        </span>
-                      </div>
-                    </Combobox.Item>
-                  );
-                }}
-              </Combobox.List>
-            </Combobox.Popup>
-          </Combobox.Positioner>
-        </Combobox.Portal>
-      </Combobox.Root>
+      {value ? (
+        <div className="max-w-[150px]">
+          <img src={value} alt="" />
+        </div>
+      ) : null}
+      <div className="flex items-center gap-x-2">
+        <Uploader
+          is_disabled={false}
+          onSuccess={handleUploadSuccess}
+          label={value ? "Change image" : "Upload image"}
+        />
+        <ImageGallery
+          is_disabled={false}
+          open={open}
+          setOpen={setOpen}
+          handleConfirmFile={handleConfirmFile}
+          selectedFileId={selectedFileId}
+          handleSelectFile={handleSelectFile}
+        />
+      </div>
     </div>
   );
 }

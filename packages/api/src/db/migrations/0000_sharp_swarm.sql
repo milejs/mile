@@ -20,6 +20,7 @@ CREATE TABLE "pages" (
 	"content" text,
 	"description" text,
 	"keywords" text,
+	"og_image_filepath" text,
 	"llm" text,
 	"no_index" integer,
 	"no_follow" integer,

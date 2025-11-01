@@ -142,7 +142,9 @@ export type PageData = {
   content: string | TreeData;
   title?: string;
   description?: string;
+  og_image_filepath?: string;
   keywords?: string;
+  llm?: string;
   no_index?: number;
   no_follow?: number;
   created_at?: number;

@@ -1,5 +1,5 @@
 {
-  "id": "f90d616b-ded9-4544-b431-e0adafc89aee",
+  "id": "df75cd5b-778c-4dd6-9e40-37a2a316ec70",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -126,6 +126,12 @@
         },
         "keywords": {
           "name": "keywords",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "og_image_filepath": {
+          "name": "og_image_filepath",
           "type": "text",
           "primaryKey": false,
           "notNull": false

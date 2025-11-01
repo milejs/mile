@@ -1,3 +1,3 @@
-import { App } from "../src/mile/app.tsx";
+import { App, fetchPageBySlug } from "../src/mile/app.tsx";
 
-export { App };
+export { App, fetchPageBySlug };

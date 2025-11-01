@@ -20,6 +20,10 @@ const components = {
     name: "heading",
     component: Heading,
   },
+  paragraph: {
+    name: "paragraph",
+    component: Paragraph,
+  },
 };
 
 // override built-in markdown component
@@ -48,16 +52,26 @@ function Heading(props: any) {
   const Tag = `h${level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
   return (
     <MarkdownBlockContainer>
-      <Tag className={`text-left font-bold ${getHeadingClasses(level)}`}>
+      <Tag
+        className={`mt-6 mb-4 text-left font-bold ${getHeadingClasses(level)}`}
+      >
         {props.children}
       </Tag>
     </MarkdownBlockContainer>
   );
 }
 
+function Paragraph(props: any) {
+  return (
+    <MarkdownBlockContainer>
+      <p className="text-left mb-2.5">{props.children}</p>
+    </MarkdownBlockContainer>
+  );
+}
+
 function MarkdownBlockContainer(props: any) {
   return (
-    <div className="relative px-4 md:px-0 max-w-2xl mx-auto">
+    <div className="relative px-4 md:px-0 max-w-5xl mx-auto">
       {props.children}
     </div>
   );
