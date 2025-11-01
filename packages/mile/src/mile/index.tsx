@@ -32,7 +32,8 @@ import {
   CheckIcon,
   ChevronLeft,
   ChevronRight,
-  ChevronsUpDownIcon,
+  CircleCheckIcon,
+  CircleXIcon,
   ImagesIcon,
   LaptopIcon,
   PencilIcon,
@@ -64,8 +65,8 @@ import { filesize } from "./utils";
 import { Field } from "@base-ui-components/react/field";
 import { Checkbox } from "@base-ui-components/react/checkbox";
 import slugify from "@sindresorhus/slugify";
-import { Combobox } from "@base-ui-components/react/combobox";
 import { LocalPageData, ParentPageValue, SlugInput } from "./shared";
+import { Switch } from "@base-ui-components/react/switch";
 // editor
 import {
   BasicTextStyleButton,
@@ -84,7 +85,6 @@ import {
 import { BlockNoteView } from "@blocknote/mantine"; // Or, you can use ariakit, shadcn, etc.
 import "@blocknote/mantine/style.css"; // Default styles for the mantine editor
 import "@blocknote/core/fonts/inter.css"; // Include the included Inter font
-import { App } from "./app";
 import {
   BlockNoteEditor,
   BlockNoteSchema,
@@ -2125,9 +2125,9 @@ function MileHeaderPageSettings({ title }: { title?: string }) {
               onClick={() => {
                 setIsOpen(true);
               }}
-              className="px-2 select-none flex items-center gap-x-1 text-xs rounded bg-zinc-100 hover:bg-zinc-300 border border-zinc-200"
+              className="px-1.5 py-1 select-none flex items-center gap-x-1 text-[10px] font-medium rounded-sm text-white bg-zinc-500 hover:bg-zinc-600 border border-zinc-600"
             >
-              <PencilIcon width={10} /> Edit
+              <PencilIcon size={8} /> Edit
             </button>
           )}
         />
@@ -2315,6 +2315,12 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
     });
   }
 
+  function handleNoIndexChange(v: boolean) {
+    setPageData((e) => {
+      return { ...e, no_index: v === true ? 1 : 0 };
+    });
+  }
+
   function handleAutoSlug() {
     setPageData((e) => {
       if (!e.title) {
@@ -2367,8 +2373,8 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
       description: pageData.description,
       keywords: pageData.keywords,
       og_image_filepath: pageData.og_image_filepath,
+      no_index: pageData.no_index,
       // llm
-      // no_index
       // no_follow
     };
     console.log("payload", payload);
@@ -2490,6 +2496,33 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
               onValueChange={handleContentChange}
               render={<textarea rows={4} className={textareaClasses} />}
             />
+          </div>
+        </div>
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
+            <label className="font-semibold text-sm flex flex-row items-center gap-x-2">
+              Do not index page
+              <Switch.Root
+                checked={Boolean(pageData.no_index)}
+                onCheckedChange={handleNoIndexChange}
+                className="relative flex h-6 w-10 rounded-full bg-gradient-to-r from-gray-700 from-35% to-gray-200 to-65% bg-[length:6.5rem_100%] bg-[100%_0%] bg-no-repeat p-px shadow-[inset_0_1.5px_2px] shadow-gray-200 outline outline-1 -outline-offset-1 outline-gray-200 transition-[background-position,box-shadow] duration-[125ms] ease-[cubic-bezier(0.26,0.75,0.38,0.45)] before:absolute before:rounded-full before:outline-offset-2 before:outline-blue-800 focus-visible:before:inset-0 focus-visible:before:outline focus-visible:before:outline-2 active:bg-gray-100 data-[checked]:bg-[0%_0%] data-[checked]:active:bg-gray-500 dark:from-gray-500 dark:shadow-black/75 dark:outline-white/15 dark:data-[checked]:shadow-none"
+              >
+                <Switch.Thumb className="aspect-square h-full rounded-full bg-white shadow-[0_0_1px_1px,0_1px_1px,1px_2px_4px_-1px] shadow-gray-100 transition-transform duration-150 data-[checked]:translate-x-4 dark:shadow-black/25" />
+              </Switch.Root>
+            </label>
+            <div className="mt-1 text-xs text-zinc-600">
+              {Boolean(pageData.no_index) ? (
+                <div className="text-red-700 flex flex-row items-center gap-x-1">
+                  <CircleXIcon size={12} />
+                  This page will not be indexed by search engines.
+                </div>
+              ) : (
+                <div className="text-green-600  flex flex-row items-center gap-x-1">
+                  <CircleCheckIcon size={12} />
+                  Search engines are allowed to index this page.
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
