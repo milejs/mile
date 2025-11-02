@@ -274,7 +274,6 @@ Editor
 .bn-container:not(.bn-comment-editor),
 .bn-editor {
   height: 100%;
-  --bn-colors-editor-text: black;
 }
 
 .bn-container:not(.bn-comment-editor) .bn-editor {

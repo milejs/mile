@@ -109,6 +109,11 @@ body {
 }
 
 /* Richtext */
+.bn-container[data-theming-app]:not(.bn-comment-editor) {
+  --bn-colors-editor-background: transparent;
+  height: auto;
+}
+
 .bn-container[data-theming-app] .bn-editor {
   padding: 0px;
   border: 0px;
@@ -166,13 +171,9 @@ body {
   line-height: var(--line-height-h6, 1.37);
 }
 
-.bn-container[data-theming-app] {
-  --bn-colors-editor-background: transparent;
-}
-
 /* <Richtext /> for banner_blue */
 .richtext_banner_blue.bn-container .bn-editor {
-  --bn-colors-editor-text: white;
+  color: white;
   --font-size-h1: 2rem;
   --line-height-h1: 1.2;
   --font-size-h2: 1.675rem;
