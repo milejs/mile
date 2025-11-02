@@ -142,7 +142,21 @@ export type PageData = {
   content: string | TreeData;
   title?: string;
   description?: string;
-  og_image_filepath?: string;
+  og_image_ids: string[];
+  og_images: {
+    size: number | null;
+    type: string | null;
+    id: string;
+    title: string | null;
+    created_at: Date;
+    updated_at: Date;
+    etag: string | null;
+    filepath: string;
+    width: number | null;
+    height: number | null;
+    alt: string | null;
+    caption: string | null;
+  }[];
   keywords?: string;
   llm?: string;
   no_index?: number;

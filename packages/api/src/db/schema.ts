@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { char, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 export const medias = pgTable("medias", {
@@ -6,6 +7,8 @@ export const medias = pgTable("medias", {
   size: integer("size"),
   etag: text("etag"),
   filepath: text("filepath").notNull(),
+  width: integer("width"),
+  height: integer("height"),
   alt: text("alt"),
   caption: text("caption"),
   title: text("title"),
@@ -24,7 +27,9 @@ export const pages = pgTable("pages", {
   content: text("content"), // mdx string
   description: text("description"),
   keywords: text("keywords"),
-  og_image_filepath: text("og_image_filepath"),
+  og_image_ids: char("og_image_ids", { length: 32 })
+    .array()
+    .default(sql`ARRAY[]::char(32)[]`),
   llm: text("llm"),
   no_index: integer("no_index"),
   no_follow: integer("no_follow"),
@@ -36,3 +41,4 @@ export const pages = pgTable("pages", {
 
 export type InsertPage = typeof pages.$inferInsert;
 export type SelectPage = typeof pages.$inferSelect;
+export type SelectMedia = typeof medias.$inferSelect;

@@ -6,8 +6,9 @@ import {
   pages as pagesTable,
   medias as mediasTable,
   SelectPage,
+  SelectMedia,
 } from "./db/schema";
-import { desc, eq, or, ilike } from "drizzle-orm";
+import { desc, eq, or, ilike, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { handleRequest, type Router, route } from "better-upload/server";
 import { cloudflare } from "better-upload/server/helpers";
@@ -152,7 +153,6 @@ medias.post("/", async (c) => {
       400,
     );
   }
-  console.log("parsed ----", parsed);
   const newImages = await db
     .insert(mediasTable)
     .values(parsed.data)
@@ -172,18 +172,31 @@ medias.patch("/:id", async (c) => {
   return c.json(updated);
 });
 
-// Get page by id
+// Get page by "/" slug
 page_by_slug.get("/", async (c) => {
-  const [page] = await db
+  const [single] = await db
     .select()
     .from(pagesTable)
     .where(eq(pagesTable.slug, "/"));
-  if (!page) {
+  if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
-  return c.json(page);
+  // Fetch related media if og_image_ids exist
+  let og_images: SelectMedia[] = [];
+  if (single.og_image_ids && single.og_image_ids.length > 0) {
+    og_images = await db
+      .select()
+      .from(mediasTable)
+      .where(inArray(mediasTable.id, single.og_image_ids));
+  }
+  const pageWithImages = {
+    ...single,
+    og_images,
+  };
+  return c.json(pageWithImages);
 });
 
+// Get page by slug
 page_by_slug.get("/:slug{.+}", async (c) => {
   const slug = c.req.param("slug");
   const [single] = await db
@@ -193,7 +206,19 @@ page_by_slug.get("/:slug{.+}", async (c) => {
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
-  return c.json(single);
+  // Fetch related media if og_image_ids exist
+  let og_images: SelectMedia[] = [];
+  if (single.og_image_ids && single.og_image_ids.length > 0) {
+    og_images = await db
+      .select()
+      .from(mediasTable)
+      .where(inArray(mediasTable.id, single.og_image_ids));
+  }
+  const pageWithImages = {
+    ...single,
+    og_images,
+  };
+  return c.json(pageWithImages);
 });
 
 // List all pages with pagination
@@ -228,11 +253,24 @@ pages.get("/:id", async (c) => {
   const [single] = await db
     .select()
     .from(pagesTable)
-    .where(eq(pagesTable.id, id));
+    .where(eq(pagesTable.id, id))
+    .limit(1);
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
-  return c.json(single);
+  // Fetch related media if og_image_ids exist
+  let og_images: SelectMedia[] = [];
+  if (single.og_image_ids && single.og_image_ids.length > 0) {
+    og_images = await db
+      .select()
+      .from(mediasTable)
+      .where(inArray(mediasTable.id, single.og_image_ids));
+  }
+  const pageWithImages = {
+    ...single,
+    og_images,
+  };
+  return c.json(pageWithImages);
 });
 
 // Update page by id
@@ -277,6 +315,12 @@ const imageSchema = z.object({
   type: z.string(),
   size: z.number(),
   filepath: z.string(),
+  alt: z.string().optional(),
+  caption: z.string().optional(),
+  title: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  etag: z.string().optional(),
 });
 
 const createImagesSchema = z.array(imageSchema);

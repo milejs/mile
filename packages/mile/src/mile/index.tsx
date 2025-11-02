@@ -1140,15 +1140,10 @@ function EditImageUrlComponent({
 }: EditComponentProps) {
   const [selectedFileId, setSelectedFileId] = useState("");
   const [open, setOpen] = useState(false);
-  const { data, error } = useMediaFile(selectedFileId);
 
   const value = getFieldValue(state, path);
 
-  function handleSelectFile(file_id: string) {
-    setSelectedFileId(file_id);
-  }
-
-  function handleConfirmFile(file_id: string) {
+  function handleConfirmFile(file_id: string, data: any) {
     setSelectedFileId(file_id);
     if (!data) {
       toast.error(
@@ -1160,7 +1155,7 @@ function EditImageUrlComponent({
     const path_alt_text = getAltTextPath(path);
     handleChange([
       { path, value: image_url },
-      { path: path_alt_text, value: data.alt },
+      { path: path_alt_text, value: data.alt ?? "" }, // empty string in case data is null
     ]);
     setOpen(false);
   }
@@ -1180,7 +1175,11 @@ function EditImageUrlComponent({
       metadata: {}
      */
     const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectKey}`;
-    handleChange({ path, value: image_url });
+    const path_alt_text = getAltTextPath(path);
+    handleChange([
+      { path, value: image_url },
+      { path: path_alt_text, value: "" }, // empty alt for newly upload file
+    ]);
 
     // save db
     mutate(`/medias`, async (prev: any) => {
@@ -1193,6 +1192,8 @@ function EditImageUrlComponent({
             type: upload.file.type,
             size: upload.file.size,
             filepath: upload.file.objectKey,
+            width: upload.file.width,
+            height: upload.file.height,
           },
         ]),
       });
@@ -1226,12 +1227,12 @@ function EditImageUrlComponent({
           label={value ? "Change image" : "Upload image"}
         />
         <ImageGallery
+          key={selectedFileId}
           is_disabled={editor.is_disabled}
           open={open}
           setOpen={setOpen}
           handleConfirmFile={handleConfirmFile}
-          selectedFileId={selectedFileId}
-          handleSelectFile={handleSelectFile}
+          initialSelectedFileId={selectedFileId}
         />
       </div>
     </div>
@@ -2230,6 +2231,8 @@ function buildLocalPageData(
   page_data: PageData,
   parent_page?: PageData,
 ): LocalPageData {
+  console.log("page_data", page_data);
+
   const { slug, ...rest } = page_data;
 
   function convertNullToEmptyString(obj: any) {
@@ -2309,9 +2312,10 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
     });
   }
 
-  function handleOgImageChange(v: string) {
+  function handleOgImageIdChange(v: string) {
+    // support 1 image for now
     setPageData((e) => {
-      return { ...e, og_image_filepath: v };
+      return { ...e, og_image_ids: [v] };
     });
   }
 
@@ -2372,7 +2376,7 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
       content: pageData.content as string,
       description: pageData.description,
       keywords: pageData.keywords,
-      og_image_filepath: pageData.og_image_filepath,
+      og_image_ids: pageData.og_image_ids,
       no_index: pageData.no_index,
       // llm
       // no_follow
@@ -2461,8 +2465,12 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
           <div className="w-full">
             <label className="font-semibold text-sm">Open graph Image</label>
             <PageOpenGraphImage
-              value={pageData.og_image_filepath}
-              onChange={handleOgImageChange}
+              image_id={
+                pageData.og_image_ids.length > 0
+                  ? pageData.og_image_ids[0]
+                  : undefined
+              }
+              onImageIdChange={handleOgImageIdChange}
             />
             <div className="mt-1 text-xs text-zinc-600">
               Used in social media preview
@@ -2542,39 +2550,31 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
 }
 
 function PageOpenGraphImage({
-  value,
-  onChange,
+  image_id,
+  onImageIdChange,
 }: {
-  value?: string;
-  onChange: (v: string) => void;
+  image_id?: string;
+  onImageIdChange: (v: string) => void;
 }) {
-  const [selectedFileId, setSelectedFileId] = useState("");
+  const [selectedFileId, setSelectedFileId] = useState(image_id);
   const [open, setOpen] = useState(false);
   const { data, error } = useMediaFile(selectedFileId);
 
-  function handleSelectFile(file_id: string) {
-    setSelectedFileId(file_id);
-  }
-
-  function handleConfirmFile(file_id: string) {
-    setSelectedFileId(file_id);
+  function handleConfirmFile(file_id: string, data: any) {
     if (!data) {
       toast.error(
         `Selecting file failed. Please choose different file. Or refresh the page and try agian.`,
       );
       return;
     }
-    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${data.filepath}`;
-    onChange(image_url);
+    onImageIdChange(file_id);
+    setSelectedFileId(file_id);
     setOpen(false);
   }
 
-  function handleUploadSuccess(upload: any) {
-    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectKey}`;
-    onChange(image_url);
-
+  async function handleUploadSuccess(upload: any) {
     // save db
-    mutate(`/medias`, async (prev: any) => {
+    const medias = await mutate(`/medias`, async (prev: any) => {
       const resp = await fetch(`${API}/medias`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2584,6 +2584,8 @@ function PageOpenGraphImage({
             type: upload.file.type,
             size: upload.file.size,
             filepath: upload.file.objectKey,
+            width: upload.file.width,
+            height: upload.file.height,
           },
         ]),
       });
@@ -2598,30 +2600,37 @@ function PageOpenGraphImage({
         throw error;
       }
       const result = await resp.json();
+      if (result.length === 0) {
+        console.error("No media uploaded");
+        return prev;
+      }
+      const [media] = result;
+      onImageIdChange(media.id);
+      setSelectedFileId(media.id);
       return prev ? [...prev, ...result] : result;
     });
   }
 
   return (
     <div className="flex flex-col gap-y-1">
-      {value ? (
+      {data ? (
         <div className="max-w-[150px]">
-          <img src={value} alt="" />
+          <img src={getImageUrl(data.filepath)} alt="" />
         </div>
       ) : null}
       <div className="flex items-center gap-x-2">
         <Uploader
           is_disabled={false}
           onSuccess={handleUploadSuccess}
-          label={value ? "Change image" : "Upload image"}
+          label={image_id ? "Change image" : "Upload image"}
         />
         <ImageGallery
+          key={selectedFileId}
           is_disabled={false}
           open={open}
           setOpen={setOpen}
           handleConfirmFile={handleConfirmFile}
-          selectedFileId={selectedFileId}
-          handleSelectFile={handleSelectFile}
+          initialSelectedFileId={selectedFileId}
         />
       </div>
     </div>
@@ -2640,6 +2649,8 @@ function handleUploadsSuccess(upload: any) {
       id: generateId(),
       type: e.type,
       size: e.size,
+      width: e.width,
+      height: e.height,
       filepath: e.objectKey,
     };
   });
@@ -2667,20 +2678,19 @@ function handleUploadsSuccess(upload: any) {
 function ImageGallery({
   open,
   setOpen,
-  selectedFileId,
-  handleSelectFile,
+  initialSelectedFileId,
   handleConfirmFile,
   is_disabled,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
-  selectedFileId: string;
-  handleSelectFile: (file_id: string) => void;
-  handleConfirmFile: (file_id: string) => void;
+  initialSelectedFileId?: string;
+  handleConfirmFile: (file_id: string, data: any) => void;
   is_disabled: boolean;
 }) {
+  const [selectedFileId, setSelectedFileId] = useState(initialSelectedFileId);
   const [isPending, setIsPending] = useState(false);
-  const { isValidating } = useMediaFile(selectedFileId);
+  const { data, isValidating } = useMediaFile(selectedFileId);
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -2693,7 +2703,7 @@ function ImageGallery({
       />
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-        <Dialog.Popup className="flex flex-col justify-between fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-full max-h-6/7 -translate-x-1/2 -translate-y-1/2 rounded-lg bg-gray-50 outline-1 outline-gray-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+        <Dialog.Popup className="flex flex-col justify-between fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-full max-h-6/7 -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl bg-gray-50 outline-1 outline-gray-400 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
           <div className="py-2 px-3 flex items-center justify-between">
             <div className="flex items-center gap-x-4">
               <Dialog.Title className="text-lg font-medium">
@@ -2711,10 +2721,10 @@ function ImageGallery({
             </div>
           </div>
           <div className="px-3 grid grid-cols-[1fr_300px] gap-2 grow overflow-hidden">
-            <div className="overflow-y-auto">
+            <div className="/pt-4 pb-8 overflow-y-auto">
               <MediaFiles
                 selectedFileId={selectedFileId}
-                handleSelectFile={handleSelectFile}
+                handleSelectFile={setSelectedFileId}
               />
             </div>
             <div className="overflow-y-auto pt-4 pb-8 px-4 bg-gray-100">
@@ -2728,7 +2738,9 @@ function ImageGallery({
             <button
               disabled={isPending || isValidating}
               onClick={() => {
-                handleConfirmFile(selectedFileId);
+                if (selectedFileId) {
+                  handleConfirmFile(selectedFileId, data);
+                }
               }}
               className="mr-2 my-1 py-2 px-3 rounded-md bg-blue-600 text-xs text-white hover:bg-blue-700 transition-colors cursor-default disabled:opacity-50"
             >
@@ -2753,7 +2765,7 @@ function MediaFiles({
   selectedFileId,
   handleSelectFile,
 }: {
-  selectedFileId: string;
+  selectedFileId?: string;
   handleSelectFile: (fileId: string) => void;
 }) {
   const { data, error, isLoading } = useMediaFiles();
@@ -2777,7 +2789,7 @@ function MediaFilesGrid({
   handleSelectFile,
 }: {
   data: any[];
-  selectedFileId: string;
+  selectedFileId?: string;
   handleSelectFile: (fileId: string) => void;
 }) {
   if (!data || data.length === 0) {
@@ -2788,7 +2800,7 @@ function MediaFilesGrid({
       {data.map((e: any) => (
         <MediaFileCard
           data={e}
-          key={e.filepath}
+          key={e.id}
           selectedFileId={selectedFileId}
           handleSelectFile={handleSelectFile}
         />
@@ -2811,7 +2823,7 @@ function MediaFileCard({
   handleSelectFile,
 }: {
   data: any;
-  selectedFileId: string;
+  selectedFileId?: string;
   handleSelectFile: (fileId: string) => void;
 }) {
   return (
@@ -2847,7 +2859,7 @@ function MediaMetadata({
   selectedFileId,
   setIsPending,
 }: {
-  selectedFileId: string;
+  selectedFileId?: string;
   setIsPending: (v: boolean) => void;
 }) {
   const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
@@ -2865,14 +2877,16 @@ function MediaMetadata({
       </div>
     );
   }
-  if (data.type.startsWith("image/")) {
-    return (
-      <ImageDetails
-        selectedFileId={selectedFileId}
-        data={data}
-        setIsPending={setIsPending}
-      />
-    );
+  if (selectedFileId) {
+    if (data.type.startsWith("image/")) {
+      return (
+        <ImageDetails
+          selectedFileId={selectedFileId}
+          data={data}
+          setIsPending={setIsPending}
+        />
+      );
+    }
   }
 
   return null;

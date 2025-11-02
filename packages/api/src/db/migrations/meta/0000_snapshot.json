@@ -1,5 +1,5 @@
 {
-  "id": "df75cd5b-778c-4dd6-9e40-37a2a316ec70",
+  "id": "d640b708-fb86-4fb6-90ca-ed7d3739025b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -37,6 +37,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "width": {
+          "name": "width",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "height": {
+          "name": "height",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         },
         "alt": {
           "name": "alt",
@@ -130,11 +142,12 @@
           "primaryKey": false,
           "notNull": false
         },
-        "og_image_filepath": {
-          "name": "og_image_filepath",
-          "type": "text",
+        "og_image_ids": {
+          "name": "og_image_ids",
+          "type": "char(32)[]",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "default": "ARRAY[]::char(32)[]"
         },
         "llm": {
           "name": "llm",

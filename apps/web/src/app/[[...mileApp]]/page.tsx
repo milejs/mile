@@ -6,6 +6,7 @@ import type { Metadata, ResolvingMetadata } from "next";
 import { notFound } from "next/navigation";
 
 const HOST_URL = process.env.NEXT_PUBLIC_HOST_URL;
+const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
 
 const SITE_NAME = "Supreme Vascular and Interventional Clinic";
 const META_DESCRIPTION =
@@ -45,10 +46,9 @@ export async function generateMetadata(
        "updated_at": "2025-10-31T04:08:05.060Z"
    }
    */
-  // console.log("res.result", res.result);
+  console.log("res.result", res.result);
 
-  const { title, description, keywords, no_index, og_image_filepath } =
-    res.result;
+  const { title, description, keywords, no_index, og_images } = res.result;
 
   // optionally access and extend (rather than replace) parent metadata
   const previousImages = (await parent).openGraph?.images || [];
@@ -63,16 +63,16 @@ export async function generateMetadata(
       description: description ? description : META_DESCRIPTION,
       url: HOST_URL,
       siteName: SITE_NAME,
-      images: og_image_filepath
-        ? [
-            {
-              url: og_image_filepath,
-              // width: 800,
-              // height: 600,
-            },
-            ...previousImages,
-          ]
-        : previousImages,
+      images:
+        og_images.length > 0
+          ? og_images
+              .map((og_image: any) => ({
+                url: `${NEXT_PUBLIC_IMAGE_URL}/${og_image.filepath}`,
+                width: og_image.width ?? 800,
+                height: og_image.height ?? 600,
+              }))
+              .concat(previousImages)
+          : previousImages,
       locale: "en_US",
       type: "website",
     },
