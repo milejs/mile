@@ -283,8 +283,7 @@ Editor
 
 .bn-editor {
   overflow: auto;
-  padding-block: 1rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
+  /*padding-block: 1rem;*/
 }
 
 .bn-editor a {
@@ -299,6 +298,8 @@ Editor
 .bn-container[data-theming-sidebar] .bn-editor {
   padding-inline: 20px;
   color: black;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  padding-block: 1rem;
 }
 
 .bn-container[data-theming-sidebar] .bn-block {

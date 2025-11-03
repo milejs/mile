@@ -1,6 +1,5 @@
 import "@milejs/core/mile.css";
 import { App, fetchPageBySlug } from "@milejs/core/app";
-import { Providers } from "../providers";
 import { components } from "./components";
 import type { Metadata, ResolvingMetadata } from "next";
 import { notFound } from "next/navigation";

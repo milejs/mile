@@ -1,3 +1,3 @@
-import { App, fetchPageBySlug } from "../src/mile/app.tsx";
+import { App, fetchPageBySlug, BlocksRenderer } from "../src/mile/app.tsx";
 
-export { App, fetchPageBySlug };
+export { App, fetchPageBySlug, BlocksRenderer };

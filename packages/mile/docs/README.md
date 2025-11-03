@@ -188,13 +188,13 @@ type NodeData = {
 
 ### Create Custom Component
 
-Here's how you create custom component like `Lead` in the example. All of the fields can be accessed via `props.options` and you can render them in your custom component. The built-in types for each field are defined as `internalSchema` in `src/mile/client.tsx` file in `@milejs/core` repo.
+Here's how you create custom component like `Lead` in the example, which is a custom component passed to `components` in Mile config. Notice that all of the fields can be accessed via `props.options` and you can render them in your custom component. The built-in types for each field are defined as `internalSchema` in `src/mile/client.tsx` file in `@milejs/core` repo.
 
 ```tsx
 // lead.tsx
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
-import { Richtext } from "./dynamic-richtext";
+import Richtext from "./richtext";
 
 export function Lead(props: MileComponentProps) {
   const { options } = props ?? {};
@@ -227,20 +227,42 @@ export function Lead(props: MileComponentProps) {
 }
 ````
 
-#### Render "richtext" type with BlockNoteView
+#### Render "richtext" type
 
-In the "Lead" component above, the `Richtext` component is used to render the `text` field which is a `"richtext"` type.
+In the "Lead" component above, `text` field is a `"richtext"` type. Here, we render it with `<Richtext />` component.
 
 The `<Richtext />` uses the `BlockNoteView` component, which you can style using CSS.
 
+So far, we have covered how to create and render a custom component for `<Mile />` editor using `components` object in Mile config. Next, we will cover how to render the frontend app.
+
 ## `<App />`
 
-`<App />` is the component that fetch MDX string (page content) and render the web. However, it has no built-in components, by design. Therefore, we have to pass `components` to it. This `components` must contain every possible component used in the whole website, including the markdown components. However, `<App />` uses `MDXRemote` to parse and render the content which uses different parser than `<Mile />` editor. Fortunately, we can use `components` prop to pass the same custom components we used in the `<Mile />` editor. Just import them into this object directly. Make sure their names match the ones in MDX string, which are also used in the `<Mile />` editor. The biggest difference is that the markdown components are parsed differently. Instead of `heading` component, we have to provide `h1`, `h2`, etc. Instead of `paragraph`, we have to provide `p`. See all markdown components here: [https://mdxjs.com/table-of-components/](https://mdxjs.com/table-of-components/)
+`<App />` is the component that fetch MDX string (page content) and render the web. However, it has no built-in components, by design. Therefore, we have to pass all possible `components` to `<App />` including the custom components and markdown components. However this `components` object is different from the one used in `<Mile />` editor. There are 2 main differences and recommended practices.
+
+1. `components` is just plain object with the key-value pairs where key is the component name and value is the component itself, which is different format than the one we use in Mile config.
+
+```tsx
+// <App /> components
+const components = {
+  Lead,
+}
+
+// compare to components in Mile config
+const components = {
+  lead: {
+    name: "lead",
+    component: Lead,
+  },
+}
+```
+
+2. `components` for `<App />` are rendered as Server Component. Therefore, we have to provide the custom components that are Server Component compatible. This essentially means we have to use `BlocksRenderer` to render `"richtext"` type, instead of `BlockNoteView`.
+
+3. `<App />` uses `MDXRemote` to parse and render the content which uses different parser than `<Mile />` editor. The parsed markdown data will have different types than the ones used in the `<Mile />` editor. For example, instead of `heading` component we have to provide `h1`, `h2`, etc. Instead of `paragraph` we have to provide `p`. See all markdown components here: [https://mdxjs.com/table-of-components/](https://mdxjs.com/table-of-components/)
 
 ```tsx
 const components = {
-  // custom components are the same ones we used in the <Mile /> editor,
-  // just import them into this object. Make sure their names match the ones used in the <Mile /> editor.
+  // custom components (Server Component version)
   Lead,
   Hero,
 
@@ -280,5 +302,178 @@ const components = {
       <p {...props} className="mb-2.5" />
     </MarkdownBlockContainer>
   ),
+};
+```
+
+## Richtext Types
+
+"richtext" is a type of fields in schema of custom component (e.g. "lead"). It is represented as an array of `Block`. These types below are taken from `BlockNote`.
+
+```ts
+type Block = {
+  id: string;
+  type: string;
+  props: Record<string, boolean | number | string>;
+  content: InlineContent[] | TableContent | undefined;
+  children: Block[];
+};
+
+type Link = {
+  type: "link";
+  content: StyledText[];
+  href: string;
+};
+type StyledText = {
+  type: "text";
+  text: string;
+  styles: Styles;
+};
+type CustomInlineContent = {
+  type: string;
+  content: StyledText[] | undefined;
+  props: Record<string, boolean | number | string>;
+};
+type InlineContent = Link | StyledText | CustomInlineContent;
+
+type Styles = {
+  /**
+   * Whether the text is bold.
+   * @default false
+   */
+  bold: boolean;
+  /**
+   * Whether the text is italic.
+   * @default false
+   */
+  italic: boolean;
+  /**
+   * Whether the text is underlined.
+   * @default false
+   */
+  underline: boolean;
+  /**
+   * Whether the text is struck through.
+   * @default false
+   */
+  strike: boolean;
+  /**
+   * The text color.
+   * @default "default"
+   */
+  textColor: string;
+};
+
+type ParagraphBlock = {
+  id: string;
+  type: "paragraph";
+  props: DefaultProps;
+  content: InlineContent[];
+  children: Block[];
+};
+
+type HeadingBlock = {
+  id: string;
+  type: "heading";
+  props: {
+    level: 1 | 2 | 3 = 1;
+  } & DefaultProps;
+  content: InlineContent[];
+  children: Block[];
+};
+
+type QuoteBlock = {
+  id: string;
+  type: "quote";
+  props: DefaultProps;
+  content: InlineContent[];
+  children: Block[];
+};
+
+type BulletListItemBlock = {
+  id: string;
+  type: "bulletListItem";
+  props: DefaultProps;
+  content: InlineContent[];
+  children: Block[];
+};
+
+type NumberedListItemBlock = {
+  id: string;
+  type: "numberedListItem";
+  props: DefaultProps & {
+    start?: number;
+  };
+  content: InlineContent[];
+  children: Block[];
+};
+
+type CheckListItemBlock = {
+  id: string;
+  type: "checkListItem";
+  props: DefaultProps & {
+    checked: boolean;
+  };
+  content: InlineContent[];
+  children: Block[];
+};
+
+type ToggleListItemBlock = {
+  id: string;
+  type: "toggleListItem";
+  props: DefaultProps;
+  content: InlineContent[];
+  children: Block[];
+};
+
+While most blocks use an array of InlineContent objects to describe their content (e.g.: paragraphs, headings, list items), some blocks, like images, don't contain any rich text content, so their content fields will be undefined.
+
+type ImageBlock = {
+  id: string;
+  type: "image";
+  props: {
+    url: string = "";
+    caption: string = "";
+    previewWidth: number = 512;
+  } & DefaultProps;
+  content: undefined;
+  children: Block[];
+};
+
+type VideoBlock = {
+  id: string;
+  type: "video";
+  props: {
+    name: string = "";
+    url: string = "";
+    caption: string = "";
+    showPreview: boolean = true;
+    previewWidth: number | undefined;
+  } & DefaultProps;
+  content: undefined;
+  children: Block[];
+};
+
+type TableBlock = {
+  id: string;
+  type: "table";
+  props: DefaultProps;
+  content: TableContent;
+  children: Block[];
+};
+type TableContent = {
+  type: "tableContent";
+  columnWidths: number[];
+  headerRows: number;
+  rows: {
+    cells: TableCell[];
+  }[];
+};
+type TableCell = {
+  type: "tableCell";
+  props: {
+    colspan?: number;
+    rowspan?: number;
+  } & DefaultProps;
+  content: InlineContent[];
 };
 ```

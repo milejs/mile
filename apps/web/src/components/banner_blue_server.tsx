@@ -1,11 +1,9 @@
-"use client";
-
 import { MileComponentProps } from "@milejs/types";
+import { BlocksRenderer } from "@milejs/core/app";
 import cn from "../lib/cn";
-import Richtext from "./richtext";
 import { Link } from "./links";
 
-export function BannerBlue(props: MileComponentProps) {
+export async function BannerBlue(props: MileComponentProps) {
   const { options } = props ?? {};
   const { image, text, link } = options ?? {};
 
@@ -16,7 +14,7 @@ export function BannerBlue(props: MileComponentProps) {
       <div className="max-w-5xl mx-auto flex flex-row">
         <div className="flex flex-col sm:flex-row gap-x-8 gap-y-6 items-center">
           <div className="w-full sm:w-1/2 text-left">
-            <Richtext text={text} className="richtext_banner_blue" />
+            <BlocksRenderer blocks={text} className="richtext_banner_blue" />
             {link && <Link {...link} />}
           </div>
           <div className="w-full sm:w-1/2">

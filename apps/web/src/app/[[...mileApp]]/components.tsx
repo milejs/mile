@@ -1,6 +1,6 @@
 import { Hero } from "../../components/hero";
-import { Lead } from "../../components/lead";
-import { BannerBlue } from "../../components/banner_blue";
+import { Lead } from "../../components/lead_server";
+import { BannerBlue } from "../../components/banner_blue_server";
 
 export const components = {
   h1: (props: React.ComponentPropsWithoutRef<"h1">) => (

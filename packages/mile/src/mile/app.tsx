@@ -4,6 +4,9 @@ import {
   MDXRemote,
   type MDXRemoteOptions,
 } from "next-mdx-remote-client/rsc";
+import { BlocksRenderer } from "./blocks";
+
+export { BlocksRenderer };
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
