@@ -1,5 +1,5 @@
 import { MileComponentProps } from "@milejs/types";
-import { BlocksRenderer } from "@milejs/core/app";
+import { RichtextView } from "@milejs/core/app";
 import cn from "../lib/cn";
 import { Link } from "./links";
 
@@ -14,7 +14,7 @@ export async function BannerBlue(props: MileComponentProps) {
       <div className="max-w-5xl mx-auto flex flex-row">
         <div className="flex flex-col sm:flex-row gap-x-8 gap-y-6 items-center">
           <div className="w-full sm:w-1/2 text-left">
-            <BlocksRenderer blocks={text} className="richtext_banner_blue" />
+            <RichtextView blocks={text} className="richtext_banner_blue" />
             {link && <Link {...link} />}
           </div>
           <div className="w-full sm:w-1/2">

@@ -58,7 +58,11 @@ import { Popover } from "@base-ui-components/react/popover";
 import { mdxToTree } from "./data";
 import { generateId } from "@/lib/generate-id";
 import { toast, Toaster } from "sonner";
-import { Uploader, Uploaders } from "@/components/ui/uploader";
+import {
+  getImageDimension,
+  Uploader,
+  Uploaders,
+} from "@/components/ui/uploader";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@base-ui-components/react/dialog";
 import { filesize } from "./utils";
@@ -73,11 +77,14 @@ import {
   BlockTypeSelect,
   ColorStyleButton,
   CreateLinkButton,
+  DefaultReactSuggestionItem,
   FileCaptionButton,
   FileReplaceButton,
   FormattingToolbar,
   FormattingToolbarController,
+  getDefaultReactSlashMenuItems,
   NestBlockButton,
+  SuggestionMenuController,
   TextAlignButton,
   UnnestBlockButton,
   useCreateBlockNote,
@@ -88,7 +95,13 @@ import "@blocknote/core/fonts/inter.css"; // Include the included Inter font
 import {
   BlockNoteEditor,
   BlockNoteSchema,
+  combineByGroup,
   createHeadingBlockSpec,
+  defaultBlockSpecs,
+  defaultInlineContentSpecs,
+  defaultStyleSpecs,
+  filterSuggestionItems,
+  insertOrUpdateBlock,
 } from "@blocknote/core";
 
 export { BlockNoteView, useCreateBlockNote };
@@ -1029,6 +1042,55 @@ function getPrimitiveComponent(type: string) {
   }
 }
 
+const insertHelloWorldItem = (editor: BlockNoteEditor) => ({
+  title: "Insert Hello World",
+  onItemClick: () =>
+    // If the block containing the text caret is empty, `insertOrUpdateBlock`
+    // changes its type to the provided block. Otherwise, it inserts the new
+    // block below and moves the text caret to it. We use this function with
+    // a block containing 'Hello World' in bold.
+    insertOrUpdateBlock(editor, {
+      type: "paragraph",
+      content: [{ type: "text", text: "Hello World", styles: { bold: true } }],
+    }),
+  aliases: ["helloworld", "hw"],
+  group: "Other",
+  icon: <TabletIcon size={18} />,
+  subtext: "Used to insert a block with 'Hello World' below.",
+});
+
+const getCustomSlashMenuItems = (
+  editor: BlockNoteEditor,
+): DefaultReactSuggestionItem[] => {
+  // const defaults = getDefaultReactSlashMenuItems(editor);
+  const defaults = getDefaultReactSlashMenuItems(editor).filter(
+    (e) => !e.title.startsWith("Toggle Heading"),
+  );
+
+  return [...defaults, insertHelloWorldItem(editor)];
+};
+
+const bn_schema = BlockNoteSchema.create({
+  blockSpecs: {
+    // audio: defaultBlockSpecs.audio,
+    bulletListItem: defaultBlockSpecs.bulletListItem,
+    checkListItem: defaultBlockSpecs.checkListItem,
+    // codeBlock: defaultBlockSpecs.codeBlock,
+    divider: defaultBlockSpecs.divider,
+    file: defaultBlockSpecs.file,
+    heading: defaultBlockSpecs.heading,
+    image: defaultBlockSpecs.image,
+    numberedListItem: defaultBlockSpecs.numberedListItem,
+    paragraph: defaultBlockSpecs.paragraph,
+    quote: defaultBlockSpecs.quote,
+    table: defaultBlockSpecs.table,
+    // toggleListItem: defaultBlockSpecs.toggleListItem,
+    video: defaultBlockSpecs.video,
+  },
+  inlineContentSpecs: defaultInlineContentSpecs,
+  styleSpecs: defaultStyleSpecs,
+});
+
 type EditComponentProps = {
   editor: MileEditor;
   node: NodeData;
@@ -1037,6 +1099,12 @@ type EditComponentProps = {
   handleChange: (changes: Change[] | Change) => void;
   field: FieldDefinition;
 };
+
+import {
+  useUploadFile,
+  useUploadFiles,
+  FileUploadInfo,
+} from "better-upload/client";
 
 function EditRichtextComponent({
   editor,
@@ -1048,6 +1116,20 @@ function EditRichtextComponent({
 }: EditComponentProps) {
   const value = getFieldValue(state, path);
 
+  const { control, upload } = useUploadFile({
+    route: "mileupload",
+    api: "/api/mile/upload",
+    onUploadComplete: async (upload) => {
+      toast.success(`Uploaded ${upload.file.name}`);
+    },
+    onUploadBegin: async ({ file }) => {
+      toast.info(`Uploading ${file.name}`);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   const bn_editor = useCreateBlockNote({
     initialContent:
       value.length === 0
@@ -1058,7 +1140,76 @@ function EditRichtextComponent({
             },
           ]
         : value,
+    schema: bn_schema,
+    uploadFile: async (file) => {
+      const result = await upload(file);
+      console.log("result", result);
+      const dims = await getImageDimension(file).catch((e) => {
+        console.error("Error getting image dimensions", e);
+        return undefined;
+      });
+      const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${result.file.objectKey}`;
+
+      // save db
+      mutate(`/medias`, async (prev: any) => {
+        const resp = await fetch(`${API}/medias`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([
+            {
+              id: generateId(),
+              type: result.file.type,
+              size: result.file.size,
+              filepath: result.file.objectKey,
+              width: dims?.width,
+              height: dims?.height,
+            },
+          ]),
+        });
+        if (!resp.ok) {
+          const error = new Error("An error occurred while saving the images.");
+          const info = await resp.json();
+          console.error("Error saving images", info);
+          // @ts-expect-error okk
+          error.info = info;
+          // @ts-expect-error okk
+          error.status = resp.status;
+          throw error;
+        }
+        const res = await resp.json();
+        return prev ? [...prev, ...res] : res;
+      });
+
+      return image_url;
+
+      // const body = new FormData();
+      // body.append("file", file);
+      // const ret = await fetch("https://tmpfiles.org/api/v1/upload", {
+      //   method: "POST",
+      //   body: body,
+      // });
+      // return (await ret.json()).data.url.replace(
+      //   "tmpfiles.org/",
+      //   "tmpfiles.org/dl/",
+      // );
+    },
+    // uploadFile: async (file) => {
+    //   const formData = new FormData();
+    //   formData.append("file", file);
+    //   const response = await fetch("/api/upload", {
+    //     method: "POST",
+    //     body: formData,
+    //   });
+    //   const data = await response.json();
+    //   return data.url;
+    // },
   });
+
+  const getSlashMenuItems = useMemo(() => {
+    return async (query: string) =>
+      // @ts-expect-error okk
+      filterSuggestionItems(getCustomSlashMenuItems(bn_editor), query);
+  }, [bn_editor]);
 
   function handleEditorChange(editor: BlockNoteEditor) {
     const content = editor.document;
@@ -1069,11 +1220,59 @@ function EditRichtextComponent({
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
       <BlockNoteView
+        // @ts-expect-error okk
         editor={bn_editor}
         onChange={handleEditorChange}
+        formattingToolbar={false}
         theme="light"
         data-theming-sidebar
-      />
+      >
+        <SuggestionMenuController
+          triggerCharacter={"/"}
+          getItems={getSlashMenuItems}
+        />
+        <FormattingToolbarController
+          formattingToolbar={() => (
+            <FormattingToolbar>
+              <BlockTypeSelect key={"blockTypeSelect"} />
+              <FileCaptionButton key={"fileCaptionButton"} />
+              <FileReplaceButton key={"replaceFileButton"} />
+              <BasicTextStyleButton
+                basicTextStyle={"bold"}
+                key={"boldStyleButton"}
+              />
+              <BasicTextStyleButton
+                basicTextStyle={"italic"}
+                key={"italicStyleButton"}
+              />
+              <BasicTextStyleButton
+                basicTextStyle={"underline"}
+                key={"underlineStyleButton"}
+              />
+              <BasicTextStyleButton
+                basicTextStyle={"strike"}
+                key={"strikeStyleButton"}
+              />
+              <TextAlignButton
+                textAlignment={"left"}
+                key={"textAlignLeftButton"}
+              />
+              <TextAlignButton
+                textAlignment={"center"}
+                key={"textAlignCenterButton"}
+              />
+              <TextAlignButton
+                textAlignment={"right"}
+                key={"textAlignRightButton"}
+              />
+              <ColorStyleButton key={"colorStyleButton"} />
+              <NestBlockButton key={"nestBlockButton"} />
+              <UnnestBlockButton key={"unnestBlockButton"} />
+              <CreateLinkButton key={"createLinkButton"} />
+            </FormattingToolbar>
+          )}
+        />
+      </BlockNoteView>
     </div>
   );
 }
@@ -1207,8 +1406,8 @@ function EditImageUrlComponent({
         error.status = resp.status;
         throw error;
       }
-      const result = await resp.json();
-      return prev ? [...prev, ...result] : result;
+      const res = await resp.json();
+      return prev ? [...prev, ...res] : res;
     });
   }
 
@@ -1698,8 +1897,10 @@ function Layers({
   });
 
   if (state.activeNodeId !== null) {
+    // re-render when node id changes (different key)
     return (
       <EditNodeSettings
+        key={state.activeNodeId}
         onBackClick={handleBackClick}
         node={data[state.activeNodeId]}
       />
@@ -2599,15 +2800,15 @@ function PageOpenGraphImage({
         error.status = resp.status;
         throw error;
       }
-      const result = await resp.json();
-      if (result.length === 0) {
+      const res = await resp.json();
+      if (res.length === 0) {
         console.error("No media uploaded");
         return prev;
       }
-      const [media] = result;
+      const [media] = res;
       onImageIdChange(media.id);
       setSelectedFileId(media.id);
-      return prev ? [...prev, ...result] : result;
+      return prev ? [...prev, ...res] : res;
     });
   }
 
@@ -2670,8 +2871,8 @@ function handleUploadsSuccess(upload: any) {
       error.status = resp.status;
       throw error;
     }
-    const result = await resp.json();
-    return prev ? [...prev, ...result] : result;
+    const res = await resp.json();
+    return prev ? [...prev, ...res] : res;
   });
 }
 

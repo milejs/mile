@@ -131,7 +131,7 @@ export function Uploaders({
   );
 }
 
-function getImageDimension(
+export function getImageDimension(
   file: File,
 ): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {

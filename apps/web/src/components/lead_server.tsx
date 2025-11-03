@@ -1,5 +1,5 @@
 import { MileComponentProps } from "@milejs/types";
-import { BlocksRenderer } from "@milejs/core/app";
+import { RichtextView } from "@milejs/core/app";
 import cn from "../lib/cn";
 
 export function Lead(props: MileComponentProps) {
@@ -24,7 +24,7 @@ export function Lead(props: MileComponentProps) {
             />
           </div>
           <div className="w-full sm:w-1/2 text-left">
-            <BlocksRenderer blocks={text} className="richtext_lead" />
+            <RichtextView blocks={text} className="richtext_lead" />
           </div>
         </div>
       </div>

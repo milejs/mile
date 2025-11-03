@@ -4,9 +4,9 @@ import {
   MDXRemote,
   type MDXRemoteOptions,
 } from "next-mdx-remote-client/rsc";
-import { BlocksRenderer } from "./blocks";
+import { RichtextView } from "./blocks";
 
-export { BlocksRenderer };
+export { RichtextView };
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
@@ -63,7 +63,7 @@ export async function App({
       "updated_at": "2025-10-06T03:17:31.923Z"
     }
    */
-  console.log("page_data", page_data);
+  // console.log("page_data", page_data);
   if (!page_data) return <div className="">No content</div>;
 
   const options: MDXRemoteOptions = {

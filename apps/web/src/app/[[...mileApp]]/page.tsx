@@ -45,7 +45,7 @@ export async function generateMetadata(
        "updated_at": "2025-10-31T04:08:05.060Z"
    }
    */
-  console.log("res.result", res.result);
+  // console.log("res.result", res.result);
 
   const { title, description, keywords, no_index, og_images } = res.result;
 

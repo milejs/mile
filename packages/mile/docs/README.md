@@ -256,7 +256,7 @@ const components = {
 }
 ```
 
-2. `components` for `<App />` are rendered as Server Component. Therefore, we have to provide the custom components that are Server Component compatible. This essentially means we have to use `BlocksRenderer` to render `"richtext"` type, instead of `BlockNoteView`.
+2. `components` for `<App />` are rendered as Server Component. Therefore, we have to provide the custom components that are Server Component compatible. This essentially means we have to use `RichtextView` to render `"richtext"` type, instead of `BlockNoteView`.
 
 3. `<App />` uses `MDXRemote` to parse and render the content which uses different parser than `<Mile />` editor. The parsed markdown data will have different types than the ones used in the `<Mile />` editor. For example, instead of `heading` component we have to provide `h1`, `h2`, etc. Instead of `paragraph` we have to provide `p`. See all markdown components here: [https://mdxjs.com/table-of-components/](https://mdxjs.com/table-of-components/)
 
@@ -361,6 +361,24 @@ type Styles = {
    * @default "default"
    */
   textColor: string;
+};
+
+type DefaultProps = {
+  /**
+   * The background color of the block, which also applies to nested blocks.
+   * @default "default"
+   */
+  backgroundColor: string;
+  /**
+   * The text color of the block, which also applies to nested blocks.
+   * @default "default"
+   */
+  textColor: string;
+  /**
+   * The text alignment of the block.
+   * @default "left"
+   */
+  textAlignment: "left" | "center" | "right" | "justify";
 };
 
 type ParagraphBlock = {

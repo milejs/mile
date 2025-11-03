@@ -1,4 +1,6 @@
 import { Block, MileComponentProps } from "@milejs/types";
+// import { Quote } from "lucide-react";
+import React from "react";
 
 const CN_BLOCK_MB = "mb-2";
 const CN_LI_MB = "mb-1";
@@ -50,7 +52,7 @@ class BlockNodes {
       "bulletListItem",
       "numberedListItem",
       "checkListItem",
-      "toggleListItem",
+      // "toggleListItem",
     ].includes(type);
   }
 
@@ -59,7 +61,7 @@ class BlockNodes {
       bulletListItem: "ul",
       numberedListItem: "ol",
       checkListItem: "checklist",
-      toggleListItem: "togglelist",
+      // toggleListItem: "togglelist",
     };
     // @ts-expect-error okk
     return typeMap[itemType] || "ul";
@@ -109,7 +111,25 @@ const StyledTextRenderer = ({ styledText }: any) => {
     style.color = styles.textColor;
   }
 
-  return <span style={style}>{styledText.text}</span>;
+  // return (
+  //   <span style={style} className="whitespace-pre-wrap">
+  //     {styledText.text}
+  //   </span>
+  // );
+
+  // Handle newlines by splitting text and inserting <br /> elements for better control than css pre-wrap
+  const textParts = styledText.text.split("\n");
+
+  return (
+    <span style={style}>
+      {textParts.map((part: any, index: number) => (
+        <React.Fragment key={index}>
+          {part}
+          {index < textParts.length - 1 && <br />}
+        </React.Fragment>
+      ))}
+    </span>
+  );
 };
 
 // Component to render inline content (text, links, custom inline)
@@ -171,9 +191,13 @@ const TableRenderer = ({ tableContent, props }: any) => {
                   border: "1px solid #ddd",
                   padding: "8px",
                   textAlign: props.textAlignment || "left",
-                  backgroundColor:
-                    props.backgroundColor ||
-                    (rowIndex < headerRows ? "#f5f5f5" : "transparent"),
+                  backgroundColor: defaultValue(
+                    props.backgroundColor,
+                    rowIndex < headerRows ? "#f5f5f5" : "transparent",
+                  ),
+                  // backgroundColor:
+                  //   props.backgroundColor ||
+                  //   (rowIndex < headerRows ? "#f5f5f5" : "transparent"),
                   width: columnWidths[cellIndex]
                     ? `${columnWidths[cellIndex]}px`
                     : "auto",
@@ -241,8 +265,8 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
   const baseStyle = {
     marginLeft: level > 0 ? `${level * 20}px` : "0",
     textAlign: props.textAlignment || "left",
-    backgroundColor: props.backgroundColor || "transparent",
-    color: props.textColor || "inherit",
+    backgroundColor: defaultValue(props.backgroundColor, "transparent"),
+    color: defaultValue(props.textColor, "inherit"),
   };
 
   switch (block.type) {
@@ -275,15 +299,10 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
     case "quote":
       return (
         <blockquote
-          style={{
-            ...baseStyle,
-            borderLeft: "4px solid #ddd",
-            paddingLeft: "16px",
-            margin: "16px 0",
-            fontStyle: "italic",
-            color: "#666",
-          }}
+          style={baseStyle}
+          className="py-3 font-bold text-2xl text-blue-700! flex items-start gap-x-1"
         >
+          <Quote className="text-blue-700 size-7" />
           <InlineContentRenderer content={block.content} />
           {block.children && block.children.length > 0 && (
             <BlocksRenderer blocks={block.children} level={level + 1} />
@@ -291,8 +310,8 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
         </blockquote>
       );
 
+    // case "toggleListItem":
     case "bulletListItem":
-    case "toggleListItem":
       return (
         <li className={`${CN_LI_MB}`}>
           <InlineContentRenderer content={block.content} />
@@ -326,7 +345,7 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
           <input
             type="checkbox"
             defaultChecked={props.checked}
-            style={{ marginTop: "4px" }}
+            style={{ marginTop: "6px" }}
           />
           <div style={{ flex: 1 }}>
             <InlineContentRenderer content={block.content} />
@@ -423,6 +442,13 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
         </div>
       );
 
+    case "divider":
+      return (
+        <div style={baseStyle} className={`my-4`}>
+          <hr className="h-[1px] border-t border-gray-300" />
+        </div>
+      );
+
     default:
       return (
         <div
@@ -439,95 +465,120 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
   }
 };
 
-// Component to render a list of blocks
-export const BlocksRenderer = ({ blocks, level = 0, className }: any) => {
-  const nodes = new BlockNodes(blocks);
+function defaultValue(value: any, defaultValue: any) {
+  return value === undefined || value === null
+    ? defaultValue
+    : value === "default"
+      ? defaultValue
+      : value;
+}
 
+// Component to render a list of blocks
+export const RichtextView = ({ blocks, level = 0, className }: any) => {
   return (
     <div className={`bn-container bn-mantine ${className}`}>
       <div className="ProseMirror bn-editor bn-default-styles">
-        {nodes.grouped.map((item, index) => {
-          if (item.type === "ul" || item.type === "ol") {
-            const ListTag = item.type;
-            const listProps =
-              item.type === "ol" && item.startNumber
-                ? { start: item.startNumber }
-                : {};
-
-            // Get props from first item for list-level styling
-            const firstItemProps = item.items[0]?.props || {};
-            const listStyle = {
-              marginLeft: level > 0 ? `${level * 20}px` : "0",
-              textAlign: firstItemProps.textAlignment || "left",
-              backgroundColor: firstItemProps.backgroundColor || "transparent",
-              color: firstItemProps.textColor || "inherit",
-            };
-
-            return (
-              <ListTag
-                key={index}
-                {...listProps}
-                style={listStyle}
-                className={`list-disc list-inside ${CN_BLOCK_MB}`}
-              >
-                {item.items.map((block: any) => (
-                  <BlockRenderer key={block.id} block={block} level={level} />
-                ))}
-              </ListTag>
-            );
-          }
-
-          if (item.type === "checklist") {
-            const firstItemProps = item.items[0]?.props || {};
-            const listStyle = {
-              listStyle: "none",
-              padding: 0,
-              marginLeft: level > 0 ? `${level * 20}px` : "0",
-              textAlign: firstItemProps.textAlignment || "left",
-              backgroundColor: firstItemProps.backgroundColor || "transparent",
-              color: firstItemProps.textColor || "inherit",
-            };
-
-            return (
-              <ul
-                key={index}
-                style={listStyle}
-                className={`list-disc list-inside ${CN_BLOCK_MB}`}
-              >
-                {item.items.map((block: any) => (
-                  <BlockRenderer key={block.id} block={block} level={level} />
-                ))}
-              </ul>
-            );
-          }
-
-          if (item.type === "togglelist") {
-            const firstItemProps = item.items[0]?.props || {};
-            const listStyle = {
-              listStyle: "none",
-              padding: 0,
-              marginLeft: level > 0 ? `${level * 20}px` : "0",
-              textAlign: firstItemProps.textAlignment || "left",
-              backgroundColor: firstItemProps.backgroundColor || "transparent",
-              color: firstItemProps.textColor || "inherit",
-            };
-
-            return (
-              <ul
-                key={index}
-                style={listStyle}
-                className={`list-disc list-inside ${CN_BLOCK_MB}`}
-              >
-                {item.items.map((block: any) => (
-                  <BlockRenderer key={block.id} block={block} level={level} />
-                ))}
-              </ul>
-            );
-          }
-
-          return <BlockRenderer key={item.id} block={item} level={level} />;
-        })}
+        <BlocksRenderer blocks={blocks} level={level} />
       </div>
+    </div>
+  );
+};
+
+const BlocksRenderer = ({ blocks, level = 0 }: any) => {
+  const nodes = new BlockNodes(blocks);
+
+  return (
+    <div className={``}>
+      {nodes.grouped.map((item, index) => {
+        if (item.type === "ul" || item.type === "ol") {
+          const ListTag = item.type;
+          const listProps =
+            item.type === "ol" && item.startNumber
+              ? { start: item.startNumber }
+              : {};
+
+          // Get props from first item for list-level styling
+          const firstItemProps = item.items[0]?.props || {};
+          const listStyle = {
+            marginLeft: level > 0 ? `${level * 20}px` : "0",
+            textAlign: firstItemProps.textAlignment || "left",
+            backgroundColor: defaultValue(
+              firstItemProps.backgroundColor,
+              "transparent",
+            ),
+            color: defaultValue(firstItemProps.textColor, "inherit"),
+          };
+
+          return (
+            <ListTag
+              key={index}
+              {...listProps}
+              style={listStyle}
+              className={`${item.type === "ul" ? "list-disc list-inside" : "list-decimal list-inside"} ${CN_BLOCK_MB}`}
+            >
+              {item.items.map((block: any) => (
+                <BlockRenderer key={block.id} block={block} level={level} />
+              ))}
+            </ListTag>
+          );
+        }
+
+        if (item.type === "checklist") {
+          const firstItemProps = item.items[0]?.props || {};
+          const listStyle = {
+            listStyle: "none",
+            padding: 0,
+            marginLeft: level > 0 ? `${level * 20}px` : "0",
+            textAlign: firstItemProps.textAlignment || "left",
+            backgroundColor: defaultValue(
+              firstItemProps.backgroundColor,
+              "transparent",
+            ),
+            color: defaultValue(firstItemProps.textColor, "inherit"),
+          };
+
+          return (
+            <ul
+              key={index}
+              style={listStyle}
+              className={`list-disc list-inside ${CN_BLOCK_MB}`}
+            >
+              {item.items.map((block: any) => (
+                <BlockRenderer key={block.id} block={block} level={level} />
+              ))}
+            </ul>
+          );
+        }
+
+        // if (item.type === "togglelist") {
+        //   const firstItemProps = item.items[0]?.props || {};
+        //   const listStyle = {
+        //     listStyle: "none",
+        //     padding: 0,
+        //     marginLeft: level > 0 ? `${level * 20}px` : "0",
+        //     textAlign: firstItemProps.textAlignment || "left",
+        //     backgroundColor: defaultValue(
+        //       firstItemProps.backgroundColor,
+        //       "transparent",
+        //     ),
+        //     color: defaultValue(firstItemProps.textColor, "inherit"),
+        //   };
+
+        //   return (
+        //     <ul
+        //       key={index}
+        //       style={listStyle}
+        //       className={`list-disc list-inside ${CN_BLOCK_MB}`}
+        //     >
+        //       {item.items.map((block: any) => (
+        //         <BlockRenderer key={block.id} block={block} level={level} />
+        //       ))}
+        //     </ul>
+        //   );
+        // }
+
+        return <BlockRenderer key={item.id} block={item} level={level} />;
+      })}
     </div>
   );
 };
@@ -549,4 +600,29 @@ function getHeadingClassNames(level: number) {
     default:
       return "text-3xl font-bold";
   }
+}
+
+function Quote({
+  width,
+  height,
+  className,
+}: {
+  width?: string;
+  height?: string;
+  className?: string;
+}) {
+  return (
+    <svg
+      stroke="currentColor"
+      fill="currentColor"
+      strokeWidth="0"
+      viewBox="0 0 24 24"
+      height={height ?? "200px"}
+      width={width ?? "200px"}
+      className={className}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M20.309 17.708C22.196 15.66 22.006 13.03 22 13V5a1 1 0 0 0-1-1h-6c-1.103 0-2 .897-2 2v7a1 1 0 0 0 1 1h3.078a2.89 2.89 0 0 1-.429 1.396c-.508.801-1.465 1.348-2.846 1.624l-.803.16V20h1c2.783 0 4.906-.771 6.309-2.292zm-11.007 0C11.19 15.66 10.999 13.03 10.993 13V5a1 1 0 0 0-1-1h-6c-1.103 0-2 .897-2 2v7a1 1 0 0 0 1 1h3.078a2.89 2.89 0 0 1-.429 1.396c-.508.801-1.465 1.348-2.846 1.624l-.803.16V20h1c2.783 0 4.906-.771 6.309-2.292z"></path>
+    </svg>
+  );
 }
