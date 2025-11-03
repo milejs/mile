@@ -25,33 +25,6 @@ import React, {
 } from "react";
 import { invariant } from "@/lib/invariant";
 
-export function ClientComponent(props: MileComponentProps) {
-  const mile = useMileProvider();
-  const { type } = props;
-  const c = mile.registry.getComponent(type);
-  if (!c) throw new Error(`Render: component not found: ${type}`);
-  let Comp: React.ComponentType<any> | undefined;
-  if (typeof c.component === "function") {
-    console.log(
-      "resolving client component for app ======: shared component",
-      type,
-    );
-    Comp = c.component;
-  }
-  // if (typeof c.component === "function") {
-  //   console.log("resolving client component for app ======: shared component", type);
-  //   Comp = c.component;
-  // } else {
-  //   console.log("resolving client component for app ======: client component", type);
-  //   Comp = c.component.client;
-  // }
-  if (!Comp) {
-    console.warn(`Render: skip because component not found: ${type}`);
-    return null;
-  }
-  return <Comp {...props} />;
-}
-
 const MileContext = createContext<Mile | null>(null);
 
 type MileProviderProps = {
