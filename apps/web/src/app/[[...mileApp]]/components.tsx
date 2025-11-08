@@ -33,11 +33,32 @@ export const components = {
       <Heading level="6" {...props} />
     </MarkdownBlockContainer>
   ),
-  p: (props: React.ComponentPropsWithoutRef<"p">) => (
+  p: (props: React.ComponentPropsWithoutRef<"p">) => {
+    return (
+      <MarkdownBlockContainer>
+        <p {...props} className="mb-2.5" />
+      </MarkdownBlockContainer>
+    );
+  },
+  ul: (props: React.ComponentPropsWithoutRef<"ul">) => (
     <MarkdownBlockContainer>
-      <p {...props} className="mb-2.5" />
+      <ul {...props} className="list-disc pl-5" />
     </MarkdownBlockContainer>
   ),
+  ol: (props: React.ComponentPropsWithoutRef<"ul">) => {
+    return (
+      <MarkdownBlockContainer>
+        <ol {...props} className="list-decimal pl-5" />
+      </MarkdownBlockContainer>
+    );
+  },
+  li: (props: React.ComponentPropsWithoutRef<"li">) => {
+    return (
+      <li {...props} className="/flex">
+        <div className="pl-1">{props.children}</div>
+      </li>
+    );
+  },
   Hero,
   Lead,
   BannerBlue,
@@ -76,7 +97,7 @@ function headingSize(level: string) {
 
 function MarkdownBlockContainer(props: any) {
   return (
-    <div className="relative px-4 md:px-0 max-w-5xl mx-auto">
+    <div className="relative px-4 md:px-0 w-full max-w-5xl mx-auto">
       {props.children}
     </div>
   );

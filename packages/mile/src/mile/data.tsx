@@ -1,146 +1,3 @@
-// import { unified } from 'unified';
-// import remarkParse from 'remark-parse';
-// import remarkMdx from 'remark-mdx';
-// import remarkFrontmatter from 'remark-frontmatter'
-// import remarkMdxFrontmatter from 'remark-mdx-frontmatter'
-// import { visit } from 'unist-util-visit'
-// import matter from 'gray-matter'
-// import { generateId } from '@/lib/generate-id';
-// import { walk } from 'estree-walker';
-
-// export function mdxToTree(source: string) {
-//   const { content, data } = matter(source);
-//   const processor = unified()
-//     .use(remarkParse)
-//     .use(remarkFrontmatter, ['yaml']) // parse `---` frontmatter
-//     .use(remarkMdx);
-
-//   const ast = processor.parse(content);
-//   console.log('ast', ast);
-
-//   const result = {
-//     ...data,
-//     content: {
-//       root: {
-//         type: 'root',
-//         id: 'root',
-//         props: {},
-//         options: {},
-//         children: [],
-//       },
-//     }
-//   }
-
-//   // mutate result object
-//   visit(ast, (node, index, parent) => {
-//     switch (node.type) {
-//       /**
-//        * "root" | "yaml" | "blockquote" | "break" | "code" | "definition" | "delete" | "emphasis" | "footnoteDefinition" | "footnoteReference" | "heading" | "html" | "image" | "imageReference" | "inlineCode" | "link" | "linkReference" | "list" | "listItem" | "paragraph" | "strong" | "table" | "tableCell" | "tableRow" | "text" | "thematicBreak" | "mdxTextExpression" | "mdxFlowExpression" | "mdxJsxFlowElement" | "mdxJsxTextElement" | "mdxjsEsm"
-//        */
-//       case "mdxJsxFlowElement": {
-//         const { name, attributes } = node;
-//         // @ts-expect-error .name
-//         const idAttr = node.attributes.find(attr => attr.name === 'id');
-//         // @ts-expect-error .name
-//         const typeAttr = node.attributes.find(attr => attr.name === 'type');
-//         const id = idAttr && typeof idAttr.value === 'string' ? idAttr.value : generateId();
-//         const type = typeAttr && typeof typeAttr.value === 'string' ? typeAttr.value : undefined;
-//         if (type == null) {
-//           throw new Error("MDX Element has no explicit type attribute");
-//         }
-//         const props = {};
-//         let options = undefined;
-//         node.attributes.forEach(attr => {
-//           // @ts-expect-error .name
-//           if (!attr.name) return;
-//           // @ts-expect-error .name
-//           if (attr.name === 'id' || attr.name === 'type') return;
-//           // @ts-expect-error .name
-//           if (attr.name === 'options') {
-//             // @ts-expect-error okk
-//             if (attr.value?.type === "mdxJsxAttributeValueExpression") {
-//               // value.value is '{title:"Supreme",image:{image_url:"https://pub-47fe340e22e548e5a8ed17dd964ffa4a.r2.dev/mileupload/2024-drive-the-icons-monterey-car-week-tour-1-jpg",alt_text:""},link:{url:"/contact",link_text:"Book",is_external:false}}'
-//               // TODO: but we need quote around keys e.g. "title"
-//               // options = JSON.parse(attr.value.value);
-//               let extractedObject = null;
-
-//               // safety
-//               if (typeof attr.value === "string") return;
-//               if (!attr.value.data?.estree) return;
-
-//               walk(attr.value.data.estree, {
-//                 enter(node, parent) {
-//                   // We're looking for the top-level object expression inside an ExpressionStatement
-//                   if (
-//                     node.type === 'ExpressionStatement' &&
-//                     node.expression?.type === 'ObjectExpression'
-//                   ) {
-//                     extractedObject = convertObjectExpression(node.expression);
-//                     // Stop walking once found
-//                     this.skip();
-//                   }
-//                 }
-//               });
-//               if (extractedObject) {
-//                 options = extractedObject;
-//               }
-//             }
-//             return;
-//           }
-//           // other attributes go to props
-//           if (typeof attr.value === 'string') {
-//             // @ts-expect-error index
-//             props[attr.name] = attr.value;
-//           }
-//           // Optionally handle expressions here
-//         });
-
-//         // @ts-expect-error not never
-//         result.content.root.children.push(id);
-//         // @ts-expect-error index
-//         result.content[id] = {
-//           type,
-//           id,
-//           props,
-//           options,
-//           // options: undefined // Optional
-//         }
-//         // console.log('result', result, id, type);
-//         break;
-//       }
-
-//       default:
-//         break;
-//     }
-//   });
-
-//   return { result, error: undefined };
-// }
-
-// function convertObjectExpression(objExpr: any) {
-//   const result = {};
-
-//   for (const prop of objExpr.properties) {
-//     if (prop.type !== 'Property') continue;
-
-//     const key = prop.key.name || prop.key.value; // handle Identifier or Literal keys
-//     const valueNode = prop.value;
-
-//     if (valueNode.type === 'Literal') {
-//       // @ts-expect-error fine
-//       result[key] = valueNode.value;
-//     } else if (valueNode.type === 'ObjectExpression') {
-//       // @ts-expect-error fine
-//       result[key] = convertObjectExpression(valueNode); // recurse
-//     } else {
-//       // @ts-expect-error fine
-//       result[key] = null; // or handle other types as needed
-//     }
-//   }
-
-//   return result;
-// }
-
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkMdx from "remark-mdx";
@@ -150,7 +7,330 @@ import remarkFrontmatter from "remark-frontmatter";
 import matter from "gray-matter";
 import { generateId } from "@/lib/generate-id";
 import { walk } from "estree-walker";
+import { Block, InlineContent as IC, NodeData, TreeData } from "@milejs/types";
 
+type BlockNoteBlock = any;
+type InlineContent = any;
+
+export function convertNodeDataToBlocks(
+  node: NodeData,
+  data: TreeData,
+): BlockNoteBlock[] {
+  // If the node is a container (root), process its children
+  if (node.type === "root") {
+    const blocks: BlockNoteBlock[] = [];
+    if (node.children && node.children.length > 0) {
+      for (const childId of node.children) {
+        const childNode = data[childId];
+        if (!childNode) continue;
+        const convertedBlocks = convertSingleNode(childNode, data);
+        blocks.push(...convertedBlocks);
+      }
+    }
+    return blocks;
+  }
+
+  // Otherwise, convert the node itself
+  return convertSingleNode(node, data);
+}
+
+function convertSingleNode(node: NodeData, data: TreeData): BlockNoteBlock[] {
+  switch (node.type) {
+    case "heading":
+      return [convertHeading(node, data)];
+
+    case "paragraph":
+      return [convertParagraph(node, data)];
+
+    case "blockquote":
+      return [convertBlockquote(node, data)];
+
+    case "list":
+      return convertList(node, data);
+
+    case "code":
+      return [convertCodeBlock(node)];
+
+    // Skip these as they're handled by their parents
+    case "listItem":
+    case "text":
+    case "strong":
+    case "emphasis":
+    case "inlineCode":
+    case "link":
+      return [];
+
+    default:
+      // For unknown types, try to convert as a generic block
+      console.warn(`Unknown node type: ${node.type}`);
+      return [
+        {
+          id: node.id,
+          type: node.type,
+          props: node.props || {},
+          content: extractInlineContent(node, data),
+          children: [],
+        },
+      ];
+  }
+}
+
+function convertHeading(node: NodeData, data: TreeData): BlockNoteBlock {
+  const depth = (node.props?.depth as number) || 1;
+  const level = Math.min(Math.max(depth, 1), 3); // BlockNote supports levels 1-3
+
+  return {
+    id: node.id,
+    type: "heading",
+    props: {
+      level: level,
+    },
+    content: extractInlineContent(node, data),
+    children: [],
+  };
+}
+
+function convertParagraph(node: NodeData, data: TreeData): BlockNoteBlock {
+  return {
+    id: node.id,
+    type: "paragraph",
+    props: {},
+    content: extractInlineContent(node, data),
+    children: [],
+  };
+}
+
+function convertBlockquote(node: NodeData, data: TreeData): BlockNoteBlock {
+  return {
+    id: node.id,
+    type: "quote",
+    props: {},
+    content: extractInlineContent(node, data),
+    children: [],
+  };
+}
+
+function convertCodeBlock(node: NodeData): BlockNoteBlock {
+  return {
+    id: node.id,
+    type: "codeBlock",
+    props: {
+      language: node.props?.lang || "",
+    },
+    content: (node.props?.value as string) || "",
+    children: [],
+  };
+}
+
+function convertList(node: NodeData, data: TreeData): BlockNoteBlock[] {
+  const isOrdered = node.props?.ordered === true;
+  const blocks: BlockNoteBlock[] = [];
+
+  if (!node.children) return blocks;
+
+  for (const childId of node.children) {
+    const listItemNode = data[childId];
+    if (!listItemNode || listItemNode.type !== "listItem") continue;
+
+    // Check if it's a checklist item
+    const isCheckListItem =
+      listItemNode.props?.checked !== null &&
+      listItemNode.props?.checked !== undefined;
+
+    let blockType: string;
+    let props: Record<string, unknown> = {};
+
+    if (isCheckListItem) {
+      blockType = "checkListItem";
+      props.checked = listItemNode.props?.checked === true;
+    } else if (isOrdered) {
+      blockType = "numberedListItem";
+    } else {
+      blockType = "bulletListItem";
+    }
+
+    // Extract content from the listItem's children
+    // Usually a listItem contains a paragraph with the text content
+    let content: InlineContent[] = [];
+    let nestedChildren: BlockNoteBlock[] = [];
+
+    if (listItemNode.children && listItemNode.children.length > 0) {
+      for (const itemChildId of listItemNode.children) {
+        const itemChild = data[itemChildId];
+        if (!itemChild) continue;
+
+        if (itemChild.type === "paragraph") {
+          // Extract inline content from the paragraph
+          content = extractInlineContent(itemChild, data);
+        } else if (itemChild.type === "list") {
+          // Nested list
+          nestedChildren = convertList(itemChild, data);
+        }
+      }
+    }
+
+    blocks.push({
+      id: listItemNode.id,
+      type: blockType,
+      props: props,
+      content: content,
+      children: nestedChildren,
+    });
+  }
+
+  return blocks;
+}
+
+function extractInlineContent(node: NodeData, data: TreeData): InlineContent[] {
+  const inlineContent: InlineContent[] = [];
+
+  if (!node.children || node.children.length === 0) {
+    return [{ type: "text", text: "" }];
+  }
+
+  for (const childId of node.children) {
+    const childNode = data[childId];
+    if (!childNode) continue;
+
+    const extracted = extractInlineContentFromNode(childNode, data, {});
+    inlineContent.push(...extracted);
+  }
+
+  return inlineContent.length > 0
+    ? inlineContent
+    : [{ type: "text", text: "" }];
+}
+
+function extractInlineContentFromNode(
+  node: NodeData,
+  data: TreeData,
+  inheritedStyles: Record<string, boolean>,
+): InlineContent[] {
+  const result: InlineContent[] = [];
+
+  switch (node.type) {
+    case "text":
+      result.push({
+        type: "text",
+        text: (node.props?.value as string) || "",
+        ...(Object.keys(inheritedStyles).length > 0
+          ? { styles: inheritedStyles }
+          : {}),
+      });
+      break;
+
+    case "break":
+      result.push({
+        type: "text",
+        text: "\n",
+        ...(Object.keys(inheritedStyles).length > 0
+          ? { styles: inheritedStyles }
+          : {}),
+      });
+      break;
+
+    case "strong":
+      if (node.children) {
+        for (const childId of node.children) {
+          const childNode = data[childId];
+          if (childNode) {
+            result.push(
+              ...extractInlineContentFromNode(childNode, data, {
+                ...inheritedStyles,
+                bold: true,
+              }),
+            );
+          }
+        }
+      }
+      break;
+
+    case "emphasis":
+      if (node.children) {
+        for (const childId of node.children) {
+          const childNode = data[childId];
+          if (childNode) {
+            result.push(
+              ...extractInlineContentFromNode(childNode, data, {
+                ...inheritedStyles,
+                italic: true,
+              }),
+            );
+          }
+        }
+      }
+      break;
+
+    case "inlineCode":
+      result.push({
+        type: "text",
+        text: (node.props?.value as string) || "",
+        styles: {
+          ...inheritedStyles,
+          code: true,
+        },
+      });
+      break;
+
+    case "delete":
+      if (node.children) {
+        for (const childId of node.children) {
+          const childNode = data[childId];
+          if (childNode) {
+            result.push(
+              ...extractInlineContentFromNode(childNode, data, {
+                ...inheritedStyles,
+                strikethrough: true,
+              }),
+            );
+          }
+        }
+      }
+      break;
+
+    case "link":
+      const linkText: string[] = [];
+      if (node.children) {
+        for (const childId of node.children) {
+          const childNode = data[childId];
+          if (childNode && childNode.type === "text") {
+            linkText.push((childNode.props?.value as string) || "");
+          }
+        }
+      }
+      result.push({
+        type: "link",
+        text: linkText.join(""),
+        href: (node.props?.href as string) || "",
+        ...(Object.keys(inheritedStyles).length > 0
+          ? { styles: inheritedStyles }
+          : {}),
+      });
+      break;
+
+    default:
+      // For other types, try to process children
+      if (node.children) {
+        for (const childId of node.children) {
+          const childNode = data[childId];
+          if (childNode) {
+            result.push(
+              ...extractInlineContentFromNode(childNode, data, inheritedStyles),
+            );
+          }
+        }
+      }
+  }
+
+  return result;
+}
+
+/**
+ * Converts MDX source code into a tree structure.
+ *
+ * @param source The MDX source code to convert.
+ * @returns The tree structure.
+ */
 export function mdxToTree(source: string) {
   const { content, data } = matter(source);
   const processor = unified()
@@ -159,7 +339,7 @@ export function mdxToTree(source: string) {
     .use(remarkMdx);
 
   const ast = processor.parse(content);
-  // console.log("ast", ast);
+  console.log("ast", ast);
 
   const nodesMap: Record<string, any> = {
     root: {
@@ -193,7 +373,6 @@ export function mdxToTree(source: string) {
       props: {},
       options: {},
       children: [],
-      pos: node.position,
     };
 
     let actualNodeId = generatedId; // This will be the ID used in the map and parent's children
@@ -266,6 +445,7 @@ export function mdxToTree(source: string) {
       case "list": {
         currentNode.props.ordered = node.ordered;
         currentNode.props.start = node.start;
+        currentNode.props.spread = node.spread;
         break;
       }
       case "listItem": {

@@ -179,6 +179,13 @@ const internalSchema = [
     fields: [],
     isMarkdown: true,
   },
+  {
+    type: "list",
+    name: "list",
+    title: "List",
+    fields: [],
+    isMarkdown: true,
+  },
 ];
 
 // markdown components
@@ -208,6 +215,27 @@ const builtinComponents: Components = {
   text: {
     name: "text",
     component: Text,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  list: {
+    name: "list",
+    component: List,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  listItem: {
+    name: "listItem",
+    component: ListItem,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  break: {
+    name: "break",
+    component: Break,
     settings: {
       isInlineContent: true,
     },
@@ -283,6 +311,38 @@ function Strong(props: any) {
   return <span className="font-bold">{props.children}</span>;
 }
 
+function List(props: any) {
+  // console.log("List --- props", props);
+  const ListType = props.ordered ? "ol" : "ul";
+  return (
+    <ListType className="relative px-4 md:px-0 mb-4 w-full max-w-5xl mx-auto space-y-3">
+      {props.children}
+    </ListType>
+  );
+}
+
+function ListItem(props: any) {
+  // console.log("ListItem ---- props", props);
+  const ordered = props.options?.ordered;
+  const index = props.options?.index;
+
+  return (
+    <li className={`flex [&_ul]:pt-2 [&_ol]:pt-2`}>
+      {ordered ? (
+        <div className="px-1 text-black">{index + 1}.</div>
+      ) : (
+        <ListBullet className="text-black" />
+      )}
+      <div className={`pl-1`}>{props.children}</div>
+    </li>
+  );
+}
+
+function Break(props: any) {
+  // console.log("Break ---- props", props);
+  return <br />;
+}
+
 function Text(props: any) {
   return <span className="">dummy text</span>;
 }
@@ -300,9 +360,27 @@ function Link(props: any) {
 
 function MarkdownBlockContainer(props: any) {
   return (
-    <div className="relative px-4 md:px-0 max-w-5xl mx-auto">
+    <div className="relative px-4 md:px-0 w-full max-w-5xl mx-auto">
       {props.children}
     </div>
+  );
+}
+
+function ListBullet({ className }: { className?: string }) {
+  return (
+    <svg
+      stroke="none"
+      fill="currentColor"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      height="200px"
+      width="200px"
+      className={`h-[1lh] w-5.5 shrink-0 ${className}`}
+    >
+      <circle cx="12.1" cy="12.1" r="3"></circle>
+    </svg>
   );
 }
 
@@ -321,21 +399,21 @@ class Registry implements MileRegistry {
     return JSON.stringify(this.components);
   }
 
-  registerComponents(components: Components, is_user_component?: boolean) {
+  registerComponents(components: Components, is_user_provided?: boolean) {
     if (!components)
       throw new Error("Registering components failed: no components");
     // key and componentData.name must be unique
     for (const key in components) {
       const c = components[key];
       if (!c) throw new Error("Component data not found");
-      this.registerComponent(key, c, is_user_component);
+      this.registerComponent(key, c, is_user_provided);
     }
   }
 
   registerComponent(
     name: string,
     componentData: ComponentData,
-    is_user_component?: boolean,
+    is_user_provided?: boolean,
   ) {
     // key must match component's name
     if (name !== componentData.name) {
@@ -346,16 +424,19 @@ class Registry implements MileRegistry {
     // name must be unique
     if (this.components[name]) {
       // override existing component if it's a user component
-      if (!is_user_component) {
+      if (!is_user_provided) {
         throw new Error(`Component '${name}' already exists`);
       }
     }
     this.components[name] = componentData;
-    if (is_user_component) {
-      this.components[name].settings = {
-        ...this.components[name].settings,
-        isUserComponent: true,
-      };
+    if (is_user_provided) {
+      // mark as user component if it's not a markdown tag
+      if (!isMarkdown(name)) {
+        this.components[name].settings = {
+          ...this.components[name].settings,
+          isUserComponent: true,
+        };
+      }
     }
   }
 
@@ -379,39 +460,35 @@ class Registry implements MileRegistry {
     }
     return c;
   }
-  // getComponent(name: string, options?: {purpose?: string}) {
-  // 	let c = this.components[name];
-  // 	if (!c) {
-  // 		return null;
-  // 	}
-  // 	if (name === c.name) {
-  // 		// - resolve the shorthand first
-  // 		// - resolve purpose
-  // 		// - client
-  // 		// - do NOT resolve server
-  // 		if (typeof c.component === "function") {
-  // 			return c.component;
-  // 		} else {
-  // 			if (options?.purpose === "editor") {
-  // 				if (c.component.editor) {
-  // 					return c.component.editor;
-  // 				}
-  // 			}
-  // 			if (c.component.client) {
-  // 				return c.component.client;
-  // 			}
-  // 			// if (c.component.server) {
-  // 			// 	return c.component.server;
-  // 			// }
-  // 		}
-  // 		return null;
-  // 	}
-  // }
+}
 
-  // getComponent(name: string) {
-  // 	if (this.components[name]) {
-  // 		return this.components[name];
-  // 	}
-  // 	return null;
-  // }
+const markdownTags = [
+  "heading",
+  "paragraph",
+  "list",
+  "listItem",
+  "text",
+  "inlineCode",
+  "code",
+  "strong",
+  "emphasis",
+  "blockquote",
+  "link",
+  "image",
+  "thematicBreak",
+  "html",
+  "break",
+  "delete",
+  "footnoteDefinition",
+  "footnoteReference",
+  "definition",
+  "imageReference",
+  "linkReference",
+  "table",
+  "tableRow",
+  "tableCell",
+];
+
+function isMarkdown(type: string) {
+  return markdownTags.includes(type);
 }

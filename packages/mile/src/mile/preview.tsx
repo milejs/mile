@@ -120,12 +120,14 @@ function Render({
   if (!data) return null;
   const root = data.root;
   if (!root) return null;
+  // console.log("data", data);
 
   return (
     <RenderItem
       key={root.id}
       data={data}
       id={root.id}
+      parent_id={null}
       sendData={sendData}
       activeNodeId={activeNodeId}
       setActiveNodeId={setActiveNodeId}
@@ -136,12 +138,14 @@ function Render({
 function RenderItem({
   data,
   id,
+  parent_id,
   sendData,
   activeNodeId,
   setActiveNodeId,
 }: {
   data: TreeData;
   id: string;
+  parent_id: string | null;
   sendData: (data: any) => Promise<void>;
   activeNodeId: string | null;
   setActiveNodeId: (id: string | null) => void;
@@ -153,37 +157,35 @@ function RenderItem({
   if (item.id === "root") {
     return (
       <div ref={ref} data-id="root">
-        {item.children?.map((id, i) => {
+        {item.children?.map((child_id, i) => {
+          const node = data[child_id];
           return (
-            <RenderItem
-              key={`${id}_${i}`}
-              data={data}
-              id={id}
-              sendData={sendData}
-              activeNodeId={activeNodeId}
-              setActiveNodeId={setActiveNodeId}
-            />
+            <button
+              key={`${child_id}_${i}`}
+              data-active={activeNodeId === node.id}
+              className={`relative w-full data-[active=true]:ring-2 data-[active=true]:ring-blue-500`}
+              onClick={() => {
+                sendData({
+                  kind: "selectNode",
+                  data: { id: node.id, type: node.type },
+                });
+                setActiveNodeId(node.id);
+              }}
+            >
+              <RenderItem
+                data={data}
+                id={child_id}
+                parent_id="root"
+                sendData={sendData}
+                activeNodeId={activeNodeId}
+                setActiveNodeId={setActiveNodeId}
+              />
+            </button>
           );
         })}
       </div>
     );
   }
-
-  // if (item.type === "component") {
-  //   return (
-  //     <div className="p-4 bg-zinc-100 flex flex-col justify-center items-center">
-  //       <div className="w-[24px] h-[24px] bg-zinc-400 rounded-full flex items-center justify-center text-lg">
-  //         <PlusIcon color="white" width={12} height={12} />
-  //       </div>
-  //       <div className="">Add component</div>
-  //     </div>
-  //   );
-  // }
-
-  // if (item.type === "text-node") {
-  //   // text node
-  //   return item.children;
-  // }
 
   if (item.type === "text") {
     // text
@@ -196,6 +198,7 @@ function RenderItem({
       node={item}
       data={data}
       id={id}
+      parent_id={parent_id}
       sendData={sendData}
       activeNodeId={activeNodeId}
       setActiveNodeId={setActiveNodeId}
@@ -207,6 +210,7 @@ function RenderComponent({
   node,
   data,
   id,
+  parent_id,
   sendData,
   activeNodeId,
   setActiveNodeId,
@@ -214,6 +218,7 @@ function RenderComponent({
   node: NodeData;
   data: TreeData;
   id: string;
+  parent_id: string | null;
   sendData: (data: any) => Promise<void>;
   activeNodeId: string | null;
   setActiveNodeId: (id: string | null) => void;
@@ -226,7 +231,22 @@ function RenderComponent({
   if (!Comp) {
     throw new Error(`component not found: ${node.type}`);
   }
-  const element = (
+  // console.log("node", node.type, node, parent_id);
+  if (node.type === "listItem") {
+    const parent = parent_id ? data[parent_id] : null;
+    if (parent) {
+      const index = parent.children?.indexOf(node.id);
+      if (index != null) {
+        node.options = {
+          ...node.options,
+          ordered: parent.props?.ordered,
+          index,
+        };
+      }
+    }
+  }
+
+  return (
     <Comp
       data-id={id}
       data-mile-item-id={node.id}
@@ -242,6 +262,7 @@ function RenderComponent({
                 key={`${id}_${i}`}
                 data={data}
                 id={id}
+                parent_id={node.id}
                 sendData={sendData}
                 activeNodeId={activeNodeId}
                 setActiveNodeId={setActiveNodeId}
@@ -252,23 +273,23 @@ function RenderComponent({
     </Comp>
   );
 
-  return c.settings?.isInlineContent ? (
-    element
-  ) : (
-    <button
-      data-active={activeNodeId === node.id}
-      className={`relative w-full data-[active=true]:ring-2 data-[active=true]:ring-blue-500`}
-      onClick={() => {
-        sendData({
-          kind: "selectNode",
-          data: { id: node.id, type: node.type },
-        });
-        setActiveNodeId(node.id);
-      }}
-    >
-      {element}
-    </button>
-  );
+  // return c.settings?.isInlineContent ? (
+  //   element
+  // ) : (
+  //   <button
+  //     data-active={activeNodeId === node.id}
+  //     className={`relative w-full data-[active=true]:ring-2 data-[active=true]:ring-blue-500`}
+  //     onClick={() => {
+  //       sendData({
+  //         kind: "selectNode",
+  //         data: { id: node.id, type: node.type },
+  //       });
+  //       setActiveNodeId(node.id);
+  //     }}
+  //   >
+  //     {element}
+  //   </button>
+  // );
 }
 
 function Container({ children }: any) {

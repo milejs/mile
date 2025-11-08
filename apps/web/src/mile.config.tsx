@@ -41,14 +41,18 @@ export const mileconfig: Config = {
           title: "Link",
         },
       ],
-      getInitialNodeData: (node_id) => ({
-        id: node_id,
-        type: "hero",
-        props: {
-          className: "",
-        },
-        options: undefined,
-      }),
+      getInitialNodes: (node_id) => {
+        return {
+          [node_id]: {
+            id: node_id,
+            type: "hero",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        };
+      },
     },
     {
       type: "lead",
@@ -77,14 +81,18 @@ export const mileconfig: Config = {
           title: "Link",
         },
       ],
-      getInitialNodeData: (node_id) => ({
-        id: node_id,
-        type: "lead",
-        props: {
-          className: "",
-        },
-        options: undefined,
-      }),
+      getInitialNodes: (node_id) => {
+        return {
+          [node_id]: {
+            id: node_id,
+            type: "lead",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        };
+      },
     },
     {
       type: "banner_blue",
@@ -108,14 +116,18 @@ export const mileconfig: Config = {
           title: "Link",
         },
       ],
-      getInitialNodeData: (node_id) => ({
-        id: node_id,
-        type: "banner_blue",
-        props: {
-          className: "",
-        },
-        options: undefined,
-      }),
+      getInitialNodes: (node_id) => {
+        return {
+          [node_id]: {
+            id: node_id,
+            type: "banner_blue",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        };
+      },
     },
   ],
 };

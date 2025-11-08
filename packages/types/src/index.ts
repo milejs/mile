@@ -459,7 +459,10 @@ interface BaseSchemaDefinition {
   isResponsive?: boolean;
   thumbnail?: string;
   isMarkdown?: boolean;
-  getInitialNodeData?: (node_id: string) => NodeData;
+  getInitialNodes?: (
+    node_id: string,
+    generateId: () => string,
+  ) => Record<string, NodeData>;
 }
 
 interface Group {

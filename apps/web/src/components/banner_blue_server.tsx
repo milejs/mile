@@ -3,7 +3,7 @@ import { RichtextView } from "@milejs/core/app";
 import cn from "../lib/cn";
 import { Link } from "./links";
 
-export async function BannerBlue(props: MileComponentProps) {
+export function BannerBlue(props: MileComponentProps) {
   const { options } = props ?? {};
   const { image, text, link } = options ?? {};
 

@@ -55,7 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Dashboard } from "./dashboard";
 import useSWR, { mutate } from "swr";
 import { Popover } from "@base-ui-components/react/popover";
-import { mdxToTree } from "./data";
+import { convertNodeDataToBlocks, mdxToTree } from "./data";
 import { generateId } from "@/lib/generate-id";
 import { toast, Toaster } from "sonner";
 import {
@@ -535,7 +535,7 @@ function MileFrame({
       >
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 min-h-[200px] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
             <div className="mb-4 flex flex-row justify-between items-center">
               <Dialog.Title className="text-lg font-medium">Edit</Dialog.Title>
               <div className="flex flex-row items-center gap-x-2">
@@ -562,7 +562,7 @@ function MileFrame({
                   key={state.activeNodeId}
                   ref={editorRef}
                   activeNodeId={state.activeNodeId}
-                  initialContent={buildTextEditorInitialContentForSingleNode(
+                  initialContent={buildInitialContentForActiveNode(
                     state.activeNodeId,
                     data,
                     mile.schema,
@@ -580,77 +580,21 @@ function MileFrame({
   );
 }
 
-function buildTextEditorInitialContentForSingleNode(
+function buildInitialContentForActiveNode(
   node_id: string | null,
   data: TreeData | undefined,
   schema: MileSchema,
 ) {
   const node = node_id && data ? data[node_id] : null;
-  console.log("buildTextEditorInitialContentForSingleNode node", node);
-  if (!node) return [];
+  console.log("buildTextEditorInitialContentForSingleNode node", node, data);
+  if (!node || !data) return [];
 
   // this should handle built-in node type from blocknote
-  // type: paragraph | heading | quote | bulletListItem | numberedListItem | checkListItem |
-  // toggleListItem | image | video | table | codeBlock | audio | file
-  return [
-    {
-      id: node?.id || "",
-      type: node?.type || "",
-      props: node?.props || {},
-      content: buildInlineContent(node?.children || [], data) || [], // {type, text, styles}
-      children: [],
-    },
-  ];
-}
-
-function buildInlineContent(children: string[], data: TreeData | undefined) {
-  if (!data) return [];
-  return children.map((child_id) => {
-    const node = data[child_id];
-    if (node.type === "text") {
-      return {
-        type: "text",
-        text: node.props?.value,
-        styles: {},
-      };
-    } else if (node.type === "strong") {
-      return {
-        type: "text",
-        text: node.children
-          ? data[node.children[0]].props?.value || ""
-          : "bad text",
-        styles: { bold: true },
-      };
-    } else if (node.type === "link") {
-      if (node.children) {
-        return {
-          type: "link",
-          content: [
-            {
-              type: "text",
-              // TODO: should we loop over children?
-              text: data[node.children[0]].props?.value || "",
-              styles: {},
-            },
-          ],
-          href: node.props?.href ?? "",
-        };
-      }
-      return {
-        type: "link",
-        content: [
-          {
-            type: "text",
-            text: "bad link",
-            styles: {},
-          },
-        ],
-        href: "",
-      };
-    } else {
-      throw new Error(`Unsupported node type: ${node.type}`);
-    }
-  });
+  // types: paragraph | heading | quote | bulletListItem | numberedListItem | checkListItem |
+  // image | file | video | audio | table | codeBlock
+  const initialContent = convertNodeDataToBlocks(node, data);
+  console.log("initialContent", initialContent);
+  return initialContent;
 }
 
 function OverlayTextEditor({
@@ -668,16 +612,7 @@ function OverlayTextEditor({
   close: () => void;
 }) {
   const editor = useCreateBlockNote({
-    schema: BlockNoteSchema.create().extend({
-      blockSpecs: {
-        heading: createHeadingBlockSpec({
-          // Disables toggleable headings.
-          allowToggleHeadings: false,
-          // Sets the allowed heading levels.
-          levels: [1, 2, 3, 4, 5, 6],
-        }),
-      },
-    }),
+    schema: bn_schema,
     initialContent,
   });
 
@@ -692,8 +627,23 @@ function OverlayTextEditor({
     };
   }, [editor]);
 
+  const getSlashMenuItems = useMemo(() => {
+    return async (query: string) =>
+      // @ts-expect-error okk
+      filterSuggestionItems(getCustomSlashMenuItems(editor), query);
+  }, [editor]);
+
   return (
-    <BlockNoteView editor={editor} formattingToolbar={false} theme="light">
+    <BlockNoteView
+      editor={editor}
+      formattingToolbar={false}
+      slashMenu={false}
+      theme="light"
+    >
+      <SuggestionMenuController
+        triggerCharacter={"/"}
+        getItems={getSlashMenuItems}
+      />
       <FormattingToolbarController
         formattingToolbar={() => (
           <FormattingToolbar>
@@ -728,9 +678,9 @@ function OverlayTextEditor({
               textAlignment={"right"}
               key={"textAlignRightButton"}
             />
-            <ColorStyleButton key={"colorStyleButton"} />
+            <ColorStyleButton key={"colorStyleButton"} />*/}
             <NestBlockButton key={"nestBlockButton"} />
-            <UnnestBlockButton key={"unnestBlockButton"} />*/}
+            <UnnestBlockButton key={"unnestBlockButton"} />
             <CreateLinkButton key={"createLinkButton"} />
           </FormattingToolbar>
         )}
@@ -1224,6 +1174,7 @@ function EditRichtextComponent({
         editor={bn_editor}
         onChange={handleEditorChange}
         formattingToolbar={false}
+        slashMenu={false}
         theme="light"
         data-theming-sidebar
       >
@@ -2030,10 +1981,10 @@ function Layer({
 
 function buildNewUserNodePayload(schema: SchemaTypeDefinition) {
   const nodeId = generateId();
-  const getInitialNodeData = schema.getInitialNodeData;
-  if (!getInitialNodeData) {
+  const getInitialNodes = schema.getInitialNodes;
+  if (!getInitialNodes) {
     throw new Error(
-      `buildNewUserNodePayload: ${schema.type}. "getInitialNodeData" function not found in mile.config.tsx file`,
+      `buildNewUserNodePayload: ${schema.type}. "getInitialNodes" function not found in mile.config.tsx file`,
     );
   }
 
@@ -2042,10 +1993,43 @@ function buildNewUserNodePayload(schema: SchemaTypeDefinition) {
     // add new node to the end of root node
     mode: "last-child",
     nodeId,
-    nodes: {
-      [nodeId]: getInitialNodeData(nodeId),
-    },
+    nodes: getInitialNodes(nodeId, generateId),
+    // nodes: {
+    //   [nodeId]: getInitialNodeData(nodeId),
+    // },
   };
+}
+
+const markdown_schema = {
+  type: "paragraph",
+  name: "paragraph",
+  title: "Markdown",
+  thumbnail: "/mile-thumbnails/markdown.png",
+  fields: [],
+  getInitialNodes: (node_id: string, generateId: () => string) => {
+    const child_id = generateId();
+    return {
+      [node_id]: {
+        id: node_id,
+        type: "paragraph",
+        props: {},
+        options: undefined,
+        children: [child_id],
+      },
+      [child_id]: {
+        id: child_id,
+        type: "text",
+        props: { value: "Paragraph" },
+        options: undefined,
+        children: [],
+      },
+    };
+  },
+};
+
+function combineSchema(schema: MileSchema) {
+  const combinedSchema = schema.user_schema.concat([markdown_schema]);
+  return combinedSchema;
 }
 
 function ComponentPicker({
@@ -2058,25 +2042,38 @@ function ComponentPicker({
   dispatch: React.ActionDispatch<[action: AppAction]>;
 }) {
   const editor = useEditor();
-  const user_schema = schema.user_schema;
+  const combined_schema = combineSchema(schema);
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-      {user_schema.map((e) => {
+      {combined_schema.map((e) => {
         function handleClick() {
           const payload = buildNewUserNodePayload(e);
+          console.log("payload", payload);
+
           editor.perform({
             type: "addNode",
             name: "Add Node",
             payload,
           });
           close();
-          dispatch({
-            type: AppActionType.SelectNode,
-            payload: {
-              id: payload.nodeId,
-            },
-          });
+          if (e.type === "paragraph") {
+            // dispatch "SelectMarkdownNode" if it's a paragraph type since paragraph is the initial type of markdown mode (see markdown_schema)
+            dispatch({
+              type: AppActionType.SelectMarkdownNode,
+              payload: {
+                id: payload.nodeId,
+              },
+            });
+          } else {
+            // otherwise dispatch "SelectNode" for other user component types
+            dispatch({
+              type: AppActionType.SelectNode,
+              payload: {
+                id: payload.nodeId,
+              },
+            });
+          }
         }
         return (
           <div
@@ -3327,35 +3324,4 @@ function ArrowSvg(props: React.ComponentProps<"svg">) {
       />
     </svg>
   );
-}
-
-const markdownTags = [
-  "heading",
-  "paragraph",
-  "list",
-  "listItem",
-  "text",
-  "inlineCode",
-  "code",
-  "strong",
-  "emphasis",
-  "blockquote",
-  "link",
-  "image",
-  "thematicBreak",
-  "html",
-  "break",
-  "delete",
-  "footnoteDefinition",
-  "footnoteReference",
-  "definition",
-  "imageReference",
-  "linkReference",
-  "table",
-  "tableRow",
-  "tableCell",
-];
-
-function isMarkdown(type: string) {
-  return markdownTags.includes(type);
 }

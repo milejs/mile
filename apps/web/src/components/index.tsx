@@ -20,10 +20,10 @@ const components = {
     name: "heading",
     component: Heading,
   },
-  paragraph: {
-    name: "paragraph",
-    component: Paragraph,
-  },
+  // paragraph: {
+  //   name: "paragraph",
+  //   component: Paragraph,
+  // },
 };
 
 // override built-in markdown component
