@@ -115,6 +115,25 @@ export function EditorProvider({
 // }
 
 const actions: Actions = {
+  reorderNode(
+    editor,
+    payload: {
+      dragId: string;
+      dropId: string;
+      closestEdgeOfDrop: Edge | null;
+      trigger: Trigger;
+    },
+  ): Action | undefined {
+    const { dragId, dropId, closestEdgeOfDrop, trigger } = payload;
+    if (dragId === dropId) return;
+    const result = editor.tree.reorderNode(dragId, dropId, closestEdgeOfDrop);
+    editor.updateData(result.data, {
+      trigger,
+      outcome: { type: "section-reorder", targetId: dragId },
+    });
+    return result.reverseAction;
+  },
+
   reorderSection(
     editor,
     payload: {

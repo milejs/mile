@@ -75,7 +75,9 @@ export class Tree implements MileTree {
       const currentDropParent = result[dropNode.id]; // row or column
       invariant(currentDropParent?.children);
       const wasLastChild = closestEdgeOfDrop === "bottom";
-      const firstOrLast = wasLastChild ? currentDropParent.children.length - 1 : 0;
+      const firstOrLast = wasLastChild
+        ? currentDropParent.children.length - 1
+        : 0;
       newDragNodeId = currentDropParent.children[firstOrLast];
     } else {
       // if prev drop node is not row or column,
@@ -147,7 +149,9 @@ export class Tree implements MileTree {
       const currentDropParent = result[dropNode.id]; // row or column
       invariant(currentDropParent?.children);
       const wasLastChild = closestEdgeOfDrop === "bottom";
-      const firstOrLast = wasLastChild ? currentDropParent.children.length - 1 : 0;
+      const firstOrLast = wasLastChild
+        ? currentDropParent.children.length - 1
+        : 0;
       newDragNodeId = currentDropParent.children[firstOrLast];
     } else {
       // if prev drop node is not row or column,
@@ -174,13 +178,76 @@ export class Tree implements MileTree {
     };
   }
 
-  reorderSection(dragId: string, dropId: string, closestEdgeOfDrop: Edge | null) {
+  reorderSection(
+    dragId: string,
+    dropId: string,
+    closestEdgeOfDrop: Edge | null,
+  ) {
     const dragNode = this.find(dragId);
     const dropNode = this.find(dropId);
-    invariant(dragNode && dropNode && dropNode.type === "section", "reorder section fail: drop node is not a section");
+    invariant(
+      dragNode && dropNode && dropNode.type === "section",
+      "reorder section fail: drop node is not a section",
+    );
     const parentId = this.getParentId(dragNode.id);
     const parentId2 = this.getParentId(dropNode.id);
-    invariant(parentId === parentId2, "reorder section fail: drag and drop node have different parent");
+    invariant(
+      parentId === parentId2,
+      "reorder section fail: drag and drop node have different parent",
+    );
+    const commonParent = this.get(parentId);
+    const prevDragIndex = commonParent.children?.indexOf(dragNode.id);
+    const prevDropIndex = commonParent.children?.indexOf(dropNode.id);
+    invariant(prevDragIndex != null && prevDropIndex != null);
+    let mode = closestEdgeOfDrop === "bottom" ? "after" : "before";
+    let result = this.removeIdFromParent(this._data, dragNode.id);
+    result = this.insertAt(result, dropId, mode, dragNode);
+
+    // refresh the world
+    this.updateTreeData(result);
+
+    // compute reverse action ------------------------------------------
+    // const parent = this.findParentId(dragNode.id)
+    // const commonParent = this.get(dragNode.parent?.id);
+    const currentCommonParent = this.get(parentId);
+    invariant(currentCommonParent.children);
+    const actualPrevDropIndex = getReorderDestinationIndex({
+      startIndex: prevDragIndex,
+      indexOfTarget: prevDropIndex,
+      closestEdgeOfTarget: closestEdgeOfDrop,
+      axis: "vertical",
+    });
+    const newDragNodeId = currentCommonParent.children[actualPrevDropIndex];
+    const newDropNodeId = currentCommonParent.children[prevDragIndex];
+    const wasMovingForward = prevDragIndex < prevDropIndex;
+
+    return {
+      data: result,
+      reverseAction: {
+        type: "reorderSection",
+        name: "Reorder section",
+        payload: {
+          dragId: newDragNodeId,
+          dropId: newDropNodeId,
+          closestEdgeOfDrop: wasMovingForward ? "top" : "bottom",
+        },
+      },
+    };
+  }
+
+  reorderNode(dragId: string, dropId: string, closestEdgeOfDrop: Edge | null) {
+    const dragNode = this.find(dragId);
+    const dropNode = this.find(dropId);
+    invariant(
+      dragNode && dropNode,
+      "reorder section fail: drag and drop node are not found",
+    );
+    const parentId = this.getParentId(dragNode.id);
+    const parentId2 = this.getParentId(dropNode.id);
+    invariant(
+      parentId === parentId2,
+      "reorder section fail: drag and drop node have different parent",
+    );
     const commonParent = this.get(parentId);
     const prevDragIndex = commonParent.children?.indexOf(dragNode.id);
     const prevDropIndex = commonParent.children?.indexOf(dropNode.id);
@@ -227,7 +294,11 @@ export class Tree implements MileTree {
    * @param newNodeId - id of new node (must be unique) that will be inserted after the `id`
    * @param nodes - all nodes data that we must add to the flat tree. containing the duplicated node and all its children.
    */
-  duplicateNode(id: string, newNodeId: string, nodes: Record<string, NodeData>) {
+  duplicateNode(
+    id: string,
+    newNodeId: string,
+    nodes: Record<string, NodeData>,
+  ) {
     const dupNode = nodes[newNodeId];
     invariant(dupNode);
     let result = this.insertAt(this._data, id, "after", dupNode);
@@ -272,7 +343,12 @@ export class Tree implements MileTree {
     };
   }
 
-  addNode(id: string, nodeId: string, nodes: Record<string, NodeData>, mode = "after") {
+  addNode(
+    id: string,
+    nodeId: string,
+    nodes: Record<string, NodeData>,
+    mode = "after",
+  ) {
     const nodeData = nodes[nodeId];
     invariant(nodeData);
     let result = this.insertAt(this._data, id, mode, nodeData);
@@ -343,7 +419,13 @@ export class Tree implements MileTree {
   // impl of insertNewElement/ deleteNewElement is basically the same as addNode/ deleteNode except
   // we must delete the 'id' node if it's a component stub (this is when you insert new node from an empty stub component node)
   // and the corresponding reverse action
-  insertNewElement(id: string, type: string, mode: string, nodeId: string, nodes: Record<string, NodeData>) {
+  insertNewElement(
+    id: string,
+    type: string,
+    mode: string,
+    nodeId: string,
+    nodes: Record<string, NodeData>,
+  ) {
     const nodeData = nodes[nodeId];
     invariant(nodeData);
     let result = this.insertAt(this._data, id, mode, nodeData);
@@ -368,13 +450,18 @@ export class Tree implements MileTree {
         payload: {
           id: nodeData.id,
           type,
-          insertPrevious: previousNode.type === "component" ? previousNode : undefined,
+          insertPrevious:
+            previousNode.type === "component" ? previousNode : undefined,
         },
       },
     };
   }
 
-  deleteNewElement(id: string, type: string, insertPrevious?: NodeData | undefined) {
+  deleteNewElement(
+    id: string,
+    type: string,
+    insertPrevious?: NodeData | undefined,
+  ) {
     const parentId = this.getParentId(id);
     const parent = this.get(parentId);
     const nodeIndex = parent.children?.indexOf(id);
@@ -511,14 +598,23 @@ export class Tree implements MileTree {
    * Private methods
    ***********************************************************************/
 
-  private updateAt(data: TreeData, targetId: string, nodeData: NodeData): TreeData {
+  private updateAt(
+    data: TreeData,
+    targetId: string,
+    nodeData: NodeData,
+  ): TreeData {
     return {
       ...data,
       [targetId]: nodeData,
     };
   }
 
-  private insertAt(data: TreeData, dropId: string, mode: string, nodeData: NodeData): TreeData {
+  private insertAt(
+    data: TreeData,
+    dropId: string,
+    mode: string,
+    nodeData: NodeData,
+  ): TreeData {
     // Ensure target parent exists in data
     if (!data[dropId]) {
       throw new Error(`Parent with ID '${dropId}' not found`);
@@ -547,7 +643,10 @@ export class Tree implements MileTree {
       parentId = dropId;
       const parent = this.get(parentId, data);
       invariant(parent.children);
-      updatedChildren = mode === "last-child" ? [...parent.children, nodeData.id] : [nodeData.id, ...parent.children];
+      updatedChildren =
+        mode === "last-child"
+          ? [...parent.children, nodeData.id]
+          : [nodeData.id, ...parent.children];
     }
 
     return {
@@ -573,7 +672,9 @@ export class Tree implements MileTree {
       ...data,
       [parentId]: {
         ...data[parentId],
-        children: data[parentId]?.children?.filter((childId: string) => childId !== id),
+        children: data[parentId]?.children?.filter(
+          (childId: string) => childId !== id,
+        ),
       },
     };
   }
@@ -596,7 +697,9 @@ export class Tree implements MileTree {
     let result = this.removeIdFromParent(data, id);
     // remove all descendants from the data
     const deleteKeys = Object.keys(descendants);
-    result = Object.fromEntries(Object.entries(result).filter(([key]) => !deleteKeys.includes(key)));
+    result = Object.fromEntries(
+      Object.entries(result).filter(([key]) => !deleteKeys.includes(key)),
+    );
     return { result, nodes: descendants };
   }
 }

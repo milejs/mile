@@ -27,13 +27,14 @@ import {
   TreeData,
 } from "@milejs/types";
 import { tinykeys } from "@/lib/tinykeys";
-import { flushSync } from "react-dom";
+import ReactDOM, { flushSync } from "react-dom";
 import {
   CheckIcon,
   ChevronLeft,
   ChevronRight,
   CircleCheckIcon,
   CircleXIcon,
+  GripVerticalIcon,
   ImagesIcon,
   LaptopIcon,
   PencilIcon,
@@ -103,6 +104,26 @@ import {
   filterSuggestionItems,
   insertOrUpdateBlock,
 } from "@blocknote/core";
+// dnd
+// import { triggerPostMoveFlash } from "@atlaskit/pragmatic-drag-and-drop-flourish/trigger-post-move-flash";
+import {
+  attachClosestEdge,
+  type Edge,
+  extractClosestEdge,
+} from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+// import { getReorderDestinationIndex } from "@atlaskit/pragmatic-drag-and-drop-hitbox/util/get-reorder-destination-index";
+// import { DragHandleButton } from "@atlaskit/pragmatic-drag-and-drop-react-accessibility/drag-handle-button";
+import { DropIndicator } from "@atlaskit/pragmatic-drag-and-drop-react-drop-indicator/box";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+  type ElementDropTargetEventBasePayload,
+  monitorForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { pointerOutsideOfPreview } from "@atlaskit/pragmatic-drag-and-drop/element/pointer-outside-of-preview";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+// import { reorder } from "@atlaskit/pragmatic-drag-and-drop/reorder";
 
 export { BlockNoteView, useCreateBlockNote };
 
@@ -1871,7 +1892,50 @@ function LayersInner({
   dispatch: React.ActionDispatch<[action: AppAction]>;
 }) {
   const mile = useMileProvider();
-  const [open, setOpen] = useState(false);
+  const editor = useEditor();
+
+  useEffect(() => {
+    return monitorForElements({
+      canMonitor({ source }) {
+        return !!source.data;
+      },
+      onDrop({ location, source }) {
+        const target = location.current.dropTargets[0];
+        if (!target) {
+          return;
+        }
+
+        const sourceData = source.data;
+        const targetData = target.data;
+        if (!sourceData || !targetData) {
+          return;
+        }
+        if (!nodes) {
+          return;
+        }
+
+        const indexOfTarget = nodes.findIndex(
+          (item) => item.id === (targetData.node as NodeData).id,
+        );
+        if (indexOfTarget < 0) {
+          return;
+        }
+
+        const closestEdgeOfTarget = extractClosestEdge(targetData);
+
+        editor.performAction({
+          type: "reorderNode",
+          name: "Reorder Node",
+          payload: {
+            dragId: (sourceData.node as NodeData).id,
+            dropId: (targetData.node as NodeData).id,
+            closestEdgeOfDrop: closestEdgeOfTarget,
+            trigger: "pointer",
+          },
+        });
+      },
+    });
+  }, [nodes, editor]);
 
   return (
     <div className="py-4">
@@ -1879,44 +1943,216 @@ function LayersInner({
         <h3 className="px-4 text-[10px] uppercase tracking-wider select-none">
           Layers
         </h3>
-        <Popover.Root open={open} onOpenChange={setOpen}>
-          <Popover.Trigger className="px-1.5 py-1 text-xs font-medium rounded-md border border-slate-400 bg-white hover:bg-slate-200 transition-colors flex items-center justify-center gap-x-1">
-            <PlusIcon size={12} /> Add
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Positioner sideOffset={12}>
-              <Popover.Popup className="w-lg origin-[var(--transform-origin)] rounded-lg bg-[canvas] px-6 py-4 text-gray-900 shadow-lg shadow-gray-200 outline-1 outline-gray-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
-                <Popover.Arrow className="data-[side=bottom]:top-[-8px] data-[side=left]:right-[-13px] data-[side=left]:rotate-90 data-[side=right]:left-[-13px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-8px] data-[side=top]:rotate-180">
-                  <ArrowSvg />
-                </Popover.Arrow>
-                <Popover.Title className="text-base font-medium">
-                  Add Component
-                </Popover.Title>
-                <div className="mt-6 space-y-4">
-                  <ComponentPicker
-                    schema={mile.schema}
-                    close={() => setOpen(false)}
-                    dispatch={dispatch}
-                  />
-                </div>
-              </Popover.Popup>
-            </Popover.Positioner>
-          </Popover.Portal>
-        </Popover.Root>
+        <PopoverComponentPicker schema={mile.schema} dispatch={dispatch} />
       </div>
       <div className="divide-y-1 divide-slate-300 border-y border-slate-300">
-        {(nodes ?? []).map((e) => {
+        {(nodes ?? []).map((e, i) => {
           return (
-            <Layer
+            <DragLayer
               key={e.id}
               node={e}
               mile_schema={mile.schema}
               dispatch={dispatch}
+              index={i}
             />
           );
         })}
       </div>
     </div>
+  );
+}
+
+function PopoverComponentPicker({
+  schema,
+  dispatch,
+}: {
+  schema: MileSchema;
+  dispatch: React.ActionDispatch<[action: AppAction]>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger className="px-1.5 py-1 text-xs font-medium rounded-md border border-slate-400 bg-white hover:bg-slate-200 transition-colors flex items-center justify-center gap-x-1">
+        <PlusIcon size={12} /> Add
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner sideOffset={12}>
+          <Popover.Popup className="w-lg origin-[var(--transform-origin)] rounded-lg bg-[canvas] px-6 py-4 text-gray-900 shadow-lg shadow-gray-200 outline-1 outline-gray-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+            <Popover.Arrow className="data-[side=bottom]:top-[-8px] data-[side=left]:right-[-13px] data-[side=left]:rotate-90 data-[side=right]:left-[-13px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-8px] data-[side=top]:rotate-180">
+              <ArrowSvg />
+            </Popover.Arrow>
+            <Popover.Title className="text-base font-medium">
+              Add Component
+            </Popover.Title>
+            <div className="mt-6 space-y-4">
+              <ComponentPicker
+                schema={schema}
+                close={() => setOpen(false)}
+                dispatch={dispatch}
+              />
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+type DraggableState =
+  | { type: "idle" }
+  | { type: "preview"; container: HTMLElement }
+  | { type: "dragging" };
+
+const idleState: DraggableState = { type: "idle" };
+const draggingState: DraggableState = { type: "dragging" };
+
+function DragLayer({
+  node,
+  mile_schema,
+  dispatch,
+  index,
+}: {
+  node: NodeData;
+  mile_schema: MileSchema;
+  dispatch: React.ActionDispatch<[action: AppAction]>;
+  index: number;
+}) {
+  const schema = mile_schema.get(node.type);
+  const ref = useRef<HTMLDivElement>(null);
+  const dragHandleRef = useRef<HTMLButtonElement | null>(null);
+  const [draggableState, setDraggableState] =
+    useState<DraggableState>(idleState);
+  const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    const dragHandle = dragHandleRef.current;
+    invariant(element);
+    invariant(dragHandle);
+
+    const dragData = {
+      node,
+      index,
+    };
+
+    function onChange({ source, self }: ElementDropTargetEventBasePayload) {
+      const isSource = source.element === dragHandle;
+      if (isSource) {
+        setClosestEdge(null);
+        return;
+      }
+
+      const closestEdge = extractClosestEdge(self.data);
+
+      const sourceIndex = source.data.index;
+      invariant(typeof sourceIndex === "number");
+
+      const isItemBeforeSource = index === sourceIndex - 1;
+      const isItemAfterSource = index === sourceIndex + 1;
+
+      const isDropIndicatorHidden =
+        (isItemBeforeSource && closestEdge === "bottom") ||
+        (isItemAfterSource && closestEdge === "top");
+
+      if (isDropIndicatorHidden) {
+        setClosestEdge(null);
+        return;
+      }
+
+      setClosestEdge(closestEdge);
+    }
+
+    return combine(
+      // registerItem({ itemId: item.id, element }),
+      draggable({
+        element: dragHandle,
+        getInitialData: () => dragData,
+        onGenerateDragPreview({ nativeSetDragImage }) {
+          setCustomNativeDragPreview({
+            nativeSetDragImage,
+            // getOffset: () => ({ x: 18, y: 18 }),
+            getOffset: pointerOutsideOfPreview({
+              x: "16px",
+              y: "8px",
+            }),
+            render({ container }) {
+              setDraggableState({ type: "preview", container });
+
+              return () => setDraggableState(draggingState);
+            },
+          });
+        },
+        onDragStart() {
+          setDraggableState(draggingState);
+        },
+        onDrop() {
+          setDraggableState(idleState);
+        },
+      }),
+      dropTargetForElements({
+        element,
+        // canDrop({ source }) {
+        // 	return source.data.instanceId === instanceId;
+        // },
+        getData({ input }) {
+          return attachClosestEdge(dragData, {
+            element,
+            input,
+            allowedEdges: ["top", "bottom"],
+          });
+        },
+        onDragEnter: onChange,
+        onDrag: onChange,
+        onDragLeave() {
+          setClosestEdge(null);
+        },
+        onDrop() {
+          setClosestEdge(null);
+        },
+      }),
+    );
+  }, [index, node]);
+
+  return (
+    <>
+      <div ref={ref} className="relative">
+        <div className="w-full flex items-center justify-between gap-x-1 text-left px-4 transition-colors">
+          <DragHandle dragHandleRef={dragHandleRef} />
+          <div
+            className={`w-full flex items-center ${draggableState.type === "dragging" ? "opacity-40" : ""}`}
+          >
+            <Layer node={node} dispatch={dispatch} mile_schema={mile_schema} />
+          </div>
+        </div>
+        {closestEdge && <DropIndicator edge={closestEdge} gap="1px" />}
+      </div>
+      {draggableState.type === "preview" &&
+        ReactDOM.createPortal(
+          <div
+            style={{
+              /**
+               * Ensuring the preview has the same dimensions as the original.
+               *
+               * Using `border-box` sizing here is not necessary in this
+               * specific example, but it is safer to include generally.
+               */
+              boxSizing: "border-box",
+              position: "relative",
+              // width: state.rect.width,
+              // height: state.rect.height,
+              // width: 36,
+              height: 36,
+            }}
+          >
+            {/*<DragPreview />*/}
+            <div className="px-3 py-1.5 bg-white shadow-lg">
+              {schema.title ?? schema.name}
+            </div>
+          </div>,
+          draggableState.container,
+        )}
+    </>
   );
 }
 
@@ -1931,7 +2167,6 @@ function Layer({
 }) {
   const editor = useEditor();
   const schema = mile_schema.get(node.type);
-
   function handleDeleteNode() {
     const action = {
       type: "deleteNode",
@@ -1942,39 +2177,56 @@ function Layer({
   }
 
   return (
-    <button
-      onClick={() => {
-        if (schema.isMarkdown) {
-          dispatch({
-            type: AppActionType.SelectMarkdownNode,
-            payload: { id: node.id },
-          });
-        } else {
-          dispatch({
-            type: AppActionType.SelectNode,
-            payload: { id: node.id },
-          });
-        }
-      }}
-      className="w-full flex items-center justify-between text-left px-4 py-1 cursor-pointer hover:bg-slate-200 transition-colors"
-    >
-      <div className="text-sm flex items-center gap-x-1">
-        {schema.isMarkdown ? (
-          <span className="text-[8px] uppercase px-1 py-0.5 bg-zinc-400/80 rounded-sm text-white font-bold">
-            MD
-          </span>
-        ) : null}
-        {schema.title ?? schema.name}
-      </div>
-      <div
-        className=""
+    <>
+      <button
+        className={`py-1 w-full cursor-pointer hover:bg-slate-200`}
+        onClick={() => {
+          if (schema.isMarkdown) {
+            dispatch({
+              type: AppActionType.SelectMarkdownNode,
+              payload: { id: node.id },
+            });
+          } else {
+            dispatch({
+              type: AppActionType.SelectNode,
+              payload: { id: node.id },
+            });
+          }
+        }}
+      >
+        <div className="text-sm flex items-center gap-x-1">
+          {schema.isMarkdown ? (
+            <span className="text-[8px] uppercase px-1 py-0.5 bg-zinc-400/80 rounded-sm text-white font-bold">
+              MD
+            </span>
+          ) : null}
+          {schema.title ?? schema.name}
+        </div>
+      </button>
+      <button
+        className="px-1 py-1 cursor-pointer hover:bg-slate-200"
         onClick={(e) => {
           e.stopPropagation();
           handleDeleteNode();
         }}
       >
         <TrashIcon size={12} />
-      </div>
+      </button>
+    </>
+  );
+}
+
+function DragHandle({
+  dragHandleRef,
+}: {
+  dragHandleRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  return (
+    <button
+      className="px-0.5 py-1 cursor-grab bg-gray-300 hover:bg-gray-400 rounded-[2px]"
+      ref={dragHandleRef}
+    >
+      <GripVerticalIcon className="w-3 h-3 text-zinc-700" />
     </button>
   );
 }

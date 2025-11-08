@@ -212,6 +212,23 @@ export interface MileTree {
     };
   };
 
+  reorderNode(
+    dragId: string,
+    dropId: string,
+    closestEdgeOfDrop: Edge | null,
+  ): {
+    data: TreeData;
+    reverseAction: {
+      type: string;
+      name: string;
+      payload: {
+        dragId: string | undefined;
+        dropId: string | undefined;
+        closestEdgeOfDrop: string;
+      };
+    };
+  };
+
   reorderSection(
     dragId: string,
     dropId: string,
