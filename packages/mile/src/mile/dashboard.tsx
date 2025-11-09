@@ -1,62 +1,103 @@
 // import useSWR, { mutate } from "swr";
 import { Config, PageData, PageMetaData } from "@milejs/types";
-import { ReactNode, Suspense, useEffect, useId, useMemo, useRef, useState } from "react";
-import slugify from '@sindresorhus/slugify';
+import {
+  ReactNode,
+  Suspense,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import slugify from "@sindresorhus/slugify";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { CheckIcon, ChevronsUpDownIcon, Circle, EqualIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
-import { Dialog } from '@base-ui-components/react/dialog';
+import {
+  CheckIcon,
+  ChevronsUpDownIcon,
+  Circle,
+  EqualIcon,
+  PlusIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react";
+import { Dialog } from "@base-ui-components/react/dialog";
 import { generateId } from "@/lib/generate-id";
 import { Input } from "@/components/ui/input";
 import { getAuth } from "./auth";
 import useSWR, { mutate } from "swr";
 
-import { Field } from '@base-ui-components/react/field';
-import { Form } from '@base-ui-components/react/form';
+import { Field } from "@base-ui-components/react/field";
+import { Form } from "@base-ui-components/react/form";
 import { cn } from "@/lib/utils";
-import { Drawer, DrawerContent, DrawerPortal, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerPortal,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 import { filesize } from "./utils";
 import { Uploaders } from "@/components/ui/uploader";
-import { LocalPageData, ParentPageValue, ParentPicker, SlugInput } from "./shared";
+import {
+  LocalPageData,
+  ParentPageValue,
+  ParentPicker,
+  SlugInput,
+} from "./shared";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
 
-const fetcher = (key: string[]) => fetch(`${API}${key.join("")}`).then(res => res.json());
-const searcher = (query: string) => fetch(`${API}/search?q=${query}`).then(res => res.json());
+const fetcher = (key: string[]) =>
+  fetch(`${API}${key.join("")}`).then((res) => res.json());
 
-export function Dashboard({ path, search }: { path: string; search: { [key: string]: string | string[] | undefined } }) {
-  console.log('path', path);
+export function Dashboard({
+  path,
+  search,
+}: {
+  path: string;
+  search: { [key: string]: string | string[] | undefined };
+}) {
+  console.log("path", path);
   if (path === "/") {
     return (
       <AppShell path={path}>
         <DashboardMain />
       </AppShell>
-    )
+    );
   }
   if (path === "/pages") {
     return (
       <AppShell path={path}>
-        <Pages />
+        <Pages search={search} />
       </AppShell>
-    )
+    );
   }
   if (path === "/search") {
     return (
       <AppShell path={path}>
         <SearchPage search={search} />
       </AppShell>
-    )
+    );
   }
   if (path === "/gallery") {
     return (
       <AppShell path={path}>
         <MediaGallery />
       </AppShell>
-    )
+    );
   }
-  return (
-    <div className="">Not found</div>
-  )
+
+  return <div className="">Not found</div>;
 }
 
 // Save db after multiple uploads completed
@@ -68,8 +109,8 @@ function handleUploadsSuccess(upload: any) {
       type: e.type,
       size: e.size,
       filepath: e.objectKey,
-    }
-  })
+    };
+  });
   mutate(`/medias`, async (prev: any) => {
     const resp = await fetch(`${API}/medias`, {
       method: "POST",
@@ -88,7 +129,7 @@ function handleUploadsSuccess(upload: any) {
     }
     const result = await resp.json();
     return prev ? [...prev, ...result] : result;
-  })
+  });
 }
 
 function MediaGallery() {
@@ -111,18 +152,27 @@ function MediaGallery() {
         <div className="space-y-8">
           <div className="py-2 flex items-center justify-between">
             <div className="flex items-center gap-x-4">
-              <Uploaders onSuccess={handleUploadsSuccess} label={"Upload files"} />
+              <Uploaders
+                onSuccess={handleUploadsSuccess}
+                label={"Upload files"}
+              />
             </div>
           </div>
           <div className="/grid /sm:grid-cols-[1fr_300px] /gap-2 /grow /overflow-hidden">
             <div className="overflow-y-auto">
-              <MediaFiles selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+              <MediaFiles
+                selectedFileId={selectedFileId}
+                handleSelectFile={handleSelectFile}
+              />
             </div>
             <Drawer open={open} onOpenChange={setOpen}>
               <DrawerPortal>
                 <DrawerContent className="mx-auto max-h-[85svh] px-6 pb-8">
                   <DrawerTitle>Test</DrawerTitle>
-                  <MediaMetadata selectedFileId={selectedFileId} setIsPending={setIsPending} />
+                  <MediaMetadata
+                    selectedFileId={selectedFileId}
+                    setIsPending={setIsPending}
+                  />
                 </DrawerContent>
               </DrawerPortal>
             </Drawer>
@@ -130,7 +180,7 @@ function MediaGallery() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function fetchStringKey(key: string) {
@@ -141,26 +191,49 @@ function useMediaFiles() {
   return useSWR(`/medias`, fetchStringKey);
 }
 
-function MediaFiles({ selectedFileId, handleSelectFile }: { selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+function MediaFiles({
+  selectedFileId,
+  handleSelectFile,
+}: {
+  selectedFileId: string;
+  handleSelectFile: (fileId: string) => void;
+}) {
   const { data, error, isLoading } = useMediaFiles();
   if (error || data?.error) return <div>failed to load</div>;
   if (isLoading) return <div>loading...</div>;
-  console.log('data', data);
+  console.log("data", data);
   return (
     <div className="">
-      <MediaFilesGrid data={data} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+      <MediaFilesGrid
+        data={data}
+        selectedFileId={selectedFileId}
+        handleSelectFile={handleSelectFile}
+      />
     </div>
-  )
+  );
 }
 
-function MediaFilesGrid({ data, selectedFileId, handleSelectFile }: { data: any[]; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+function MediaFilesGrid({
+  data,
+  selectedFileId,
+  handleSelectFile,
+}: {
+  data: any[];
+  selectedFileId: string;
+  handleSelectFile: (fileId: string) => void;
+}) {
   if (!data || data.length === 0) {
     return <div className="">No files</div>;
   }
   return (
     <div className="grid grid-cols-4 gap-4 items-start">
-      {data.map((e: any) => (
-        <MediaFileCard data={e} key={e.filepath} selectedFileId={selectedFileId} handleSelectFile={handleSelectFile} />
+      {data.map((e: any, i) => (
+        <MediaFileCard
+          data={e}
+          key={`${e.filepath}_${i}`}
+          selectedFileId={selectedFileId}
+          handleSelectFile={handleSelectFile}
+        />
       ))}
     </div>
   );
@@ -174,7 +247,15 @@ function getFileName(filepath: string) {
   return filepath.split("/").at(-1) ?? "Unknown name";
 }
 
-function MediaFileCard({ data, selectedFileId, handleSelectFile }: { data: any; selectedFileId: string; handleSelectFile: (fileId: string) => void; }) {
+function MediaFileCard({
+  data,
+  selectedFileId,
+  handleSelectFile,
+}: {
+  data: any;
+  selectedFileId: string;
+  handleSelectFile: (fileId: string) => void;
+}) {
   return (
     <button
       className={`bg-white flex w-full flex-col border ${selectedFileId === data.id ? "border-zinc-500" : "border-zinc-300"} hover:border-zinc-400`}
@@ -182,11 +263,19 @@ function MediaFileCard({ data, selectedFileId, handleSelectFile }: { data: any; 
         handleSelectFile(data.id);
       }}
     >
-      <div className={`py-5 ${selectedFileId === data.id ? "bg-blue-100" : "bg-zinc-100"} h-[180px] flex justify-center`}>
-        <img src={getImageUrl(data.filepath)} alt="" className="max-h-full max-w-full object-contain" />
+      <div
+        className={`py-5 ${selectedFileId === data.id ? "bg-blue-100" : "bg-zinc-100"} h-[180px] flex justify-center`}
+      >
+        <img
+          src={getImageUrl(data.filepath)}
+          alt=""
+          className="max-h-full max-w-full object-contain"
+        />
       </div>
       <div className="px-2 py-2">
-        <div className="text-sm leading-4 select-text">{getFileName(data.filepath)}</div>
+        <div className="text-sm leading-4 select-text">
+          {getFileName(data.filepath)}
+        </div>
       </div>
     </button>
   );
@@ -196,7 +285,13 @@ function useMediaFile(media_id?: string) {
   return useSWR(media_id ? `/medias/${media_id}` : null, fetchStringKey);
 }
 
-function MediaMetadata({ selectedFileId, setIsPending }: { selectedFileId: string; setIsPending: (v: boolean) => void; }) {
+function MediaMetadata({
+  selectedFileId,
+  setIsPending,
+}: {
+  selectedFileId: string;
+  setIsPending: (v: boolean) => void;
+}) {
   const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
   if (error || data?.error) return <div>failed to load</div>;
   if (isLoading) return <div>loading...</div>;
@@ -213,13 +308,27 @@ function MediaMetadata({ selectedFileId, setIsPending }: { selectedFileId: strin
     );
   }
   if (data.type.startsWith("image/")) {
-    return <ImageDetails selectedFileId={selectedFileId} data={data} setIsPending={setIsPending} />;
+    return (
+      <ImageDetails
+        selectedFileId={selectedFileId}
+        data={data}
+        setIsPending={setIsPending}
+      />
+    );
   }
 
   return null;
 }
 
-function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: string; data: any; setIsPending: (v: boolean) => void; }) {
+function ImageDetails({
+  selectedFileId,
+  data,
+  setIsPending,
+}: {
+  selectedFileId: string;
+  data: any;
+  setIsPending: (v: boolean) => void;
+}) {
   return (
     <div className="">
       <h2 className="mb-4 font-semibold">Media details</h2>
@@ -231,7 +340,9 @@ function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: 
         <div className="mb-4 text-xs">
           <h3 className="mb-1.5 font-medium">{data.filepath}</h3>
           <div className="mb-0.5">{filesize(data.size)}</div>
-          <div className="text-gray-500">{new Date(data.created_at).toString()}</div>
+          <div className="text-gray-500">
+            {new Date(data.created_at).toString()}
+          </div>
           <div className="mt-4">
             <ImageURL defaultValue={getImageUrl(data.filepath)} />
           </div>
@@ -240,7 +351,12 @@ function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: 
 
       <div className="flex flex-col gap-y-3">
         <div className="">
-          <TextAreaImageAltText key={`alt_${selectedFileId}`} fileId={data.id} defaultValue={data.alt} setIsPending={setIsPending} />
+          <TextAreaImageAltText
+            key={`alt_${selectedFileId}`}
+            fileId={data.id}
+            defaultValue={data.alt}
+            setIsPending={setIsPending}
+          />
         </div>
         <div className="">
           <InputImageTitle
@@ -251,9 +367,13 @@ function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: 
           />
         </div>
         <div className="">
-          <TextAreaImageCaption key={`caption_${selectedFileId}`} fileId={data.id} defaultValue={data.caption} setIsPending={setIsPending} />
+          <TextAreaImageCaption
+            key={`caption_${selectedFileId}`}
+            fileId={data.id}
+            defaultValue={data.caption}
+            setIsPending={setIsPending}
+          />
         </div>
-
       </div>
     </div>
   );
@@ -262,13 +382,23 @@ function ImageDetails({ selectedFileId, data, setIsPending }: { selectedFileId: 
 function ImageURL({ defaultValue }: any) {
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">File url</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        File url
+      </label>
       <Input readOnly defaultValue={defaultValue} className="truncate" />
     </div>
   );
 }
 
-function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+function TextAreaImageCaption({
+  fileId,
+  defaultValue,
+  setIsPending,
+}: {
+  fileId: string;
+  defaultValue: string | null;
+  setIsPending: (v: boolean) => void;
+}) {
   const [isDirty, setIsDirty] = useState(false);
   const [value, setValue] = useState("");
   function handleBlur() {
@@ -286,7 +416,9 @@ function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: 
 
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">Caption</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        Caption
+      </label>
       <Field.Control
         defaultValue={defaultValue ?? undefined}
         onBlur={handleBlur}
@@ -297,9 +429,18 @@ function TextAreaImageCaption({ fileId, defaultValue, setIsPending }: { fileId: 
   );
 }
 
-const textareaClasses = "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive"
+const textareaClasses =
+  "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive";
 
-function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+function InputImageTitle({
+  fileId,
+  defaultValue,
+  setIsPending,
+}: {
+  fileId: string;
+  defaultValue: string | null;
+  setIsPending: (v: boolean) => void;
+}) {
   const [isDirty, setIsDirty] = useState(false);
   const [value, setValue] = useState("");
   function handleBlur() {
@@ -317,7 +458,9 @@ function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: strin
 
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">Title</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        Title
+      </label>
       <Input
         defaultValue={defaultValue ?? undefined}
         onBlur={handleBlur}
@@ -328,7 +471,15 @@ function InputImageTitle({ fileId, defaultValue, setIsPending }: { fileId: strin
   );
 }
 
-function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: string; defaultValue: string | null; setIsPending: (v: boolean) => void; }) {
+function TextAreaImageAltText({
+  fileId,
+  defaultValue,
+  setIsPending,
+}: {
+  fileId: string;
+  defaultValue: string | null;
+  setIsPending: (v: boolean) => void;
+}) {
   const [isDirty, setIsDirty] = useState(false);
   const [value, setValue] = useState(defaultValue ?? "");
   function handleBlur() {
@@ -346,7 +497,9 @@ function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: 
   }
   return (
     <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">Alt text</label>
+      <label htmlFor="" className="mb-1 text-xs font-semibold">
+        Alt text
+      </label>
       <Field.Control
         value={value}
         onBlur={handleBlur}
@@ -360,16 +513,20 @@ function TextAreaImageAltText({ fileId, defaultValue, setIsPending }: { fileId: 
   );
 }
 
-function updateFileMetadata(file_id: string, data: { [k: string]: string }, done: () => void) {
+function updateFileMetadata(
+  file_id: string,
+  data: { [k: string]: string },
+  done: () => void,
+) {
   updateMediaMetadata(`${API}/medias/${file_id}`, data)
-    .then(e => {
+    .then((e) => {
       mutate((k: string) => k === `/medias/${file_id}` || k === "/medias");
       done();
     })
-    .catch(e => {
-      console.error('error', e);
+    .catch((e) => {
+      console.error("error", e);
       done();
-    })
+    });
 }
 
 async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
@@ -380,7 +537,6 @@ async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
   }).then((r) => r.json());
 }
 
-
 function DashboardMain() {
   return (
     <div className="py-5">
@@ -389,14 +545,23 @@ function DashboardMain() {
           <h1 className="font-bold text-3xl">Welcome</h1>
         </div>
         <div className="space-y-8">
-          <div className="">Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsam ab maiores tempore earum a voluptas debitis voluptatem. Nam suscipit officia animi cumque dolorem. Blanditiis amet autem similique porro laborum laudantium!</div>
+          <div className="">
+            Lorem ipsum dolor sit amet consectetur adipisicing elit. Ipsam ab
+            maiores tempore earum a voluptas debitis voluptatem. Nam suscipit
+            officia animi cumque dolorem. Blanditiis amet autem similique porro
+            laborum laudantium!
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function SearchPage({ search }: { search: { [key: string]: string | string[] | undefined; } }) {
+function SearchPage({
+  search,
+}: {
+  search: { [key: string]: string | string[] | undefined };
+}) {
   return (
     <div className="py-5">
       <div className="max-w-5xl mx-auto">
@@ -405,28 +570,42 @@ function SearchPage({ search }: { search: { [key: string]: string | string[] | u
         </div>
         <div className="space-y-8">
           <SearchForm initialQuery={search.query} />
-          <SearchData search={search} />
+          <SearchFetcher search={search} />
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-function SearchData({ search }: { search: { [key: string]: string | string[] | undefined; } }) {
-  const { data: result, error: searchError, isLoading: searching } = useSWR(search.query, searcher);
-  if (searchError) return <div>Failed to load</div>
-  if (searching) return <div>loading...</div>
-  if (result?.error) {
-    console.error('error', result.message);
-    return <div>Failed to load</div>
-  }
-
+function SearchFetcher({
+  search,
+}: {
+  search: { [key: string]: string | string[] | undefined };
+}) {
+  const { query, page = "1", limit = "30" } = search ?? {};
+  const page_no = parseInt(Array.isArray(page) ? page[0] : page, 10);
+  const limit_no = parseInt(Array.isArray(limit) ? limit[0] : limit, 10);
+  const fetcher_key = [
+    `/search?`,
+    `q=${query}`,
+    `&`,
+    `page=${page_no}`,
+    `&`,
+    `limit=${limit_no}`,
+  ];
   return (
-    <PagesList data={result} />
-  )
+    <div>
+      <PagesData fetcher_key={fetcher_key} />
+      <PagesPagination fetcher_key={fetcher_key} />
+    </div>
+  );
 }
 
-function Pages() {
+function Pages({
+  search,
+}: {
+  search: { [key: string]: string | string[] | undefined };
+}) {
   return (
     <div className="py-5">
       <div className="max-w-5xl mx-auto">
@@ -436,24 +615,10 @@ function Pages() {
         </div>
         <div className="space-y-8">
           <SearchForm />
-          <PagesData />
+          <PagesFetcher search={search} />
         </div>
       </div>
     </div>
-  );
-}
-function PagesData() {
-  const { data: pages, error: pagesError, isLoading: pagesIsLoading } = useSWR([`/pages`], fetcher);
-  // console.log('pages', pages, pagesError, pagesIsLoading);
-  if (pagesError) return <div>Failed to load</div>
-  if (pagesIsLoading) return <div>loading...</div>
-  if (pages && pages.error === true) {
-    console.error('error', pages.message);
-    return <div className="">Failed to load</div>
-  }
-
-  return (
-    <PagesList data={pages} />
   );
 }
 
@@ -472,7 +637,9 @@ function SearchForm({ initialQuery }: { initialQuery?: any }) {
     >
       <Field.Root name="query" className="flex flex-col items-start gap-y-1">
         <div className="relative">
-          <div className="absolute top-3 left-2"><SearchIcon size={16} /></div>
+          <div className="absolute top-3 left-2">
+            <SearchIcon size={16} />
+          </div>
           <Field.Control
             ref={inputRef}
             type="text"
@@ -482,7 +649,16 @@ function SearchForm({ initialQuery }: { initialQuery?: any }) {
             className="h-10 w-full sm:min-w-[400px] rounded-md border border-gray-300 pl-8 text-base text-gray-900 focus:outline-2 focus:-outline-offset-1 focus:outline-blue-800"
           />
           <div className="absolute top-2 right-2">
-            <button type="button" onClick={() => { setValue(''); inputRef.current?.focus(); }} className="rounded px-2 py-1 hover:bg-zinc-100 cursor-pointer"><XIcon size={16} /></button>
+            <button
+              type="button"
+              onClick={() => {
+                setValue("");
+                inputRef.current?.focus();
+              }}
+              className="rounded px-2 py-1 hover:bg-zinc-100 cursor-pointer"
+            >
+              <XIcon size={16} />
+            </button>
           </div>
         </div>
         <Field.Error className="text-sm text-red-800" />
@@ -496,6 +672,150 @@ function SearchForm({ initialQuery }: { initialQuery?: any }) {
       </button>
     </Form>
   );
+}
+
+function PagesFetcher({
+  search,
+}: {
+  search: { [key: string]: string | string[] | undefined };
+}) {
+  const { page = "1", limit = "30" } = search ?? {};
+  const page_no = parseInt(Array.isArray(page) ? page[0] : page, 10);
+  const limit_no = parseInt(Array.isArray(limit) ? limit[0] : limit, 10);
+  const fetcher_key = [`/pages?`, `page=${page_no}`, `&`, `limit=${limit_no}`];
+
+  return (
+    <div>
+      <PagesData fetcher_key={fetcher_key} />
+      <PagesPagination fetcher_key={fetcher_key} />
+    </div>
+  );
+}
+
+function PagesPagination({ fetcher_key }: { fetcher_key: string[] }) {
+  const {
+    data: pages,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR(fetcher_key, fetcher);
+  if (pagesError) return <div>Failed to load</div>;
+  if (pagesIsLoading) return null;
+  if (pages && pages.error === true) {
+    console.error("error", pages.message);
+    return <div className="">Failed to load</div>;
+  }
+
+  const { pagination } = pages;
+  const { current_page, total_pages, has_next, has_prev } = pagination;
+
+  // Generate page numbers to display based on total pages
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxVisible = 7; // Max page buttons to show (excluding prev/next)
+
+    // Case 1: Total pages <= maxVisible, show all pages
+    if (total_pages <= maxVisible) {
+      for (let i = 1; i <= total_pages; i++) {
+        pages.push(i);
+      }
+      return pages;
+    }
+
+    // Case 2: Many pages, show smart pagination with ellipsis
+    // Always show: first page, last page, current page, and pages around current
+
+    // Always include first page
+    pages.push(1);
+
+    // Calculate range around current page
+    const leftSiblings = Math.max(2, current_page - 1);
+    const rightSiblings = Math.min(total_pages - 1, current_page + 1);
+
+    // Show left ellipsis if there's a gap
+    if (leftSiblings > 2) {
+      pages.push("ellipsis-left");
+    }
+
+    // Show pages around current page
+    for (let i = leftSiblings; i <= rightSiblings; i++) {
+      if (i !== 1 && i !== total_pages) {
+        pages.push(i);
+      }
+    }
+
+    // Show right ellipsis if there's a gap
+    if (rightSiblings < total_pages - 1) {
+      pages.push("ellipsis-right");
+    }
+
+    // Always include last page
+    if (total_pages > 1) {
+      pages.push(total_pages);
+    }
+
+    return pages;
+  };
+
+  const pageNumbers = getPageNumbers();
+
+  return (
+    <Pagination>
+      <PaginationContent>
+        {/* Previous Button */}
+        <PaginationItem>
+          <PaginationPrevious
+            href={
+              !has_prev
+                ? ""
+                : `/mile/pages?${current_page > 1 ? `page=${current_page - 1}` : ""}`
+            }
+            className={`${!has_prev ? "opacity-50" : ""}`}
+          />
+        </PaginationItem>
+
+        {/* Page Numbers */}
+        {pageNumbers.map((page, idx) => (
+          <PaginationItem key={`${page}-${idx}`}>
+            {typeof page === "number" ? (
+              <PaginationLink
+                href={`/mile/pages?page=${page}`}
+                isActive={page === current_page}
+              >
+                {page}
+              </PaginationLink>
+            ) : (
+              <PaginationEllipsis />
+            )}
+          </PaginationItem>
+        ))}
+
+        {/* Next Button */}
+        <PaginationItem>
+          <PaginationNext
+            href={!has_next ? "" : `/mile/pages?page=${current_page + 1}`}
+            className={`${!has_next ? "opacity-50" : ""}`}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
+
+function PagesData({ fetcher_key }: { fetcher_key: string[] }) {
+  const {
+    data: pages,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR(fetcher_key, fetcher);
+  // console.log('pages', pages, pagesError, pagesIsLoading);
+  if (pagesError) return <div>Failed to load</div>;
+  if (pagesIsLoading) return <div>loading...</div>;
+  if (pages && pages.error === true) {
+    console.error("error", pages.message);
+    return <div className="">Failed to load</div>;
+  }
+
+  return <PagesList data={pages.data} />;
 }
 
 function PagesList({ data }: { data: any }) {
@@ -531,12 +851,20 @@ function PageItem({ data }: { data: any }) {
       </div>
       <div className="w-32 shrink-0">
         <div className="text-xs text-zinc-700">
-          {new Date(data.updated_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+          {new Date(data.updated_at).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })}
         </div>
       </div>
       <div className="w-32 shrink-0">
         <div className="text-xs text-zinc-700">
-          {new Date(data.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+          {new Date(data.created_at).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })}
         </div>
       </div>
     </div>
@@ -557,11 +885,15 @@ function CreatePageModal() {
           <Dialog.Title className="-mt-1.5 mb-1 text-lg font-medium">
             Create New Page
           </Dialog.Title>
-          <NewPageSettings close={() => { setIsOpen(false) }} />
+          <NewPageSettings
+            close={() => {
+              setIsOpen(false);
+            }}
+          />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
-  )
+  );
 }
 
 function createPage(data: { [k: string]: any }) {
@@ -596,8 +928,8 @@ function buildParentItems(parents: any[]): ParentPageValue[] {
       id: e.id,
       value: e.slug,
       label: e.title,
-    }
-  })
+    };
+  });
 }
 
 function NewPageSettings({ close }: any) {
@@ -676,12 +1008,14 @@ function NewPageSettings({ close }: any) {
     }
     setError(null);
     function buildPageSlug(data: LocalPageData) {
-      return data.parent ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}` : data.own_slug;
+      return data.parent
+        ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}`
+        : data.own_slug;
     }
     function buildPageParentId(data: LocalPageData) {
       if (data.parent) {
         if (data.parent.value === "/" || data.parent.value === "") {
-          return undefined
+          return undefined;
         }
         return data.parent.id;
       }
@@ -700,11 +1034,11 @@ function NewPageSettings({ close }: any) {
       // llm
       // no_index
       // no_follow
-    }
-    console.log('payload', pageData, payload);
+    };
+    console.log("payload", pageData, payload);
     await createPage(payload)
       .then((e) => {
-        console.log('e', e);
+        console.log("e", e);
         if (e) {
           const last = e[e.length - 1];
           window.location.assign(`/mile/${last.id}/edit`);
@@ -712,7 +1046,9 @@ function NewPageSettings({ close }: any) {
         // close();
       })
       .catch((e) => {
-        let message = e.info?.message ? `${e.message} ${e.info.message}` : e.message;
+        let message = e.info?.message
+          ? `${e.message} ${e.info.message}`
+          : e.message;
         setError(message);
       });
   }
@@ -722,17 +1058,23 @@ function NewPageSettings({ close }: any) {
       <div className="overflow-y-auto h-[calc(100vh-350px)]">
         <div className="pt-2 pb-12 space-y-4">
           <div className="w-full">
-            <label htmlFor="title" className="font-semibold text-sm">Title</label>
+            <label htmlFor="title" className="font-semibold text-sm">
+              Title
+            </label>
             <Input
               id="title"
               value={pageData.title}
               onChange={handleTitleChange}
               placeholder="e.g. About us"
             />
-            <div className="mt-1 text-xs text-zinc-600">Title of the page displayed on the browser</div>
+            <div className="mt-1 text-xs text-zinc-600">
+              Title of the page displayed on the browser
+            </div>
           </div>
           <div className="w-full">
-            <label htmlFor="type" className="font-semibold text-sm">Type</label>
+            <label htmlFor="type" className="font-semibold text-sm">
+              Type
+            </label>
             <Input
               id="type"
               value={pageData.type}
@@ -742,7 +1084,11 @@ function NewPageSettings({ close }: any) {
             <div className="mt-1 text-xs text-zinc-600">"page" or "post"</div>
           </div>
           <div className="w-full relative">
-            <SlugInput pageData={pageData} handleParentSlugChange={handleParentSlugChange} handleOwnSlugChange={handleOwnSlugChange} />
+            <SlugInput
+              pageData={pageData}
+              handleParentSlugChange={handleParentSlugChange}
+              handleOwnSlugChange={handleOwnSlugChange}
+            />
             <div className="absolute right-0 -top-1.5">
               <button
                 type="button"
@@ -756,7 +1102,9 @@ function NewPageSettings({ close }: any) {
             </div>
           </div>
           <div className="w-full">
-            <label htmlFor="metadescription" className="font-semibold text-sm">Meta Description</label>
+            <label htmlFor="metadescription" className="font-semibold text-sm">
+              Meta Description
+            </label>
             <Field.Control
               id="metadescription"
               value={pageData.description}
@@ -767,7 +1115,9 @@ function NewPageSettings({ close }: any) {
         </div>
       </div>
       <div className="mt-4 w-full">
-        {error ? <div className="mb-2 text-xs text-red-600">{error}</div> : null}
+        {error ? (
+          <div className="mb-2 text-xs text-red-600">{error}</div>
+        ) : null}
         <Button
           onClick={handleCreatePage}
           className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
@@ -781,7 +1131,7 @@ function NewPageSettings({ close }: any) {
 
 /**
  * AuthWrapper renders nothing unless user has a valid auth
- * @returns 
+ * @returns
  */
 function PageWrapper(props: {
   config: Config;
@@ -789,27 +1139,34 @@ function PageWrapper(props: {
   path: string;
   search: { [key: string]: string | string[] | undefined };
 }) {
-  console.log('path=====', props.path, props.search);
+  console.log("path=====", props.path, props.search);
   if (props.path === "/setup") {
-    return <MileGithubSetup config={props.config} />
+    return <MileGithubSetup config={props.config} />;
   }
   if (props.path === "/created-github-app") {
-    return <CreatedGitHubApp config={props.config} search={props.search} />
+    return <CreatedGitHubApp config={props.config} search={props.search} />;
   }
-  return (
-    <AuthWrapper config={props.config}>{props.children}</AuthWrapper>
-  )
+  return <AuthWrapper config={props.config}>{props.children}</AuthWrapper>;
 }
 
-function CreatedGitHubApp({ config, search }: { config: Config; search: { [key: string]: string | string[] | undefined }; }) {
+function CreatedGitHubApp({
+  config,
+  search,
+}: {
+  config: Config;
+  search: { [key: string]: string | string[] | undefined };
+}) {
   return (
     <div className="py-24 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold">You've installed Mile! 🎉</h1>
-      <div className="mt-4">To start using Mile, you need to install the GitHub app you've created.</div>
+      <div className="mt-4">
+        To start using Mile, you need to install the GitHub app you've created.
+      </div>
 
       <div className="mt-3 space-y-2">
         <div className="">
-          Make sure to add the App to the <code>{config.storage.repo}</code> repository.
+          Make sure to add the App to the <code>{config.storage.repo}</code>{" "}
+          repository.
         </div>
         <InstallGitHubApp config={config} search={search} />
       </div>
@@ -817,7 +1174,13 @@ function CreatedGitHubApp({ config, search }: { config: Config; search: { [key: 
   );
 }
 
-function InstallGitHubApp({ config, search }: { config: Config; search: { [key: string]: string | string[] | undefined }; }) {
+function InstallGitHubApp({
+  config,
+  search,
+}: {
+  config: Config;
+  search: { [key: string]: string | string[] | undefined };
+}) {
   return (
     <div className="">
       <a
@@ -827,51 +1190,62 @@ function InstallGitHubApp({ config, search }: { config: Config; search: { [key: 
         Install GitHub App
       </a>
     </div>
-  )
+  );
 }
 
 function MileGithubSetup({ config }: { config: Config }) {
-  const [deployedURL, setDeployedURL] = useState('');
-  const [organization, setOrganization] = useState('');
+  const [deployedURL, setDeployedURL] = useState("");
+  const [organization, setOrganization] = useState("");
 
   return (
     <div className="py-24 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold">Mile GitHub Setup</h1>
       <div className="">Create GitHub App</div>
       <form
-        action={`https://github.com${organization ? `/organizations/${organization}` : ''}/settings/apps/new`}
+        action={`https://github.com${organization ? `/organizations/${organization}` : ""}/settings/apps/new`}
         method="post"
         className="mt-8 space-y-4"
       >
         <div className="">
-          <label className="block font-medium mb-1" htmlFor="deployedURL">Deployed App URL</label>
+          <label className="block font-medium mb-1" htmlFor="deployedURL">
+            Deployed App URL
+          </label>
           <Input
             id="deployedURL"
             value={deployedURL}
             onChange={(e) => setDeployedURL(e.target.value)}
           />
-          <div className="text-xs">This should the root of your domain. If you're not sure where Mile will be deployed, leave this blank and you can update the GitHub app later.</div>
+          <div className="text-xs">
+            This should the root of your domain. If you're not sure where Mile
+            will be deployed, leave this blank and you can update the GitHub app
+            later.
+          </div>
         </div>
 
         <div className="">
-          <label className="block font-medium mb-1" htmlFor="organization">GitHub organization (if any)</label>
+          <label className="block font-medium mb-1" htmlFor="organization">
+            GitHub organization (if any)
+          </label>
           <Input
             id="organization"
             value={organization}
             onChange={(e) => setOrganization(e.target.value)}
           />
-          <div className="text-xs">You must be an owner or GitHub App manager in the organization to create the GitHub App. Leave this blank to create the app in your personal account.</div>
+          <div className="text-xs">
+            You must be an owner or GitHub App manager in the organization to
+            create the GitHub App. Leave this blank to create the app in your
+            personal account.
+          </div>
         </div>
 
         <input
           type="text"
           name="manifest"
-          style={{ display: 'none' }}
+          style={{ display: "none" }}
           value={JSON.stringify({
-            name: `${parseRepoConfig(config.storage.repo).owner
-              } Mile`,
+            name: `${parseRepoConfig(config.storage.repo).owner} Mile`,
             url: deployedURL
-              ? new URL('/mile', deployedURL).toString()
+              ? new URL("/mile", deployedURL).toString()
               : `${window.location.origin}/mile`,
             public: true,
             redirect_url: `${window.location.origin}/api/mile/github/created-app`,
@@ -880,61 +1254,56 @@ function MileGithubSetup({ config }: { config: Config }) {
               `http://127.0.0.1/api/mile/github/oauth/callback`,
               ...(deployedURL
                 ? [
-                  new URL(
-                    '/api/mile/github/oauth/callback',
-                    deployedURL
-                  ).toString(),
-                ]
+                    new URL(
+                      "/api/mile/github/oauth/callback",
+                      deployedURL,
+                    ).toString(),
+                  ]
                 : []),
             ],
             request_oauth_on_install: true,
             default_permissions: {
-              contents: 'write',
-              metadata: 'read',
-              pull_requests: 'read',
+              contents: "write",
+              metadata: "read",
+              pull_requests: "read",
             },
           })}
         />
-        <Button type="submit">
-          Create GitHub App
-        </Button>
+        <Button type="submit">Create GitHub App</Button>
       </form>
     </div>
-  )
+  );
 }
 
 function parseRepoConfig(repo: string) {
-  const [owner, name] = repo.split('/');
+  const [owner, name] = repo.split("/");
   return { owner, name };
 }
 
 /**
  * AuthWrapper renders nothing unless user has a valid auth
- * @returns 
+ * @returns
  */
-function AuthWrapper(props: {
-  config: Config;
-  children: ReactNode;
-}) {
-  const [state, setState] = useState<'unknown' | 'valid' | 'explicit-auth'>(
-    'unknown'
+function AuthWrapper(props: { config: Config; children: ReactNode }) {
+  const [state, setState] = useState<"unknown" | "valid" | "explicit-auth">(
+    "unknown",
   );
   useEffect(() => {
-    getAuth(props.config).then(auth => {
+    getAuth(props.config).then((auth) => {
       if (auth) {
-        setState('valid');
+        setState("valid");
         return;
       }
-      setState('explicit-auth');
+      setState("explicit-auth");
     });
   }, [props.config]);
 
-  if (state === 'valid') {
+  if (state === "valid") {
     return props.children;
   }
 
-  if (state === 'explicit-auth') {
-    if (props.config.storage.kind === 'github') {
+  if (state === "explicit-auth") {
+    if (props.config.storage.kind === "github") {
       return (
         <div className="flex items-center justify-center h-screen">
           <a
@@ -954,7 +1323,12 @@ function AuthWrapper(props: {
 }
 
 const GithubIcon = ({ width, height }: any) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={width ?? "24"} height={height ?? "24"} viewBox="0 0 24 24">
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width={width ?? "24"}
+    height={height ?? "24"}
+    viewBox="0 0 24 24"
+  >
     <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4" />
     <path d="M9 18c-4.51 2-5-2-7-2" />
   </svg>
@@ -967,10 +1341,16 @@ function AppShell({ path, children }: { path: string; children: ReactNode }) {
       <DocsLayout path={path}>{children}</DocsLayout>
       <Footer />
     </div>
-  )
+  );
 }
 
-const DocsLayout = ({ path, children }: { path: string; children: React.ReactNode }) => (
+const DocsLayout = ({
+  path,
+  children,
+}: {
+  path: string;
+  children: React.ReactNode;
+}) => (
   <div className="/container mx-auto gap-8 px-4 md:grid md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[240px_1fr] xl:px-0">
     <aside className="fixed top-14 hidden h-[calc(100vh-3.5rem)] w-full shrink-0 md:sticky md:block xl:border-r">
       <div className="scrollbar-hidden h-full overflow-y-auto py-4 pr-2 pl-6">
@@ -990,7 +1370,9 @@ const DocsSidebarNav = ({ path, onNavItemClick }: DocsSidebarNavProps) => {
     <>
       {navConfig.sidebarNav.map((group, index) => (
         <div key={index} className="pb-4 [&:last-child]:pb-0">
-          <h4 className="text-foreground mb-1 text-sm font-semibold">{group.title}</h4>
+          <h4 className="text-foreground mb-1 text-sm font-semibold">
+            {group.title}
+          </h4>
           {group.items.length && (
             <DocsSidebarNavItems
               items={group.items}
@@ -1021,12 +1403,10 @@ const DocsSidebarNavItems = ({
   path,
   onNavItemClick,
 }: DocsSidebarNavItemsProps) => {
-  console.log('path', path);
-  const milepath = path === "/" ? "/mile" : `/mile${path}`
+  const milepath = path === "/" ? "/mile" : `/mile${path}`;
   return (
     <div className="mt-1 space-y-0.5 text-sm">
       {items.map((item, index) => {
-        console.log('item', item);
         return !item.disabled && item.href ? (
           <a
             key={index}
@@ -1062,11 +1442,11 @@ const DocsSidebarNavItems = ({
               </span>
             )}
           </span>
-        )
+        );
       })}
     </div>
-  )
-}
+  );
+};
 
 const Footer = () => (
   <footer className="border-t border-dashed">
@@ -1078,7 +1458,7 @@ const Footer = () => (
   </footer>
 );
 
-function Header({ path }: { path: string; }) {
+function Header({ path }: { path: string }) {
   return (
     <header className="bg-background supports-[backdrop-filter]:bg-background/80 sticky top-0 z-50 mx-auto w-full border-b border backdrop-blur">
       <div className="/container mx-auto px-4 xl:px-0 flex h-14 items-center">
@@ -1086,9 +1466,7 @@ function Header({ path }: { path: string; }) {
         <MobileNav path={path} />
         <div className="flex-1" />
         <div className="flex items-center gap-1">
-          <div className="hidden md:block">
-            {/* <SearchDialog /> */}
-          </div>
+          <div className="hidden md:block">{/* <SearchDialog /> */}</div>
           <Button variant="link" asChild>
             <a href="/help">Help</a>
           </Button>
@@ -1099,7 +1477,7 @@ function Header({ path }: { path: string; }) {
   );
 }
 
-function MobileNav({ path }: { path: string; }) {
+function MobileNav({ path }: { path: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -1126,7 +1504,9 @@ function MobileNav({ path }: { path: string; }) {
               </div>
               {navConfig.sidebarNav.map((group) => (
                 <div key={group.title} className="mt-4">
-                  <h4 className="text-foreground mb-1 text-sm font-semibold">{group.title}</h4>
+                  <h4 className="text-foreground mb-1 text-sm font-semibold">
+                    {group.title}
+                  </h4>
                   <div className="space-y-0.5">
                     {group.items.map((item) => (
                       <MobileNavItem
@@ -1160,7 +1540,15 @@ interface NavItem {
   label?: string;
 }
 
-function MobileNavItem({ path, item, onNavItemClick }: { path: string; item: NavItem; onNavItemClick: () => void }) {
+function MobileNavItem({
+  path,
+  item,
+  onNavItemClick,
+}: {
+  path: string;
+  item: NavItem;
+  onNavItemClick: () => void;
+}) {
   return !item.disabled && item.href ? (
     <a
       href={item.href}
@@ -1197,7 +1585,7 @@ function MobileNavItem({ path, item, onNavItemClick }: { path: string; item: Nav
   );
 }
 
-function MainNav({ path }: { path: string; }) {
+function MainNav({ path }: { path: string }) {
   return (
     <div className="mr-4 hidden md:flex">
       <a href="/mile" className="px-6 flex items-center">
@@ -1277,6 +1665,10 @@ const navConfig = {
         {
           title: "Gallery",
           href: "/mile/gallery",
+        },
+        {
+          title: "Sitemap",
+          href: "/mile/sitemap",
         },
       ],
     },

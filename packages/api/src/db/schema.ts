@@ -24,6 +24,7 @@ export const pages = pgTable("pages", {
   slug: text("slug").notNull(),
   title: text("title"), // page <title>
   type: text("type"),
+  status: text("status"), // published, draft, archived
   content: text("content"), // mdx string
   description: text("description"),
   keywords: text("keywords"),

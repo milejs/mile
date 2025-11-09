@@ -8,7 +8,7 @@ import {
   SelectPage,
   SelectMedia,
 } from "./db/schema";
-import { desc, eq, or, ilike, inArray } from "drizzle-orm";
+import { desc, eq, or, ilike, inArray, count } from "drizzle-orm";
 import { z } from "zod";
 import { handleRequest, type Router, route } from "better-upload/server";
 import { cloudflare } from "better-upload/server/helpers";
@@ -92,19 +92,55 @@ export function MileAPI(options: MileAPIOptions) {
   app.route("/pages", pages);
   app.route("/page", page_by_slug);
   app.get("/search", async (c) => {
-    const { q } = c.req.query();
+    const { q, page = "1", limit = "30" } = c.req.query();
     if (!q || typeof q !== "string") {
       return c.json({ message: 'Query parameter "q" is required' }, 400);
     }
 
-    const results: SelectPage[] = await db
-      .select()
-      .from(pagesTable)
-      .where(
-        or(ilike(pagesTable.title, `%${q}%`), ilike(pagesTable.slug, `%${q}%`)),
-      );
+    const per_page = Math.min(100, parseInt(limit, 10));
+    const page_no = Math.max(1, parseInt(page, 10));
+    // Calculate offset
+    const offset = (page_no - 1) * per_page;
 
-    return c.json(results);
+    const searchCondition = or(
+      ilike(pagesTable.title, `%${q}%`),
+      ilike(pagesTable.slug, `%${q}%`),
+    );
+
+    // Fetch results and total count in parallel
+    const [results, totalCount] = await Promise.all([
+      // Get paginated results
+      db
+        .select()
+        .from(pagesTable)
+        .where(searchCondition)
+        .limit(per_page)
+        .offset(offset)
+        .orderBy(pagesTable.title), // order by title
+
+      // Get total count for pagination
+      db
+        .select({ count: count() })
+        .from(pagesTable)
+        .where(searchCondition)
+        .then((result) => result[0].count),
+    ]);
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(Number(totalCount) / per_page);
+
+    return c.json({
+      query: q,
+      data: results,
+      pagination: {
+        current_page: page_no,
+        per_page: per_page,
+        total_items: Number(totalCount),
+        total_pages: totalPages,
+        has_next: page_no < totalPages,
+        has_prev: page_no > 1,
+      },
+    });
   });
   app.post("/upload", (c) => {
     return handleRequest(c.req.raw, upload_router);
@@ -119,6 +155,10 @@ export function MileAPI(options: MileAPIOptions) {
 const medias = new Hono();
 const pages = new Hono();
 const page_by_slug = new Hono();
+
+/****************************************************************
+ * Medias
+ */
 
 medias.get("/", async (c) => {
   const { offset = "0", limit = "10" } = c.req.query();
@@ -172,6 +212,10 @@ medias.patch("/:id", async (c) => {
   return c.json(updated);
 });
 
+/****************************************************************
+ * Page by slug
+ */
+
 // Get page by "/" slug
 page_by_slug.get("/", async (c) => {
   const [single] = await db
@@ -221,15 +265,52 @@ page_by_slug.get("/:slug{.+}", async (c) => {
   return c.json(pageWithImages);
 });
 
+/****************************************************************
+ * Pages
+ */
+
 // List all pages with pagination
 pages.get("/", async (c) => {
-  const { offset = "0", limit = "10" } = c.req.query();
-  const result = await db
-    .select()
-    .from(pagesTable)
-    .orderBy(desc(pagesTable.created_at))
-    .limit(parseInt(limit, 10))
-    .offset(parseInt(offset, 10));
+  const { page = "1", limit = "30" } = c.req.query();
+  const per_page = Math.min(100, parseInt(limit, 10));
+  const page_no = Math.max(1, parseInt(page, 10));
+  // Calculate offset
+  const offset = (page_no - 1) * per_page;
+  const [data, totalCount] = await Promise.all([
+    // Get the current page of data
+    db
+      .select()
+      .from(pagesTable)
+      .limit(per_page)
+      .offset(offset)
+      .orderBy(desc(pagesTable.created_at)), // or whatever ordering you want
+
+    // Get total count
+    db
+      .select({ count: count() })
+      .from(pagesTable)
+      .then((result) => result[0].count),
+  ]);
+  // Calculate pagination metadata
+  const totalPages = Math.ceil(Number(totalCount) / per_page);
+
+  return c.json({
+    data,
+    pagination: {
+      current_page: page_no,
+      per_page: per_page,
+      total_items: Number(totalCount),
+      total_pages: totalPages,
+      has_next: page_no < totalPages,
+      has_prev: page_no > 1,
+    },
+  });
+  // const result = await db
+  //   .select()
+  //   .from(pagesTable)
+  //   .orderBy(desc(pagesTable.created_at))
+  //   .limit(parseInt(limit, 10))
+  //   .offset(parseInt(offset, 10));
   return c.json(result);
 });
 

@@ -19,6 +19,7 @@ CREATE TABLE "pages" (
 	"slug" text NOT NULL,
 	"title" text,
 	"type" text,
+	"status" text,
 	"content" text,
 	"description" text,
 	"keywords" text,
