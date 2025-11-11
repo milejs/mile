@@ -13,8 +13,12 @@ const META_DESCRIPTION =
 const KEYWORDS =
   "Vascular, Vascular Clinic, Vascular Clinic Singapore, Vascular and Interventional Clinic, Vascular and Interventional Clinic Singapore, Brain Aneurysm, Brain Aneurysm Singapore, Neurovascular, Neurovascular Intervention, Neurovascular Surgery, Neurovascular Surgery Singapore";
 
+type Props = {
+  params: Promise<{ mileApp?: string[] }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+};
 export async function generateMetadata(
-  { params }: { params: Promise<{ mileApp?: string[] }> },
+  { params, searchParams }: Props,
   parent: ResolvingMetadata,
 ): Promise<Metadata> {
   if (!HOST_URL) {
@@ -22,7 +26,8 @@ export async function generateMetadata(
   }
   // read route params
   const { mileApp } = await params;
-  const res = await fetchPageBySlug(mileApp);
+  const search = await searchParams;
+  const res = await fetchPageBySlug(mileApp, search);
   // console.log("res", res);
   if (!res.ok) {
     notFound();
@@ -90,15 +95,13 @@ export async function generateMetadata(
   return meta;
 }
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ mileApp?: string[] }>;
-}) {
+export default async function Page({ params, searchParams }: Props) {
   // return (
   //   <Providers>
   //     <App params={params} components={components} />
   //   </Providers>
   // );
-  return <App params={params} components={components} />;
+  return (
+    <App params={params} searchParams={searchParams} components={components} />
+  );
 }

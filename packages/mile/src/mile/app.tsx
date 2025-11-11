@@ -14,9 +14,13 @@ function getSlug(paths: string[] | undefined) {
   return paths === undefined ? "/" : `/${paths.join("/")}`;
 }
 
-export async function fetchPageBySlug(paths?: string[]) {
+export async function fetchPageBySlug(
+  paths?: string[],
+  search?: { [key: string]: string | string[] | undefined },
+) {
   const slug = getSlug(paths);
-  const url = `${API}/page${slug}`;
+  const isPreview = search?.preview === "true";
+  const url = `${API}/page${slug}${isPreview ? "?preview=true" : ""}`;
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text();
@@ -35,16 +39,20 @@ export async function fetchPageBySlug(paths?: string[]) {
  */
 export async function App({
   params,
+  searchParams,
   components,
 }: {
   params: Promise<{ mileApp?: string[] }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
   components: MDXComponents;
 }) {
   const mileApp = (await params).mileApp;
-  const res = await fetchPageBySlug(mileApp);
+  const search = await searchParams;
+  const res = await fetchPageBySlug(mileApp, search);
   if (!res.ok) {
     return <div className="">Not found</div>;
   }
+
   const page_data = res.result;
   /**
    * {

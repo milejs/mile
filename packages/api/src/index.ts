@@ -98,7 +98,7 @@ async function searchPagesByTitle(query: string, limit = 20) {
 export function MileAPI(options: MileAPIOptions) {
   const app = new Hono().basePath("/api/mile");
   app.onError((err, c) => {
-    console.log("err", err.message);
+    console.log("err -------------", err);
     if (err instanceof HTTPException) {
       // Get the custom response
       return err.getResponse();
@@ -246,14 +246,31 @@ medias.patch("/:id", async (c) => {
 
 // Get page by "/" slug
 page_by_slug.get("/", async (c) => {
-  console.info("------- home");
+  const { preview } = c.req.query();
 
-  const [single] = await db
+  let [single] = await db
     .select()
     .from(pagesTable)
     .where(eq(pagesTable.slug, ""));
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
+  }
+
+  // get the draft if preview mode
+  if (preview === "true") {
+    [single] = await db
+      .select()
+      .from(draftsTable)
+      .where(
+        and(
+          eq(draftsTable.page_id, single.id),
+          eq(draftsTable.is_current_draft, 1),
+        ),
+      )
+      .limit(1);
+    if (!single) {
+      return c.json({ message: "Page not found" }, 404);
+    }
   }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
@@ -274,7 +291,6 @@ page_by_slug.get("/", async (c) => {
 async function findPageByFullSlug(fullSlug: string) {
   // Split the slug path into segments
   const segments = fullSlug.split("/").filter(Boolean);
-
   if (segments.length === 0) {
     return null;
   }
@@ -307,7 +323,7 @@ async function findPageByFullSlug(fullSlug: string) {
       WHERE pp.depth < ${segments.length}
     )
     SELECT
-      pp.id,
+      p.id,
       p.parent_id,
       p.slug,
       p.title,
@@ -324,8 +340,11 @@ async function findPageByFullSlug(fullSlug: string) {
       p.updated_at
     FROM page_path pp
     INNER JOIN pages p ON pp.id = p.id
-    WHERE pp.path_array = ${segments}
-    LIMIT 1
+    WHERE pp.path_array = ARRAY[${sql.join(
+      segments.map((s) => sql`${s}`),
+      sql.raw(`, `),
+    )}]
+    LIMIT 1;
   `);
 
   return (result.rows[0] as SelectPage) || null;
@@ -334,13 +353,26 @@ async function findPageByFullSlug(fullSlug: string) {
 // Get page by slug
 page_by_slug.get("/:slug{.+}", async (c) => {
   const slug = c.req.param("slug");
-  const single = await findPageByFullSlug(`/${slug}`);
-  // const [single] = await db
-  //   .select()
-  //   .from(pagesTable)
-  //   .where(eq(pagesTable.slug, `/${slug}`));
+  const { preview } = c.req.query();
+  let single = await findPageByFullSlug(`/${slug}`);
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
+  }
+  // get the draft if preview mode
+  if (preview === "true") {
+    [single] = await db
+      .select()
+      .from(draftsTable)
+      .where(
+        and(
+          eq(draftsTable.page_id, single.id),
+          eq(draftsTable.is_current_draft, 1),
+        ),
+      )
+      .limit(1);
+    if (!single) {
+      return c.json({ message: "Page not found" }, 404);
+    }
   }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
