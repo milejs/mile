@@ -271,6 +271,11 @@ page_by_slug.get("/", async (c) => {
     if (!single) {
       return c.json({ message: "Page not found" }, 404);
     }
+  } else {
+    // published mode must have "published" status
+    if (single.status !== "published") {
+      return c.json({ message: "Page not found" }, 404);
+    }
   }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
@@ -371,6 +376,11 @@ page_by_slug.get("/:slug{.+}", async (c) => {
       )
       .limit(1);
     if (!single) {
+      return c.json({ message: "Page not found" }, 404);
+    }
+  } else {
+    // published mode must have "published" status
+    if (single.status !== "published") {
       return c.json({ message: "Page not found" }, 404);
     }
   }
@@ -650,6 +660,23 @@ pages.get("/", async (c) => {
       has_next: page_no < totalPages,
       has_prev: page_no > 1,
     },
+  });
+});
+
+pages.get("/all-pages", async (c) => {
+  // const { page = "1", limit = "30" } = c.req.query();
+  const result = await db
+    .select({
+      id: pagesTable.id,
+      slug: pagesTable.slug,
+      title: pagesTable.title,
+      description: pagesTable.description,
+    })
+    .from(pagesTable)
+    .orderBy(desc(pagesTable.created_at));
+
+  return c.json({
+    data: result,
   });
 });
 
