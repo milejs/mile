@@ -91,12 +91,23 @@ export type SetOperation = React.Dispatch<
   React.SetStateAction<Operation | null>
 >;
 
+/**
+ * Draft Data Reducer
+ */
+export type DraftDataAction = {
+  type: string;
+  payload?: any;
+};
+export type DraftDataState = DraftData;
+export type UpdateDraftData = React.ActionDispatch<[action: DraftDataAction]>;
+
 export interface MileEditor {
   activeNodeId: string | null;
   mile: MileClient;
   config: Config;
   tree: MileTree;
-  page_data: PageData;
+  draft_data: DraftData;
+  updateDraftData: UpdateDraftData;
   setData: SetData;
   setLastOperation: SetOperation;
   history: MileHistoryManager;
@@ -142,6 +153,7 @@ export type PageData = {
   content: string | TreeData;
   title?: string;
   description?: string;
+  status?: string | null;
   og_image_ids: string[];
   og_images: {
     size: number | null;
@@ -165,8 +177,12 @@ export type PageData = {
   updated_at?: number;
 };
 
-export type PageMetaData = Omit<PageData, "content"> & {
-  _isSlugDirty?: boolean;
+export type DraftData = PageData & {
+  page_id: string;
+  version: number;
+  is_current_draft: number;
+  created_by: string; // "admin" | string
+  published_at?: number;
 };
 
 export type TreeData = {
@@ -417,7 +433,6 @@ export type HistoryEntry = {
 export interface MilePersister {
   editor: MileEditor;
   save(
-    id: string,
     pageData: PageData,
     content: TreeData,
     components: Components,

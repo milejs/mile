@@ -1,14 +1,14 @@
-import { Button } from '@/components/ui/button';
-import type { UploadHookControl } from 'better-upload/client';
-import { Loader2, Upload } from 'lucide-react';
-import { useId } from 'react';
+import { Button } from "@/components/ui/button";
+import type { UploadHookControl } from "@better-upload/client";
+import { Loader2, Upload } from "lucide-react";
+import { useId } from "react";
 
 type UploadButtonProps = {
   control: UploadHookControl<false>;
   accept?: string;
   metadata?: Record<string, unknown>;
   uploadOverride?: (
-    ...args: Parameters<UploadHookControl<false>['upload']>
+    ...args: Parameters<UploadHookControl<false>["upload"]>
   ) => void;
   label?: string;
   is_disabled?: boolean;
@@ -27,7 +27,11 @@ export function UploadButton({
   const id = useId();
 
   return (
-    <Button disabled={isPending || is_disabled} className="relative" type="button">
+    <Button
+      disabled={isPending || is_disabled}
+      className="relative"
+      type="button"
+    >
       <label htmlFor={id} className="absolute inset-0 cursor-pointer">
         <input
           id={id}
@@ -42,7 +46,7 @@ export function UploadButton({
                 upload(e.target.files[0], { metadata });
               }
             }
-            e.target.value = '';
+            e.target.value = "";
           }}
         />
       </label>
@@ -66,7 +70,7 @@ type UploadsButtonProps = {
   accept?: string;
   metadata?: Record<string, unknown>;
   uploadOverride?: (
-    ...args: Parameters<UploadHookControl<true>['upload']>
+    ...args: Parameters<UploadHookControl<true>["upload"]>
   ) => void;
   label?: string;
   is_disabled?: boolean;
@@ -85,7 +89,11 @@ export function UploadsButton({
   const id = useId();
 
   return (
-    <Button disabled={isPending || is_disabled} className="relative" type="button">
+    <Button
+      disabled={isPending || is_disabled}
+      className="relative"
+      type="button"
+    >
       <label htmlFor={id} className="absolute inset-0 cursor-pointer">
         <input
           multiple
@@ -101,7 +109,7 @@ export function UploadsButton({
                 upload(e.target.files, { metadata });
               }
             }
-            e.target.value = '';
+            e.target.value = "";
           }}
         />
       </label>

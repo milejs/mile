@@ -14,15 +14,15 @@ import {
   useImperativeHandle,
 } from "react";
 import {
+  DraftData,
+  DraftDataAction,
+  DraftDataState,
   FieldDefinition,
   MileEditor,
   MileSchema,
   NodeData,
   Operation,
   PageData,
-  PageMetaData,
-  RouterLike,
-  Schema,
   SchemaTypeDefinition,
   TreeData,
 } from "@milejs/types";
@@ -43,7 +43,6 @@ import {
   SquareArrowOutUpRight,
   TabletIcon,
   TrashIcon,
-  Upload,
 } from "lucide-react";
 import { invariant } from "@/lib/invariant";
 import { Preview } from "./preview";
@@ -69,9 +68,10 @@ import { Dialog } from "@base-ui-components/react/dialog";
 import { filesize } from "./utils";
 import { Field } from "@base-ui-components/react/field";
 import { Checkbox } from "@base-ui-components/react/checkbox";
-import slugify from "@sindresorhus/slugify";
-import { LocalPageData, ParentPageValue, SlugInput } from "./shared";
+import { SlugInput } from "./shared";
 import { Switch } from "@base-ui-components/react/switch";
+// upload
+import { useUploadFile } from "@better-upload/client";
 // editor
 import {
   BasicTextStyleButton,
@@ -96,8 +96,6 @@ import "@blocknote/core/fonts/inter.css"; // Include the included Inter font
 import {
   BlockNoteEditor,
   BlockNoteSchema,
-  combineByGroup,
-  createHeadingBlockSpec,
   defaultBlockSpecs,
   defaultInlineContentSpecs,
   defaultStyleSpecs,
@@ -123,7 +121,6 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { pointerOutsideOfPreview } from "@atlaskit/pragmatic-drag-and-drop/element/pointer-outside-of-preview";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-// import { reorder } from "@atlaskit/pragmatic-drag-and-drop/reorder";
 
 export { BlockNoteView, useCreateBlockNote };
 
@@ -163,101 +160,95 @@ export function Mile({
   }
 
   return (
-    <MileInner isEdit={isEdit} isIframeContent={isIframeContent} path={path} />
+    <MileInner
+      isEdit={isEdit}
+      isIframeContent={isIframeContent}
+      path={path}
+      search={search}
+    />
   );
 }
+
+const buildSearchParamsFetcherKey = (search: {
+  [key: string]: string | string[] | undefined;
+}) => {
+  // @ts-expect-error okk
+  const searchParams = new URLSearchParams(search);
+  return searchParams.toString();
+};
 
 function MileInner({
   isEdit,
   isIframeContent,
   path,
+  search,
 }: {
   isEdit: boolean;
   isIframeContent: boolean;
   path: string;
+  search: { [key: string]: string | string[] | undefined };
 }) {
-  let {
+  const key = buildSearchParamsFetcherKey(search);
+  const {
     data: page_data,
     error: pageError,
     isLoading: pageIsLoading,
-  } = useSWR([`/pages`, path], fetcher);
-  // console.log("MileInner", page_data, pageError, pageIsLoading);
+  } = useSWR(isEdit ? [`/pages`, path, `?`, key] : null, fetcher);
+  // console.log("path", path, isEdit, isIframeContent);
 
   if (pageError) return <div>failed to load</div>;
   if (pageIsLoading) return <div>loading...</div>;
-  if (!page_data) {
+  if (isEdit && !page_data) {
     return <div>no data</div>;
   }
-  /**
-   * {
-    "id": "2950199bae37fa6fb854bd7773fb7fc9",
-    "parent_id": null,
-    "slug": "/",
-    "name": "Home",
-    "title": "Home",
-    "content": "<Hero id=\"e5472bffdba8d51fe249b704b8e39b2a\" type=\"hero\" className=\"\" options={{title:\"Supreme Vascular and Inter\",image:{image_url:\"https://pub-47fe340e22e548e5a8ed17dd964ffa4a.r2.dev/mileupload/2024-drive-the-icons-monterey-car-week-tour-2.jpg\",alt_text:\"Side mirror\"},link:{url:\"/contact-us\",link_text:\"Book Appointment\",is_external:true}}} />",
-    "description": null,
-    "keywords": null,
-    "llm": null,
-    "no_index": null,
-    "no_follow": null,
-    "created_at": "2025-10-08T03:25:40.216Z",
-    "updated_at": "2025-10-08T06:36:29.395Z"
-}
-   */
 
-  return (
-    <MileReady
-      page_data={page_data}
-      isEdit={isEdit}
-      isIframeContent={isIframeContent}
-      path={path}
-    />
-  );
+  if (isIframeContent) {
+    return <Preview slug={path} />;
+  }
+
+  console.log("page_data", page_data);
+  return <MileReady page_data={page_data} path={path} />;
 }
+
+const initial_empty_tree = {
+  root: {
+    type: "root",
+    id: "root",
+    props: {},
+    options: {},
+    children: [],
+  },
+};
 
 function MileReady({
-  isEdit,
-  isIframeContent,
   path,
   page_data,
 }: {
-  isEdit: boolean;
-  isIframeContent: boolean;
   path: string;
-  page_data: PageData;
+  page_data: DraftData;
 }) {
-  // console.log({ isEdit, isIframeContent, path, page_data });
-  const tree = useMemo(() => {
+  const tree_data = useMemo(() => {
     if (page_data && page_data.content) {
       if (typeof page_data.content === "string") {
         const { result, error } = mdxToTree(page_data.content);
-        // console.log('result', result);
         return new Tree(result.content);
       } else {
         return new Tree(page_data.content ?? {});
       }
     }
-    return new Tree({
-      root: {
-        type: "root",
-        id: "root",
-        props: {},
-        options: {},
-        children: [],
-      },
-    });
+    return new Tree(initial_empty_tree);
   }, [page_data]);
-  const [data, setData] = useState<TreeData | undefined>(() => tree?.data);
+  const [data, setData] = useState<TreeData | undefined>(() => tree_data.data);
+  const [draft_data, updateDraftData] = useReducer(draftDataReducer, page_data);
   const [lastOperation, setLastOperation] = useState<Operation | null>(null);
   //
   const frameRef = useRef<IFrame | null>(null);
   const channelRef = useRef<ReturnType<typeof createChannel> | null>(null);
 
+  // Create channel for parent->iframe communication
   useEffect(() => {
     if (!frameRef.current) return;
     if (!frameRef.current.contentWindow) return;
-    // Create channel for parent->iframe communication
     const channel = createChannel(frameRef.current.contentWindow);
     channelRef.current = channel;
     return () => {
@@ -289,33 +280,25 @@ function MileReady({
   // console.log("MileReady render ---- data", data);
   // console.log('tree', tree);
 
-  if (isEdit) {
-    return (
-      <>
-        <EditorProvider
-          page_data={page_data}
-          tree={tree}
-          setData={setDataAndSend}
-          setLastOperation={setLastOperation}
-        >
-          <MileFrame
-            title={page_data?.title ?? "Title"}
-            data={data}
-            frameRef={frameRef}
-            channelRef={channelRef}
-            iframeSrc={`${process.env.NEXT_PUBLIC_HOST_URL}/mile${path}/__iframe_content__`}
-          />
-        </EditorProvider>
-        <Toaster />
-      </>
-    );
-  }
-
-  if (isIframeContent) {
-    return <Preview slug={path} />;
-  }
-
-  return null;
+  return (
+    <>
+      <EditorProvider
+        draft_data={draft_data}
+        updateDraftData={updateDraftData}
+        tree={tree_data}
+        setData={setDataAndSend}
+        setLastOperation={setLastOperation}
+      >
+        <MileFrame
+          data={data}
+          frameRef={frameRef}
+          channelRef={channelRef}
+          iframeSrc={`${process.env.NEXT_PUBLIC_HOST_URL}/mile${path}/__iframe_content__`}
+        />
+      </EditorProvider>
+      <Toaster />
+    </>
+  );
 }
 
 enum IframeActionType {
@@ -431,17 +414,33 @@ function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
+/**
+ * Draft Data Reducer
+ */
+
+function draftDataReducer(
+  state: DraftDataState,
+  action: DraftDataAction,
+): DraftDataState {
+  switch (action.type) {
+    case "UpdateField": {
+      return { ...state, [action.payload.key]: action.payload.value };
+    }
+    default: {
+      throw new Error(`Unhandled action type: ${action.type}`);
+    }
+  }
+}
+
 function MileFrame({
   data,
   iframeSrc,
   frameRef,
   channelRef,
-  title,
 }: {
   frameRef: React.RefObject<IFrame | null>;
   channelRef: React.RefObject<any | null>;
   data: TreeData | undefined;
-  title?: string;
   iframeSrc: string;
 }) {
   const editor = useEditor();
@@ -451,7 +450,7 @@ function MileFrame({
     initialIframeState,
   );
   const [state, dispatch] = useReducer(appReducer, initialAppState);
-  const editorRef = useRef<{
+  const markdownEditorRef = useRef<{
     getDocument: () => any;
     getMarkdown: () => string;
   } | null>(null);
@@ -510,32 +509,11 @@ function MileFrame({
     };
   }, [editor]);
 
-  function handleDoneClick() {
-    const md = editorRef.current?.getMarkdown();
-    if (state.activeNodeId && md) {
-      editor.mergeMarkdownData(state.activeNodeId, md);
-    }
-    dispatch({ type: AppActionType.DeselectNode });
-  }
-
-  function handleDiscardClick() {
-    dispatch({ type: AppActionType.DeselectNode });
-  }
-
-  function handleOpenChange(v: boolean) {
-    if (v) {
-      dispatch({ type: AppActionType.OpenMarkdownEditor });
-    } else {
-      dispatch({ type: AppActionType.CloseMarkdownEditor });
-    }
-  }
-
   // console.log("data", data);
 
   return (
     <div className="flex flex-col h-screen">
       <MileHeader
-        title={title}
         frameRef={frameRef}
         iframe_state={iframe_state}
         dispatch_iframe={dispatch_iframe}
@@ -551,7 +529,13 @@ function MileFrame({
       />
       <Dialog.Root
         open={state.isMarkdownEditorOpen}
-        onOpenChange={handleOpenChange}
+        onOpenChange={(v) => {
+          if (v) {
+            dispatch({ type: AppActionType.OpenMarkdownEditor });
+          } else {
+            dispatch({ type: AppActionType.CloseMarkdownEditor });
+          }
+        }}
         dismissible={false}
       >
         <Dialog.Portal>
@@ -561,7 +545,7 @@ function MileFrame({
               <Dialog.Title className="text-lg font-medium">Edit</Dialog.Title>
               <div className="flex flex-row items-center gap-x-2">
                 <Button
-                  onClick={handleDiscardClick}
+                  onClick={() => dispatch({ type: AppActionType.DeselectNode })}
                   className="px-3 py-1 rounded text-sm"
                   variant="secondary"
                   size="sm"
@@ -569,7 +553,13 @@ function MileFrame({
                   Discard
                 </Button>
                 <Button
-                  onClick={handleDoneClick}
+                  onClick={() => {
+                    const md = markdownEditorRef.current?.getMarkdown();
+                    if (state.activeNodeId && md) {
+                      editor.mergeMarkdownData(state.activeNodeId, md);
+                    }
+                    dispatch({ type: AppActionType.DeselectNode });
+                  }}
                   className="px-3 py-1 rounded text-sm"
                   size="sm"
                 >
@@ -578,10 +568,10 @@ function MileFrame({
               </div>
             </div>
             <div className="overflow-y-auto h-full pb-20">
-              {state.activeNodeId && (
+              {Boolean(state.activeNodeId) && state.isMarkdownEditorOpen && (
                 <OverlayTextEditor
                   key={state.activeNodeId}
-                  ref={editorRef}
+                  ref={markdownEditorRef}
                   activeNodeId={state.activeNodeId}
                   initialContent={buildInitialContentForActiveNode(
                     state.activeNodeId,
@@ -640,6 +630,7 @@ function OverlayTextEditor({
   useImperativeHandle(ref, () => {
     return {
       getDocument() {
+        // NOTE: not used
         return editor.document;
       },
       getMarkdown() {
@@ -1071,12 +1062,6 @@ type EditComponentProps = {
   field: FieldDefinition;
 };
 
-import {
-  useUploadFile,
-  useUploadFiles,
-  FileUploadInfo,
-} from "better-upload/client";
-
 function EditRichtextComponent({
   editor,
   node,
@@ -1119,7 +1104,7 @@ function EditRichtextComponent({
         console.error("Error getting image dimensions", e);
         return undefined;
       });
-      const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${result.file.objectKey}`;
+      const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${result.file.objectInfo.key}`;
 
       // save db
       mutate(`/medias`, async (prev: any) => {
@@ -1131,7 +1116,7 @@ function EditRichtextComponent({
               id: generateId(),
               type: result.file.type,
               size: result.file.size,
-              filepath: result.file.objectKey,
+              filepath: result.file.objectInfo.key,
               width: dims?.width,
               height: dims?.height,
             },
@@ -1340,12 +1325,15 @@ function EditImageUrlComponent({
         "name": "2024-Drive-The-Icons-Monterey-Car-Week-tour-13.jpg",
         "size": 114176,
         "type": "image/jpeg",
-        "objectKey": "mileupload/2024-drive-the-icons-monterey-car-week-tour-13-jpg",
+        "objectInfo": {
+            "key": "mileupload/2024-drive-the-icons-monterey-car-week-tour-1.jpg",
+            "metadata": {}
+        },
         "objectMetadata": {}
       },
       metadata: {}
      */
-    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectKey}`;
+    const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${upload.file.objectInfo.key}`;
     const path_alt_text = getAltTextPath(path);
     handleChange([
       { path, value: image_url },
@@ -1362,7 +1350,7 @@ function EditImageUrlComponent({
             id: generateId(),
             type: upload.file.type,
             size: upload.file.size,
-            filepath: upload.file.objectKey,
+            filepath: upload.file.objectInfo.key,
             width: upload.file.width,
             height: upload.file.height,
           },
@@ -1923,7 +1911,7 @@ function LayersInner({
 
         const closestEdgeOfTarget = extractClosestEdge(targetData);
 
-        editor.performAction({
+        editor.perform({
           type: "reorderNode",
           name: "Reorder Node",
           payload: {
@@ -2173,7 +2161,7 @@ function Layer({
       name: "Delete node",
       payload: { id: node.id },
     };
-    editor.performAction(action);
+    editor.perform(action);
   }
 
   return (
@@ -2392,12 +2380,10 @@ function getViewportWidthString() {
 }
 
 function MileHeader({
-  title,
   frameRef,
   iframe_state,
   dispatch_iframe,
 }: {
-  title?: string;
   frameRef: React.RefObject<IFrame | null>;
   iframe_state: IframeState;
   dispatch_iframe: React.ActionDispatch<[action: IframeAction]>;
@@ -2418,61 +2404,19 @@ function MileHeader({
         </a>
         <Divider />
         <button
-          onClick={() => {
-            editor.undo();
-          }}
+          onClick={() => editor.undo()}
           className="px-2 py-1.5 flex gap-1 text-xs bg-blue-100 text-blue-800 active:bg-blue-200"
         >
           Undo
         </button>
         <button
-          onClick={() => {
-            editor.redo();
-          }}
+          onClick={() => editor.redo()}
           className="px-2 py-1.5 flex gap-1 text-xs bg-blue-100 text-blue-800 active:bg-blue-200"
         >
           Redo
         </button>
         <Divider />
         <div className="flex gap-[1px] bg-white /p-2">
-          {/* <button
-            type="button"
-            className="mile-controls-item w-[26px]"
-            onClick={() => {
-              if (state.zoom === 1) {
-                const thisZoom = 0.5;
-                const iframeBodyHeight = getIframeBodyHeight(frameRef.current, thisZoom);
-                const iframeWidth = getViewportWidthString();
-                dispatch_iframe({
-                  type: IframeActionType.SetState,
-                  payload: {
-                    zoom: thisZoom,
-                    pt: HEADER_HEIGHT * 2,
-                    h: `${iframeBodyHeight}px`,
-                    w: iframeWidth,
-                    breakpoint: "desktop",
-                  },
-                });
-                sendMessage({ type: "mile-zoom-changed", payload: thisZoom }, frameRef);
-              } else {
-                const iframeWidth = getViewportWidthString();
-                const iframeBodyHeight = getIframeBodyHeight(frameRef.current, 1);
-                dispatch_iframe({
-                  type: IframeActionType.SetState,
-                  payload: {
-                    zoom: 1,
-                    pt: HEADER_HEIGHT,
-                    h: `${iframeBodyHeight}px`,
-                    w: iframeWidth,
-                    breakpoint: "desktop",
-                  },
-                });
-                sendMessage({ type: "mile-zoom-changed", payload: 1 }, frameRef);
-              }
-            }}
-          >
-            {state.zoom === 1 ? <ZoomOutIcon width={20} height={20} /> : <ZoomInIcon width={20} height={20} />}
-          </button> */}
           <button
             type="button"
             className={`mile-controls-item w-[26px] ${iframe_state.breakpoint === "desktop" ? "bg-indigo-100" : ""}`}
@@ -2541,7 +2485,7 @@ function MileHeader({
           </button>
         </div>
       </div>
-      <MileHeaderPageSettings title={title} />
+      <MileHeaderPageSettings />
       <div className="mile-headRight">
         <a
           type="button"
@@ -2562,13 +2506,14 @@ function MileHeader({
   );
 }
 
-function MileHeaderPageSettings({ title }: { title?: string }) {
-  const [localTitle, setLocalTitle] = useState(title);
+function MileHeaderPageSettings() {
+  const editor = useEditor();
   const [isOpen, setIsOpen] = useState(false);
+  console.log("editor.draft_data", editor.draft_data);
 
   return (
     <div className="mile-headCenter">
-      <div className="text-sm">{localTitle ?? "Untitled"}</div>
+      <div className="text-sm">{editor.draft_data.title ?? "Untitled"}</div>
       <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
         <Dialog.Trigger
           render={() => (
@@ -2589,12 +2534,7 @@ function MileHeaderPageSettings({ title }: { title?: string }) {
               Edit Page Data
             </Dialog.Title>
             <div className="overflow-y-auto h-full">
-              <PageSettings
-                close={() => {
-                  setIsOpen(false);
-                }}
-                setLocalTitle={setLocalTitle}
-              />
+              <PageSettings close={() => setIsOpen(false)} />
             </div>
           </Dialog.Popup>
         </Dialog.Portal>
@@ -2603,251 +2543,25 @@ function MileHeaderPageSettings({ title }: { title?: string }) {
   );
 }
 
-function getParentValue(parent?: PageData) {
-  if (!parent) return undefined;
-  return {
-    id: parent.id,
-    value: parent.slug,
-    label: parent.title ?? "Untitled",
-  };
-}
-function getOwnSlug(page_slug: string, parent: ParentPageValue | undefined) {
-  if (parent) {
-    if (page_slug.startsWith(parent?.value)) {
-      return page_slug.slice(parent.value.length);
-    } else {
-      return page_slug;
-    }
-  } else {
-    return page_slug;
-  }
-}
-
-function PageSettings({ close, setLocalTitle }: any) {
+function PageSettings({ close }: { close: () => void }) {
   const editor = useEditor();
-  const {
-    data: parent_page,
-    error: parentError,
-    isLoading: parentIsLoading,
-  } = useSWR(
-    editor.page_data.parent_id ? [`/pages/`, editor.page_data.parent_id] : null,
+  const parent = useSWR(
+    editor.draft_data.parent_id
+      ? [`/pages/`, editor.draft_data.parent_id, "?preview=true"]
+      : null,
     fetcher,
   );
-  if (parentIsLoading) return <div>loading...</div>;
-  if (parentError) return <div>error loading parent page data</div>;
-  // if (!parent_page) return <div>no parent page data</div>
+  console.log("parent", parent);
 
-  return (
-    <PageSettingsReady
-      parent_page={parent_page}
-      close={close}
-      setLocalTitle={setLocalTitle}
-    />
-  );
+  return <PageSettingsReady parent={parent} close={close} />;
 }
 
-function savePage(id: string, data: { [k: string]: any }) {
-  return mutate(
-    ["/pages/", id],
-    async () => {
-      // const resp = await fetch(`${API}/pages`, {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify(data),
-      // });
-      const resp = await fetch(`${API}/pages/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!resp.ok) {
-        const error = new Error("An error occurred while creating the page.");
-        const info = await resp.json();
-        console.error("Error creating page", info);
-        // @ts-expect-error okk
-        error.info = info;
-        // @ts-expect-error okk
-        error.status = resp.status;
-        throw error;
-      }
-      const result = await resp.json();
-      return result;
-    },
-    // { revalidate: false },
-  );
-}
-
-function buildLocalPageData(
-  page_data: PageData,
-  parent_page?: PageData,
-): LocalPageData {
-  console.log("page_data", page_data);
-
-  const { slug, ...rest } = page_data;
-
-  function convertNullToEmptyString(obj: any) {
-    return Object.keys(obj).reduce((acc, key) => {
-      if (["description", "keywords", "llm", "title"].includes(key)) {
-        // @ts-expect-error okk
-        acc[key] = obj[key] === null ? "" : obj[key];
-      } else {
-        // @ts-expect-error okk
-        acc[key] = obj[key];
-      }
-      return acc;
-    }, {});
-  }
-
-  const parent_value = page_data.parent_id
-    ? getParentValue(parent_page)
-    : undefined;
-  const own_slug = getOwnSlug(page_data.slug, parent_value);
-
-  return {
-    ...(convertNullToEmptyString(rest) as Omit<PageData, "slug">),
-    own_slug,
-    parent: parent_value,
-  };
-}
-
-function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
+function PageSettingsReady({ parent, close }: any) {
   const editor = useEditor();
-  const [pageData, setPageData] = useState<LocalPageData>(() =>
-    buildLocalPageData(editor.page_data, parent_page),
-  );
   const [error, setError] = useState<string | null>(null);
-  // console.log("pageData", pageData);
-
-  function handleTitleChange(event: any) {
-    const value = event.target.value;
-    setLocalTitle(value);
-    setPageData((e) => {
-      return { ...e, title: value };
-    });
-  }
-  function handleTypeChange(event: any) {
-    const value = event.target.value;
-    setPageData((e) => {
-      return { ...e, type: value };
-    });
-  }
-
-  function handleOwnSlugChange(event: any) {
-    setPageData((e) => {
-      return { ...e, own_slug: event.target.value };
-    });
-  }
-
-  function handleParentSlugChange(v?: ParentPageValue | null) {
-    setPageData((e) => {
-      return { ...e, parent: v };
-    });
-  }
-
-  function handleContentChange(v: string) {
-    setPageData((e) => {
-      return { ...e, content: v };
-    });
-  }
-
-  function handleKeywordsChange(v: string) {
-    setPageData((e) => {
-      return { ...e, keywords: v };
-    });
-  }
-
-  function handleMetaDescriptionChange(v: string) {
-    setPageData((e) => {
-      return { ...e, description: v };
-    });
-  }
-
-  function handleOgImageIdChange(v: string) {
-    // support 1 image for now
-    setPageData((e) => {
-      return { ...e, og_image_ids: [v] };
-    });
-  }
-
-  function handleNoIndexChange(v: boolean) {
-    setPageData((e) => {
-      return { ...e, no_index: v === true ? 1 : 0 };
-    });
-  }
-
-  function handleAutoSlug() {
-    setPageData((e) => {
-      if (!e.title) {
-        return e;
-      }
-      return { ...e, own_slug: `/${slugify(e.title)}` };
-    });
-  }
-
-  async function handleSavePage() {
-    // const pageId = generateId();
-    // validate
-    if (pageData.title === "") {
-      setError("Title is required.");
-      return;
-    }
-    if (pageData.own_slug === "") {
-      setError("Slug is required.");
-      return;
-    }
-    if (pageData.own_slug !== "/" && pageData.own_slug.at(0) !== "/") {
-      setError("Slug must start with slash e.g. /good-slug");
-      return;
-    }
-    if (pageData.own_slug !== "/" && pageData.own_slug.slice(-1) === "/") {
-      setError("Slug cannot end with slash e.g. /bad-slug/");
-      return;
-    }
-    setError(null);
-    function buildPageSlug(data: LocalPageData) {
-      return data.parent
-        ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}`
-        : data.own_slug;
-    }
-    function buildPageParentId(data: LocalPageData) {
-      if (data.parent) {
-        if (data.parent.value === "/" || data.parent.value === "") {
-          return undefined;
-        }
-        return data.parent.id;
-      }
-      return undefined;
-    }
-    const payload = {
-      // id: pageId,
-      title: pageData.title?.trim(),
-      slug: buildPageSlug(pageData),
-      parent_id: buildPageParentId(pageData),
-      content: pageData.content as string,
-      description: pageData.description,
-      keywords: pageData.keywords,
-      og_image_ids: pageData.og_image_ids,
-      no_index: pageData.no_index,
-      // llm
-      // no_follow
-    };
-    console.log("payload", payload);
-    await savePage(editor.page_data.id, payload)
-      .then((e) => {
-        console.log("e", e);
-        close();
-        window.location.reload();
-      })
-      .catch((e) => {
-        let message = e.info?.message
-          ? `${e.message} ${e.info.message}`
-          : e.message;
-        setError(message);
-      });
-  }
 
   return (
-    <div className="flex flex-col py-8 /h-full">
+    <div className="flex flex-col py-8">
       <div className="space-y-4">
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
@@ -2856,48 +2570,64 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
             </label>
             <Input
               id="title"
-              value={pageData.title}
-              onChange={handleTitleChange}
+              value={editor.draft_data.title}
+              onChange={(e) => {
+                const value = e.target.value;
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "title", value: value },
+                });
+              }}
               placeholder="e.g. About us"
             />
             <div className="mt-1 text-xs text-zinc-600">
               Title of the page displayed on the browser
             </div>
           </div>
+
           <div className="w-full">
             <label htmlFor="type" className="font-semibold text-sm">
               Type
             </label>
             <Input
               id="type"
-              value={pageData.type}
-              onChange={handleTypeChange}
+              value={editor.draft_data.type}
+              onChange={(e) => {
+                const value = e.target.value;
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "type", value },
+                });
+              }}
               placeholder="e.g. page or post"
             />
             <div className="mt-1 text-xs text-zinc-600">"page" or "post"</div>
           </div>
         </div>
+
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full relative">
             <SlugInput
-              pageData={pageData}
-              handleParentSlugChange={handleParentSlugChange}
-              handleOwnSlugChange={handleOwnSlugChange}
-              hideCurrentPageInParentPicker={true}
+              value={editor.draft_data.slug}
+              onChange={(v) => {
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "slug", value: v },
+                });
+              }}
+              title={editor.draft_data.title}
+              parentId={editor.draft_data.parent_id}
+              parentTitle={parent?.data?.title}
+              onParentChange={(parent_id: string | null) => {
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "parent_id", value: parent_id },
+                });
+              }}
             />
-            <div className="absolute right-0 -top-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  handleAutoSlug();
-                }}
-                className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
-              >
-                Auto
-              </button>
-            </div>
           </div>
         </div>
+
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
             <label htmlFor="metadescription" className="font-semibold text-sm">
@@ -2905,28 +2635,44 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
             </label>
             <Field.Control
               id="metadescription"
-              value={pageData.description}
-              onValueChange={handleMetaDescriptionChange}
+              value={
+                editor.draft_data.description == null
+                  ? ""
+                  : editor.draft_data.description
+              }
+              onValueChange={(value) => {
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "description", value },
+                });
+              }}
               render={<textarea rows={4} className={textareaClasses} />}
             />
           </div>
         </div>
+
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
             <label className="font-semibold text-sm">Open graph Image</label>
             <PageOpenGraphImage
               image_id={
-                pageData.og_image_ids.length > 0
-                  ? pageData.og_image_ids[0]
+                editor.draft_data.og_image_ids.length > 0
+                  ? editor.draft_data.og_image_ids[0]
                   : undefined
               }
-              onImageIdChange={handleOgImageIdChange}
+              onImageIdChange={(v) => {
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "og_image_ids", value: [v] },
+                });
+              }}
             />
             <div className="mt-1 text-xs text-zinc-600">
               Used in social media preview
             </div>
           </div>
         </div>
+
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
             <label htmlFor="keywords" className="font-semibold text-sm">
@@ -2934,8 +2680,17 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
             </label>
             <Field.Control
               id="keywords"
-              value={pageData.keywords}
-              onValueChange={handleKeywordsChange}
+              value={
+                editor.draft_data.keywords == null
+                  ? ""
+                  : editor.draft_data.keywords
+              }
+              onValueChange={(value) => {
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "keywords", value },
+                });
+              }}
               render={<textarea rows={4} className={textareaClasses} />}
             />
             <div className="mt-1 text-xs text-zinc-600">
@@ -2943,6 +2698,7 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
             </div>
           </div>
         </div>
+
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
             <label htmlFor="content" className="font-semibold text-sm">
@@ -2950,26 +2706,37 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
             </label>
             <Field.Control
               id="content"
-              value={pageData.content as string}
-              onValueChange={handleContentChange}
+              value={editor.draft_data.content as string}
+              onValueChange={(value) => {
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "content", value },
+                });
+              }}
               render={<textarea rows={4} className={textareaClasses} />}
             />
           </div>
         </div>
+
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
             <label className="font-semibold text-sm flex flex-row items-center gap-x-2">
               Do not index page
               <Switch.Root
-                checked={Boolean(pageData.no_index)}
-                onCheckedChange={handleNoIndexChange}
+                checked={Boolean(editor.draft_data.no_index)}
+                onCheckedChange={(v) => {
+                  editor.updateDraftData({
+                    type: "UpdateField",
+                    payload: { key: "no_index", value: v === true ? 1 : 0 },
+                  });
+                }}
                 className="relative flex h-6 w-10 rounded-full bg-gradient-to-r from-gray-700 from-35% to-gray-200 to-65% bg-[length:6.5rem_100%] bg-[100%_0%] bg-no-repeat p-px shadow-[inset_0_1.5px_2px] shadow-gray-200 outline outline-1 -outline-offset-1 outline-gray-200 transition-[background-position,box-shadow] duration-[125ms] ease-[cubic-bezier(0.26,0.75,0.38,0.45)] before:absolute before:rounded-full before:outline-offset-2 before:outline-blue-800 focus-visible:before:inset-0 focus-visible:before:outline focus-visible:before:outline-2 active:bg-gray-100 data-[checked]:bg-[0%_0%] data-[checked]:active:bg-gray-500 dark:from-gray-500 dark:shadow-black/75 dark:outline-white/15 dark:data-[checked]:shadow-none"
               >
                 <Switch.Thumb className="aspect-square h-full rounded-full bg-white shadow-[0_0_1px_1px,0_1px_1px,1px_2px_4px_-1px] shadow-gray-100 transition-transform duration-150 data-[checked]:translate-x-4 dark:shadow-black/25" />
               </Switch.Root>
             </label>
             <div className="mt-1 text-xs text-zinc-600">
-              {Boolean(pageData.no_index) ? (
+              {Boolean(editor.draft_data.no_index) ? (
                 <div className="text-red-700 flex flex-row items-center gap-x-1">
                   <CircleXIcon size={12} />
                   This page will not be indexed by search engines.
@@ -2988,12 +2755,12 @@ function PageSettingsReady({ parent_page, close, setLocalTitle }: any) {
         {error ? (
           <div className="mb-2 text-xs text-red-600">{error}</div>
         ) : null}
-        <Button
+        {/*<Button
           onClick={handleSavePage}
           className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
         >
           Save
-        </Button>
+        </Button>*/}
       </div>
     </div>
   );
@@ -3033,7 +2800,7 @@ function PageOpenGraphImage({
             id: generateId(),
             type: upload.file.type,
             size: upload.file.size,
-            filepath: upload.file.objectKey,
+            filepath: upload.file.objectInfo.key,
             width: upload.file.width,
             height: upload.file.height,
           },
@@ -3093,6 +2860,8 @@ function Divider() {
 
 // Save db after multiple uploads completed
 function handleUploadsSuccess(upload: any) {
+  console.log("handleUploadsSuccess", upload);
+
   // save db
   const payload = upload.files.map((e: any) => {
     return {
@@ -3101,7 +2870,7 @@ function handleUploadsSuccess(upload: any) {
       size: e.size,
       width: e.width,
       height: e.height,
-      filepath: e.objectKey,
+      filepath: e.objectInfo.key,
     };
   });
   mutate(`/medias`, async (prev: any) => {

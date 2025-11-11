@@ -4,7 +4,7 @@ import {
   useUploadFile,
   useUploadFiles,
   FileUploadInfo,
-} from "better-upload/client";
+} from "@better-upload/client";
 import { toast } from "sonner";
 import { UploadButton, UploadsButton } from "./upload-button";
 

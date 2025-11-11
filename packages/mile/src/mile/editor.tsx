@@ -11,7 +11,6 @@ import {
   MileHistoryManager,
   MilePersister,
   Operation,
-  PageMetaData,
   Schema,
   SchemaTypeDefinition,
   SetData,
@@ -22,6 +21,9 @@ import {
   Components,
   PageData,
   MileSchema,
+  DraftData,
+  DraftDataAction,
+  UpdateDraftData,
 } from "@milejs/types";
 import { Tree } from "./tree";
 import { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/types/types";
@@ -45,20 +47,29 @@ type EditorProviderProps = {
   tree: Tree;
   setData: SetData;
   setLastOperation: SetOperation;
-  page_data: PageData;
+  draft_data: DraftData;
+  updateDraftData: UpdateDraftData;
 };
 export function EditorProvider({
-  page_data,
+  draft_data,
   children,
   tree,
   setData,
   setLastOperation,
+  updateDraftData,
 }: EditorProviderProps) {
   const mile = useMileProvider();
   invariant(mile);
   const editor = useMemo(() => {
-    return new Editor(mile, tree, page_data, setData, setLastOperation);
-  }, [mile, page_data, tree, setData, setLastOperation]);
+    return new Editor(
+      mile,
+      tree,
+      setData,
+      setLastOperation,
+      draft_data,
+      updateDraftData,
+    );
+  }, [mile, draft_data, tree, setData, setLastOperation, updateDraftData]);
   return <EditorContext value={editor}>{children}</EditorContext>;
 }
 
@@ -303,18 +314,14 @@ function initializeActions(actions: Actions, userActions?: Actions): Actions {
   return { ...actions, ...userActions };
 }
 
-function initializeSchema(schema: Schema, userSchema?: Schema): Schema {
-  if (!userSchema) return schema;
-  return [...schema, ...userSchema];
-}
-
 export class Editor implements MileEditor {
   activeNodeId: string | null;
   mile: MileClient;
   config: Config;
   tree: Tree;
-  // stores page_data that has page metadata (page content is in here but we manage it through editor's tree instead)
-  page_data: PageData;
+  // stores draft_data that has page metadata (page content is in here but we manage it through editor's tree instead)
+  draft_data: DraftData;
+  updateDraftData: UpdateDraftData;
   setData: SetData;
   setLastOperation: SetOperation;
   history: HistoryManager = new HistoryManager();
@@ -329,17 +336,19 @@ export class Editor implements MileEditor {
   constructor(
     mile: MileClient,
     tree: Tree,
-    page_data: PageData,
     setData: SetData,
     setLastOperation: SetOperation,
+    draft_data: DraftData,
+    updateDraftData: UpdateDraftData,
   ) {
     this.activeNodeId = null;
     this.is_disabled = false;
     this.mile = mile;
     this.config = mile.config;
     this.tree = tree;
-    this.page_data = page_data;
     this.setData = setData;
+    this.draft_data = draft_data;
+    this.updateDraftData = updateDraftData;
     this.setLastOperation = setLastOperation;
     this.actions = initializeActions(actions, mile.config.actions);
     // this.schema = new EditorSchema(initializeSchema(schema, mile.config.schema));
@@ -454,8 +463,7 @@ export class Editor implements MileEditor {
     this.forceReRender();
     try {
       const result = await this.persister.save(
-        this.page_data.id,
-        this.page_data,
+        this.draft_data,
         this.tree.data,
         this.mile.registry.components,
       );
@@ -854,13 +862,8 @@ class Persister implements MilePersister {
     this.editor = editor;
   }
 
-  async save(
-    id: string,
-    page_data: PageData,
-    content: TreeData,
-    components: Components,
-  ) {
-    console.log("save", page_data, content);
+  async save(draft_data: DraftData, content: TreeData, components: Components) {
+    console.log("save", draft_data, content);
 
     // convert json to mdx string
     let mdxstring = "";
@@ -874,12 +877,12 @@ class Persister implements MilePersister {
     console.log("mdxstring", mdxstring);
 
     return mutate(
-      [`/pages`, `/${id}`],
+      [`/pages`, `/${draft_data.page_id}`],
       async () => {
-        const resp = await fetch(`${API}/pages/${id}`, {
+        const resp = await fetch(`${API}/pages/${draft_data.page_id}/draft`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...page_data, content: mdxstring }),
+          body: JSON.stringify({ ...draft_data, content: mdxstring }),
         });
         if (!resp.ok) {
           const error = new Error("An error occurred while saving the page.");

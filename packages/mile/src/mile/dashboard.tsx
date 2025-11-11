@@ -1,31 +1,12 @@
 // import useSWR, { mutate } from "swr";
-import { Config, PageData, PageMetaData } from "@milejs/types";
-import {
-  ReactNode,
-  Suspense,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import slugify from "@sindresorhus/slugify";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  CheckIcon,
-  ChevronsUpDownIcon,
-  Circle,
-  EqualIcon,
-  PlusIcon,
-  SearchIcon,
-  XIcon,
-} from "lucide-react";
+import { ReactNode, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { EqualIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
 import { Dialog } from "@base-ui-components/react/dialog";
 import { generateId } from "@/lib/generate-id";
 import { Input } from "@/components/ui/input";
-import { getAuth } from "./auth";
+// import { getAuth } from "./auth";
 import useSWR, { mutate } from "swr";
-
 import { Field } from "@base-ui-components/react/field";
 import { Form } from "@base-ui-components/react/form";
 import { cn } from "@/lib/utils";
@@ -38,12 +19,7 @@ import {
 } from "@/components/ui/drawer";
 import { filesize } from "./utils";
 import { Uploaders } from "@/components/ui/uploader";
-import {
-  LocalPageData,
-  ParentPageValue,
-  ParentPicker,
-  SlugInput,
-} from "./shared";
+import { SlugInput } from "./shared";
 import {
   Pagination,
   PaginationContent,
@@ -53,6 +29,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { PageData } from "@milejs/types";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
@@ -67,7 +44,7 @@ export function Dashboard({
   path: string;
   search: { [key: string]: string | string[] | undefined };
 }) {
-  console.log("path", path);
+  // console.log("path", path);
   if (path === "/") {
     return (
       <AppShell path={path}>
@@ -108,7 +85,7 @@ function handleUploadsSuccess(upload: any) {
       id: generateId(),
       type: e.type,
       size: e.size,
-      filepath: e.objectKey,
+      filepath: e.objectInfo.key,
     };
   });
   mutate(`/medias`, async (prev: any) => {
@@ -201,7 +178,7 @@ function MediaFiles({
   const { data, error, isLoading } = useMediaFiles();
   if (error || data?.error) return <div>failed to load</div>;
   if (isLoading) return <div>loading...</div>;
-  console.log("data", data);
+  // console.log("data", data);
   return (
     <div className="">
       <MediaFilesGrid
@@ -832,8 +809,12 @@ function PagesList({ data }: { data: any }) {
   );
 }
 
+function isHomeSlug(data: any): boolean {
+  return data.slug === "" && data.parent_id == null;
+}
+
 function PageItem({ data }: { data: any }) {
-  const href = `/mile/${data.id}/edit`;
+  const href = `/mile/${data.id}/edit?preview=true`;
 
   return (
     <div className="py-1.5 flex flex-row">
@@ -844,7 +825,7 @@ function PageItem({ data }: { data: any }) {
               {data.title ?? "No title"}
             </div>
             <div className="text-xs text-zinc-500">
-              <code className="">{data.slug}</code>
+              <code className="">{isHomeSlug(data) ? "/" : data.slug}</code>
             </div>
           </a>
         </div>
@@ -916,59 +897,55 @@ function createPage(data: { [k: string]: any }) {
         throw error;
       }
       const result = await resp.json();
-      return [...pages, result];
+      // console.log("POST CREATE", pages, result);
+
+      return [...(pages ? pages.data : []), result];
     },
     // { revalidate: false },
   );
 }
 
-function buildParentItems(parents: any[]): ParentPageValue[] {
-  return parents.map((e) => {
-    return {
-      id: e.id,
-      value: e.slug,
-      label: e.title,
-    };
-  });
-}
-
 function NewPageSettings({ close }: any) {
-  const [pageData, setPageData] = useState<LocalPageData>({
+  const [pageData, setPageData] = useState<PageData>({
     id: "_notused_",
     title: "",
     type: "page",
-    own_slug: "/",
+    slug: "",
     content: "",
     description: "",
-    parent: {
-      id: "",
-      value: "",
-      label: "",
-    },
     parent_id: null,
+    og_image_ids: [],
+    og_images: [],
   });
   const [error, setError] = useState<string | null>(null);
+  const parent = useSWR(
+    pageData.parent_id
+      ? [`/pages/`, pageData.parent_id, "?preview=true"]
+      : null,
+    fetcher,
+  );
 
   function handleTitleChange(event: any) {
     setPageData((e) => {
       return { ...e, title: event.target.value };
     });
   }
+
   function handleTypeChange(event: any) {
     setPageData((e) => {
       return { ...e, type: event.target.value };
     });
   }
 
-  function handleOwnSlugChange(event: any) {
+  function handleSlugChange(v: string) {
     setPageData((e) => {
-      return { ...e, own_slug: event.target.value };
+      return { ...e, slug: v };
     });
   }
 
-  function handleParentSlugChange(v?: ParentPageValue | null) {
+  function handleParentIdChange(parent_id: string | null) {
     setPageData((e) => {
-      return { ...e, parent: v };
+      return { ...e, parent_id };
     });
   }
 
@@ -978,55 +955,32 @@ function NewPageSettings({ close }: any) {
     });
   }
 
-  function handleAutoSlug() {
-    setPageData((e) => {
-      if (!e.title) {
-        return e;
-      }
-      return { ...e, own_slug: `/${slugify(e.title)}` };
-    });
-  }
-
   async function handleCreatePage() {
-    const pageId = generateId();
     // validate
     if (pageData.title === "") {
       setError("Title is required.");
       return;
     }
-    if (pageData.own_slug === "") {
-      setError("Slug is required.");
+    // if (pageData.own_slug === "") {
+    //   setError("Slug is required.");
+    //   return;
+    // }
+    if (pageData.slug !== "" && pageData.slug.at(0) === "/") {
+      setError("Slug cannot start with slash e.g. /good-slug ");
       return;
     }
-    if (pageData.own_slug !== "/" && pageData.own_slug.at(0) !== "/") {
-      setError("Slug must start with slash e.g. /good-slug");
-      return;
-    }
-    if (pageData.own_slug !== "/" && pageData.own_slug.slice(-1) === "/") {
-      setError("Slug cannot end with slash e.g. /bad-slug/");
+    if (pageData.slug !== "" && pageData.slug.slice(-1) === "/") {
+      setError("Slug cannot end with slash e.g. bad-slug/");
       return;
     }
     setError(null);
-    function buildPageSlug(data: LocalPageData) {
-      return data.parent
-        ? `${data.parent.value === "/" ? "" : data.parent.value}${data.own_slug}`
-        : data.own_slug;
-    }
-    function buildPageParentId(data: LocalPageData) {
-      if (data.parent) {
-        if (data.parent.value === "/" || data.parent.value === "") {
-          return undefined;
-        }
-        return data.parent.id;
-      }
-      return undefined;
-    }
+
     const payload = {
-      id: pageId,
+      id: generateId(),
       title: pageData.title?.trim(),
       type: pageData.type?.trim(),
-      slug: buildPageSlug(pageData),
-      parent_id: buildPageParentId(pageData),
+      slug: pageData.slug,
+      parent_id: pageData.parent_id,
       content: pageData.content,
       description: pageData.description,
       // description
@@ -1035,13 +989,13 @@ function NewPageSettings({ close }: any) {
       // no_index
       // no_follow
     };
-    console.log("payload", pageData, payload);
+    // console.log("payload", pageData, payload);
     await createPage(payload)
       .then((e) => {
-        console.log("e", e);
+        // console.log("e", e);
         if (e) {
           const last = e[e.length - 1];
-          window.location.assign(`/mile/${last.id}/edit`);
+          window.location.assign(`/mile/${last.id}/edit?preview=true`);
         }
         // close();
       })
@@ -1085,21 +1039,13 @@ function NewPageSettings({ close }: any) {
           </div>
           <div className="w-full relative">
             <SlugInput
-              pageData={pageData}
-              handleParentSlugChange={handleParentSlugChange}
-              handleOwnSlugChange={handleOwnSlugChange}
+              value={pageData.slug}
+              onChange={handleSlugChange}
+              title={pageData.title}
+              parentId={pageData.parent_id}
+              parentTitle={parent?.data?.title}
+              onParentChange={handleParentIdChange}
             />
-            <div className="absolute right-0 -top-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  handleAutoSlug();
-                }}
-                className="text-xs leading-none px-2 py-1 bg-zinc-100 border border-zinc-200 hover:bg-zinc-200/70 text-zinc-600 hover:text-zinc-900 rounded"
-              >
-                Auto
-              </button>
-            </div>
           </div>
           <div className="w-full">
             <label htmlFor="metadescription" className="font-semibold text-sm">
@@ -1133,206 +1079,206 @@ function NewPageSettings({ close }: any) {
  * AuthWrapper renders nothing unless user has a valid auth
  * @returns
  */
-function PageWrapper(props: {
-  config: Config;
-  children: ReactNode;
-  path: string;
-  search: { [key: string]: string | string[] | undefined };
-}) {
-  console.log("path=====", props.path, props.search);
-  if (props.path === "/setup") {
-    return <MileGithubSetup config={props.config} />;
-  }
-  if (props.path === "/created-github-app") {
-    return <CreatedGitHubApp config={props.config} search={props.search} />;
-  }
-  return <AuthWrapper config={props.config}>{props.children}</AuthWrapper>;
-}
+// function PageWrapper(props: {
+//   config: Config;
+//   children: ReactNode;
+//   path: string;
+//   search: { [key: string]: string | string[] | undefined };
+// }) {
+//   console.log("path=====", props.path, props.search);
+//   if (props.path === "/setup") {
+//     return <MileGithubSetup config={props.config} />;
+//   }
+//   if (props.path === "/created-github-app") {
+//     return <CreatedGitHubApp config={props.config} search={props.search} />;
+//   }
+//   return <AuthWrapper config={props.config}>{props.children}</AuthWrapper>;
+// }
 
-function CreatedGitHubApp({
-  config,
-  search,
-}: {
-  config: Config;
-  search: { [key: string]: string | string[] | undefined };
-}) {
-  return (
-    <div className="py-24 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold">You've installed Mile! 🎉</h1>
-      <div className="mt-4">
-        To start using Mile, you need to install the GitHub app you've created.
-      </div>
+// function CreatedGitHubApp({
+//   config,
+//   search,
+// }: {
+//   config: Config;
+//   search: { [key: string]: string | string[] | undefined };
+// }) {
+//   return (
+//     <div className="py-24 max-w-2xl mx-auto">
+//       <h1 className="text-2xl font-bold">You've installed Mile! 🎉</h1>
+//       <div className="mt-4">
+//         To start using Mile, you need to install the GitHub app you've created.
+//       </div>
 
-      <div className="mt-3 space-y-2">
-        <div className="">
-          Make sure to add the App to the <code>{config.storage.repo}</code>{" "}
-          repository.
-        </div>
-        <InstallGitHubApp config={config} search={search} />
-      </div>
-    </div>
-  );
-}
+//       <div className="mt-3 space-y-2">
+//         <div className="">
+//           Make sure to add the App to the <code>{config.storage.repo}</code>{" "}
+//           repository.
+//         </div>
+//         <InstallGitHubApp config={config} search={search} />
+//       </div>
+//     </div>
+//   );
+// }
 
-function InstallGitHubApp({
-  config,
-  search,
-}: {
-  config: Config;
-  search: { [key: string]: string | string[] | undefined };
-}) {
-  return (
-    <div className="">
-      <a
-        href={`https://github.com/apps/${search.slug}/installations/new`}
-        className={`${buttonVariants()}`}
-      >
-        Install GitHub App
-      </a>
-    </div>
-  );
-}
+// function InstallGitHubApp({
+//   config,
+//   search,
+// }: {
+//   config: Config;
+//   search: { [key: string]: string | string[] | undefined };
+// }) {
+//   return (
+//     <div className="">
+//       <a
+//         href={`https://github.com/apps/${search.slug}/installations/new`}
+//         className={`${buttonVariants()}`}
+//       >
+//         Install GitHub App
+//       </a>
+//     </div>
+//   );
+// }
 
-function MileGithubSetup({ config }: { config: Config }) {
-  const [deployedURL, setDeployedURL] = useState("");
-  const [organization, setOrganization] = useState("");
+// function MileGithubSetup({ config }: { config: Config }) {
+//   const [deployedURL, setDeployedURL] = useState("");
+//   const [organization, setOrganization] = useState("");
 
-  return (
-    <div className="py-24 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold">Mile GitHub Setup</h1>
-      <div className="">Create GitHub App</div>
-      <form
-        action={`https://github.com${organization ? `/organizations/${organization}` : ""}/settings/apps/new`}
-        method="post"
-        className="mt-8 space-y-4"
-      >
-        <div className="">
-          <label className="block font-medium mb-1" htmlFor="deployedURL">
-            Deployed App URL
-          </label>
-          <Input
-            id="deployedURL"
-            value={deployedURL}
-            onChange={(e) => setDeployedURL(e.target.value)}
-          />
-          <div className="text-xs">
-            This should the root of your domain. If you're not sure where Mile
-            will be deployed, leave this blank and you can update the GitHub app
-            later.
-          </div>
-        </div>
+//   return (
+//     <div className="py-24 max-w-2xl mx-auto">
+//       <h1 className="text-2xl font-bold">Mile GitHub Setup</h1>
+//       <div className="">Create GitHub App</div>
+//       <form
+//         action={`https://github.com${organization ? `/organizations/${organization}` : ""}/settings/apps/new`}
+//         method="post"
+//         className="mt-8 space-y-4"
+//       >
+//         <div className="">
+//           <label className="block font-medium mb-1" htmlFor="deployedURL">
+//             Deployed App URL
+//           </label>
+//           <Input
+//             id="deployedURL"
+//             value={deployedURL}
+//             onChange={(e) => setDeployedURL(e.target.value)}
+//           />
+//           <div className="text-xs">
+//             This should the root of your domain. If you're not sure where Mile
+//             will be deployed, leave this blank and you can update the GitHub app
+//             later.
+//           </div>
+//         </div>
 
-        <div className="">
-          <label className="block font-medium mb-1" htmlFor="organization">
-            GitHub organization (if any)
-          </label>
-          <Input
-            id="organization"
-            value={organization}
-            onChange={(e) => setOrganization(e.target.value)}
-          />
-          <div className="text-xs">
-            You must be an owner or GitHub App manager in the organization to
-            create the GitHub App. Leave this blank to create the app in your
-            personal account.
-          </div>
-        </div>
+//         <div className="">
+//           <label className="block font-medium mb-1" htmlFor="organization">
+//             GitHub organization (if any)
+//           </label>
+//           <Input
+//             id="organization"
+//             value={organization}
+//             onChange={(e) => setOrganization(e.target.value)}
+//           />
+//           <div className="text-xs">
+//             You must be an owner or GitHub App manager in the organization to
+//             create the GitHub App. Leave this blank to create the app in your
+//             personal account.
+//           </div>
+//         </div>
 
-        <input
-          type="text"
-          name="manifest"
-          style={{ display: "none" }}
-          value={JSON.stringify({
-            name: `${parseRepoConfig(config.storage.repo).owner} Mile`,
-            url: deployedURL
-              ? new URL("/mile", deployedURL).toString()
-              : `${window.location.origin}/mile`,
-            public: true,
-            redirect_url: `${window.location.origin}/api/mile/github/created-app`,
-            callback_urls: [
-              `${window.location.origin}/api/mile/github/oauth/callback`,
-              `http://127.0.0.1/api/mile/github/oauth/callback`,
-              ...(deployedURL
-                ? [
-                    new URL(
-                      "/api/mile/github/oauth/callback",
-                      deployedURL,
-                    ).toString(),
-                  ]
-                : []),
-            ],
-            request_oauth_on_install: true,
-            default_permissions: {
-              contents: "write",
-              metadata: "read",
-              pull_requests: "read",
-            },
-          })}
-        />
-        <Button type="submit">Create GitHub App</Button>
-      </form>
-    </div>
-  );
-}
+//         <input
+//           type="text"
+//           name="manifest"
+//           style={{ display: "none" }}
+//           value={JSON.stringify({
+//             name: `${parseRepoConfig(config.storage.repo).owner} Mile`,
+//             url: deployedURL
+//               ? new URL("/mile", deployedURL).toString()
+//               : `${window.location.origin}/mile`,
+//             public: true,
+//             redirect_url: `${window.location.origin}/api/mile/github/created-app`,
+//             callback_urls: [
+//               `${window.location.origin}/api/mile/github/oauth/callback`,
+//               `http://127.0.0.1/api/mile/github/oauth/callback`,
+//               ...(deployedURL
+//                 ? [
+//                     new URL(
+//                       "/api/mile/github/oauth/callback",
+//                       deployedURL,
+//                     ).toString(),
+//                   ]
+//                 : []),
+//             ],
+//             request_oauth_on_install: true,
+//             default_permissions: {
+//               contents: "write",
+//               metadata: "read",
+//               pull_requests: "read",
+//             },
+//           })}
+//         />
+//         <Button type="submit">Create GitHub App</Button>
+//       </form>
+//     </div>
+//   );
+// }
 
-function parseRepoConfig(repo: string) {
-  const [owner, name] = repo.split("/");
-  return { owner, name };
-}
+// function parseRepoConfig(repo: string) {
+//   const [owner, name] = repo.split("/");
+//   return { owner, name };
+// }
 
 /**
  * AuthWrapper renders nothing unless user has a valid auth
  * @returns
  */
-function AuthWrapper(props: { config: Config; children: ReactNode }) {
-  const [state, setState] = useState<"unknown" | "valid" | "explicit-auth">(
-    "unknown",
-  );
-  useEffect(() => {
-    getAuth(props.config).then((auth) => {
-      if (auth) {
-        setState("valid");
-        return;
-      }
-      setState("explicit-auth");
-    });
-  }, [props.config]);
+// function AuthWrapper(props: { config: Config; children: ReactNode }) {
+//   const [state, setState] = useState<"unknown" | "valid" | "explicit-auth">(
+//     "unknown",
+//   );
+//   useEffect(() => {
+//     getAuth(props.config).then((auth) => {
+//       if (auth) {
+//         setState("valid");
+//         return;
+//       }
+//       setState("explicit-auth");
+//     });
+//   }, [props.config]);
 
-  if (state === "valid") {
-    return props.children;
-  }
+//   if (state === "valid") {
+//     return props.children;
+//   }
 
-  if (state === "explicit-auth") {
-    if (props.config.storage.kind === "github") {
-      return (
-        <div className="flex items-center justify-center h-screen">
-          <a
-            href={`/api/mile/github/login`}
-            target="_top"
-            className="flex flex-row items-center gap-x-1"
-          >
-            <GithubIcon />
-            <div>Log in with GitHub</div>
-          </a>
-        </div>
-      );
-    }
-  }
+//   if (state === "explicit-auth") {
+//     if (props.config.storage.kind === "github") {
+//       return (
+//         <div className="flex items-center justify-center h-screen">
+//           <a
+//             href={`/api/mile/github/login`}
+//             target="_top"
+//             className="flex flex-row items-center gap-x-1"
+//           >
+//             <GithubIcon />
+//             <div>Log in with GitHub</div>
+//           </a>
+//         </div>
+//       );
+//     }
+//   }
 
-  return null;
-}
+//   return null;
+// }
 
-const GithubIcon = ({ width, height }: any) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={width ?? "24"}
-    height={height ?? "24"}
-    viewBox="0 0 24 24"
-  >
-    <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4" />
-    <path d="M9 18c-4.51 2-5-2-7-2" />
-  </svg>
-);
+// const GithubIcon = ({ width, height }: any) => (
+//   <svg
+//     xmlns="http://www.w3.org/2000/svg"
+//     width={width ?? "24"}
+//     height={height ?? "24"}
+//     viewBox="0 0 24 24"
+//   >
+//     <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.4 5.4 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4" />
+//     <path d="M9 18c-4.51 2-5-2-7-2" />
+//   </svg>
+// );
 
 function AppShell({ path, children }: { path: string; children: ReactNode }) {
   return (
