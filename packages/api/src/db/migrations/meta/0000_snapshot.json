@@ -1,5 +1,5 @@
 {
-  "id": "90970e3b-a36f-441f-9cbf-6006b418b5e0",
+  "id": "6dc8f7df-bf2f-488b-aefb-beffc36f1c52",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -90,6 +90,12 @@
         "no_follow": {
           "name": "no_follow",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "canonical_url": {
+          "name": "canonical_url",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -349,6 +355,12 @@
         "no_follow": {
           "name": "no_follow",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "canonical_url": {
+          "name": "canonical_url",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

@@ -13,6 +13,7 @@ CREATE TABLE "drafts" (
 	"llm" text,
 	"no_index" integer,
 	"no_follow" integer,
+	"canonical_url" text,
 	"status" text NOT NULL,
 	"is_current_draft" integer DEFAULT 0,
 	"published_at" timestamp,
@@ -50,6 +51,7 @@ CREATE TABLE "pages" (
 	"llm" text,
 	"no_index" integer,
 	"no_follow" integer,
+	"canonical_url" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL
 );

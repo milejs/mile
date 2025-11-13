@@ -2675,6 +2675,29 @@ function PageSettingsReady({ parent, close }: any) {
 
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
+            <label htmlFor="canonical_url" className="font-semibold text-sm">
+              Canonical URL
+            </label>
+            <Field.Control
+              id="canonical_url"
+              value={
+                editor.draft_data.canonical_url == null
+                  ? ""
+                  : editor.draft_data.canonical_url
+              }
+              onValueChange={(value) => {
+                editor.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "canonical_url", value },
+                });
+              }}
+              render={<textarea rows={2} className={textareaClasses} />}
+            />
+          </div>
+        </div>
+
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
             <label htmlFor="keywords" className="font-semibold text-sm">
               Keywords
             </label>

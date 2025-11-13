@@ -41,6 +41,7 @@ export const pages = pgTable("pages", {
   llm: text("llm"),
   no_index: integer("no_index"),
   no_follow: integer("no_follow"),
+  canonical_url: text("canonical_url"),
   created_at: timestamp("created_at").notNull().defaultNow(),
   updated_at: timestamp("updated_at")
     .notNull()
@@ -66,6 +67,7 @@ export const drafts = pgTable(
     llm: text("llm"),
     no_index: integer("no_index"),
     no_follow: integer("no_follow"),
+    canonical_url: text("canonical_url"),
 
     // Version metadata
     status: text("status").notNull(), // 'draft', 'published', 'archived'

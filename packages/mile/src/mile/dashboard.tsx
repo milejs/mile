@@ -1,7 +1,14 @@
 // import useSWR, { mutate } from "swr";
-import { ReactNode, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { EqualIcon, PlusIcon, SearchIcon, XIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  EqualIcon,
+  PlusIcon,
+  SearchIcon,
+  XIcon,
+} from "lucide-react";
 import { Dialog } from "@base-ui-components/react/dialog";
 import { generateId } from "@/lib/generate-id";
 import { Input } from "@/components/ui/input";
@@ -30,6 +37,9 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { PageData } from "@milejs/types";
+import { Kbd } from "@/components/ui/kbd";
+import Fuse from "fuse.js";
+import { tinykeys } from "@/lib/tinykeys";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
@@ -583,6 +593,435 @@ function Pages({
 }: {
   search: { [key: string]: string | string[] | undefined };
 }) {
+  // const [mode, setMode] = useState("allpages");
+  const [mode, setMode] = useState(search.mode || "allpages");
+
+  return (
+    <div className="py-5 space-y-6">
+      <div className="max-w-5xl mx-auto flex justify-between items-center">
+        <div className="flex w-full items-center justify-between">
+          <div className="flex gap-x-2 items-center">
+            <h1 className="font-bold text-3xl">Pages</h1>
+            <CreatePageModal />
+          </div>
+          <div className="px-2 bg-zinc-200/50 rounded flex gap-x-2 items-center">
+            <button
+              className={`py-2 px-2 text-xs ${mode === "allpages" ? "text-zinc-900" : "text-zinc-400 hover:text-zinc-700"} font-medium`}
+              onClick={() => {
+                setMode("allpages");
+                history.pushState(null, "", "/mile/pages?mode=allpages");
+              }}
+            >
+              All pages
+            </button>
+            <button
+              className={`py-2 px-2 text-xs ${mode === "tree" ? "text-zinc-900" : "text-zinc-400 hover:text-zinc-700"} font-medium`}
+              onClick={() => {
+                setMode("tree");
+                history.pushState(null, "", "/mile/pages?mode=tree");
+              }}
+            >
+              Tree view
+            </button>
+            <button
+              className={`py-2 px-2 text-xs ${mode === "pagination" ? "text-zinc-900" : "text-zinc-400 hover:text-zinc-700"} font-medium`}
+              onClick={() => {
+                setMode("pagination");
+                history.pushState(null, "", "/mile/pages?mode=pagination");
+              }}
+            >
+              Pagination
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {mode === "allpages" && <AllPages />}
+      {mode === "tree" && <TreeViewAllPages />}
+      {mode === "pagination" && <PaginatedPages search={search} />}
+    </div>
+  );
+}
+
+function PaginatedPages({
+  search,
+}: {
+  search: { [key: string]: string | string[] | undefined };
+}) {
+  return (
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6 flex justify-between items-center">
+        <SearchForm />
+      </div>
+
+      <div className="">
+        <div className="space-y-8">
+          <PagesFetcher search={search} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TreeViewAllPages() {
+  const {
+    data: pages,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR([`/pages/all-pages`], fetcher);
+  if (pagesError) return <div>Failed to load</div>;
+  if (pagesIsLoading) return <div>loading...</div>;
+  if (pages && pages.error === true) {
+    console.error("error", pages.message);
+    return <div className="">Failed to load</div>;
+  }
+
+  const { data } = pages;
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6 flex justify-between items-center">
+        <FuzzySearchButton data={data} />
+      </div>
+
+      <div className="">
+        <div className="space-y-8">
+          <AllPagesTreeView data={data} />
+        </div>
+      </div>
+    </div>
+  );
+}
+function buildTree(
+  items: any,
+  { parent_id_key = "parent_id" }: { parent_id_key?: string },
+) {
+  const lookup: Record<string, any> = {};
+  const roots = [];
+
+  // Initialize lookup map
+  for (const item of items) {
+    lookup[item.id] = { ...item, children: [] };
+  }
+
+  // Build tree
+  for (const item of items) {
+    const node = lookup[item.id];
+    if (item[parent_id_key]) {
+      // Add to parent's children
+      if (lookup[item[parent_id_key]]) {
+        lookup[item[parent_id_key]].children.push(node);
+      }
+    } else {
+      // No parent_id → root node
+      roots.push(node);
+    }
+  }
+
+  return roots;
+}
+
+function Item({
+  item,
+  parent_slug,
+  draft_parent_slug,
+}: {
+  item: any;
+  parent_slug?: any;
+  draft_parent_slug?: any;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasChildren = item.children.length > 0;
+  const draft_full_slug = printSlug(item, draft_parent_slug, {
+    slug_key: "draft_slug",
+  });
+  const full_slug = printSlug(item, parent_slug, {
+    slug_key: "published_slug",
+  });
+  const is_slug_diff = draft_full_slug !== full_slug;
+
+  return (
+    <div className="">
+      <div className="flex items-start gap-x-2">
+        {hasChildren ? (
+          <div className="pt-2 shrink-0">
+            <button
+              onClick={() => setOpen(!open)}
+              className="px-1 py-1 bg-zinc-100 hover:bg-zinc-200"
+            >
+              {open ? (
+                <ChevronDownIcon size={12} />
+              ) : (
+                <ChevronRightIcon size={12} />
+              )}
+            </button>
+          </div>
+        ) : null}
+        <div className="pt-2 pb-2 flex-1 border-b border-zinc-200">
+          <div className="text-zinc-700 text-sm font-semibold">
+            {item.draft_title || item.published_title || "No title"}
+          </div>
+          <div className="-mt-0.5 text-zinc-500 text-xs">
+            <span className="inline-block">/{draft_full_slug}</span>
+            {is_slug_diff && (
+              <span className="ml-2 inline-block">
+                (published: /{full_slug})
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+      {hasChildren && open && (
+        <div className="ml-10">
+          {item.children.map((child: any) => (
+            <Item
+              key={child.id}
+              item={child}
+              parent_slug={printSlug(item, parent_slug, {
+                slug_key: "published_slug",
+              })}
+              draft_parent_slug={printSlug(item, draft_parent_slug, {
+                slug_key: "draft_slug",
+              })}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function printSlug(
+  item: any,
+  parent_slug: any,
+  { slug_key = "published_slug" }: { slug_key?: string },
+) {
+  if (!parent_slug) return `${item[slug_key]}`; // or draft_slug
+  return `${parent_slug}/${item[slug_key]}`; // or draft_slug
+}
+
+function AllPagesTreeView({ data }: { data: any }) {
+  const tree = buildTree(data, { parent_id_key: "published_parent_id" });
+  console.log("data", data, tree);
+
+  return (
+    <div className="">
+      {tree.map((item: any) => (
+        <Item
+          key={item.id}
+          item={item}
+          parent_slug={null}
+          draft_parent_slug={null}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AllPages() {
+  const {
+    data: pages,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR([`/pages/all-pages`], fetcher);
+  if (pagesError) return <div>Failed to load</div>;
+  if (pagesIsLoading) return <div>loading...</div>;
+  if (pages && pages.error === true) {
+    console.error("error", pages.message);
+    return <div className="">Failed to load</div>;
+  }
+
+  const { data } = pages;
+
+  return (
+    <div className="max-w-5xl mx-auto">
+      <div className="mb-6 flex justify-between items-center">
+        <FuzzySearchButton data={data} />
+      </div>
+
+      <div className="">
+        <div className="space-y-8">
+          <AllPagesList data={data} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AllPagesList({ data }: { data: any }) {
+  const ITEMS_PER_PAGE = 5;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  if (!data || data.length === 0) {
+    return <div className="">No pages</div>;
+  }
+
+  const totalPages = Math.ceil(data.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentItems = data.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  const handlePageChange = (page_no: number) => {
+    if (page_no >= 1 && page_no <= totalPages) {
+      setCurrentPage(page_no);
+    }
+  };
+
+  console.log("currentItems", currentItems);
+
+  return (
+    <div className="space-y-10">
+      <div className="divide-y divide-zinc-200">
+        {currentItems.map((e: any) => {
+          return <PageItem key={e.id} data={e} />;
+        })}
+      </div>
+
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handlePageChange(currentPage - 1);
+              }}
+            />
+          </PaginationItem>
+
+          {Array.from({ length: totalPages }).map((_, i) => {
+            const page = i + 1;
+            return (
+              <PaginationItem key={page}>
+                <PaginationLink
+                  href="#"
+                  isActive={page === currentPage}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handlePageChange(page);
+                  }}
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            );
+          })}
+
+          {totalPages > 5 && <PaginationEllipsis />}
+
+          <PaginationItem>
+            <PaginationNext
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                handlePageChange(currentPage + 1);
+              }}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
+  );
+}
+
+function FuzzySearchButton({ data }: { data: any }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = tinykeys(window, {
+      "$mod+K": (e: Event) => {
+        e.preventDefault();
+        setOpen(true);
+      },
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  return (
+    <div>
+      <Button
+        onClick={() => setOpen(true)}
+        className="bg-zinc-200/70 hover:bg-zinc-200 text-zinc-700 relative w-full justify-start overflow-hidden border-0 pr-12 text-sm font-normal shadow-none md:w-40 lg:w-64"
+      >
+        <span className="hidden max-w-[calc(100%-32px)] overflow-hidden lg:inline-flex">
+          Search page...
+        </span>
+        <span className="inline-flex lg:hidden">Search...</span>
+        <div className="pointer-events-none absolute right-3 flex gap-x-0.5">
+          <Kbd className="border-0 text-[10px]">⌘</Kbd>
+          <Kbd className="border-0 text-[10px]">K</Kbd>
+        </div>
+      </Button>
+      <Dialog.Root open={open} onOpenChange={setOpen}>
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
+          <Dialog.Popup className="fixed /top-1/2 top-[100px] left-1/2 w-4xl max-w-[calc(100vw-3rem)] -translate-x-1/2 /-translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+            <FuzzySearchResult data={data} />
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </div>
+  );
+}
+
+const fuse_options = {
+  includeScore: true,
+  keys: ["published_title", "published_slug"],
+};
+
+function FuzzySearchResult({ data }: { data: any }) {
+  const [search, setSearch] = useState("");
+  const fuse = useMemo(() => {
+    return new Fuse(data, fuse_options);
+  }, [data]);
+  const items =
+    search !== "" && fuse != null
+      ? fuse.search(search.toLowerCase()).map((e) => {
+          return e.item;
+        })
+      : null;
+
+  function handleSearchChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setSearch(event.target.value);
+  }
+
+  return (
+    <div>
+      <div className="mb-3">
+        <Input
+          value={search}
+          onChange={handleSearchChange}
+          placeholder="Search page..."
+        />
+      </div>
+      <div className="h-[400px] overflow-auto">
+        {items?.map((item: any) => {
+          const href = `/mile/${item.id}/edit?preview=true`;
+
+          return (
+            <a href={href} key={item.id}>
+              <div key={item.id} className="px-3 pt-1 py-1.5 hover:bg-zinc-100">
+                <div className="font-semibold text-sm">
+                  {item.published_title}
+                </div>
+                <div className="text-xs text-gray-500">
+                  {item.published_slug}
+                </div>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Pages_bk_pagination({
+  search,
+}: {
+  search: { [key: string]: string | string[] | undefined };
+}) {
   return (
     <div className="py-5">
       <div className="max-w-5xl mx-auto">
@@ -656,7 +1095,7 @@ function PagesFetcher({
 }: {
   search: { [key: string]: string | string[] | undefined };
 }) {
-  const { page = "1", limit = "30" } = search ?? {};
+  const { page = "1", limit = "4" } = search ?? {};
   const page_no = parseInt(Array.isArray(page) ? page[0] : page, 10);
   const limit_no = parseInt(Array.isArray(limit) ? limit[0] : limit, 10);
   const fetcher_key = [`/pages?`, `page=${page_no}`, `&`, `limit=${limit_no}`];
@@ -735,41 +1174,63 @@ function PagesPagination({ fetcher_key }: { fetcher_key: string[] }) {
 
   const pageNumbers = getPageNumbers();
 
+  // const prevLink = !has_prev
+  //   ? ""
+  //   : `/mile/pages?${current_page > 1 ? `page=${current_page - 1}` : ""}`;
+  // const nextLink = !has_next ? "" : `/mile/pages?page=${current_page + 1}`;
+  const params = new URLSearchParams(window.location.search);
+  const newParams = new URLSearchParams(params);
+
+  // Calculate page links
+  const prevLink = !has_prev
+    ? ""
+    : (() => {
+        const pageNum = Math.max(1, current_page - 1);
+        newParams.set("page", `${pageNum}`);
+        return `/mile/pages?${newParams.toString()}`;
+      })();
+
+  const nextLink = !has_next
+    ? ""
+    : (() => {
+        newParams.set("page", current_page + 1);
+        return `/mile/pages?${newParams.toString()}`;
+      })();
+
   return (
     <Pagination>
       <PaginationContent>
         {/* Previous Button */}
         <PaginationItem>
           <PaginationPrevious
-            href={
-              !has_prev
-                ? ""
-                : `/mile/pages?${current_page > 1 ? `page=${current_page - 1}` : ""}`
-            }
+            href={prevLink}
             className={`${!has_prev ? "opacity-50" : ""}`}
           />
         </PaginationItem>
 
         {/* Page Numbers */}
-        {pageNumbers.map((page, idx) => (
-          <PaginationItem key={`${page}-${idx}`}>
-            {typeof page === "number" ? (
-              <PaginationLink
-                href={`/mile/pages?page=${page}`}
-                isActive={page === current_page}
-              >
-                {page}
-              </PaginationLink>
-            ) : (
-              <PaginationEllipsis />
-            )}
-          </PaginationItem>
-        ))}
+        {pageNumbers.map((page, idx) => {
+          newParams.set("page", page);
+          return (
+            <PaginationItem key={`${page}-${idx}`}>
+              {typeof page === "number" ? (
+                <PaginationLink
+                  href={`/mile/pages?${newParams.toString()}`}
+                  isActive={page === current_page}
+                >
+                  {page}
+                </PaginationLink>
+              ) : (
+                <PaginationEllipsis />
+              )}
+            </PaginationItem>
+          );
+        })}
 
         {/* Next Button */}
         <PaginationItem>
           <PaginationNext
-            href={!has_next ? "" : `/mile/pages?page=${current_page + 1}`}
+            href={nextLink}
             className={`${!has_next ? "opacity-50" : ""}`}
           />
         </PaginationItem>
@@ -796,6 +1257,8 @@ function PagesData({ fetcher_key }: { fetcher_key: string[] }) {
 }
 
 function PagesList({ data }: { data: any }) {
+  console.log("data", data);
+
   if (!data || data.length === 0) {
     return <div className="">No pages</div>;
   }
@@ -809,8 +1272,10 @@ function PagesList({ data }: { data: any }) {
   );
 }
 
-function isHomeSlug(data: any): boolean {
-  return data.slug === "" && data.parent_id == null;
+function getPageSlug(data: any): string {
+  const isHome = data.published_slug === "" && data.published_parent_id == null;
+  if (isHome) return "/";
+  return data.draft_slug || data.published_slug;
 }
 
 function PageItem({ data }: { data: any }) {
@@ -822,17 +1287,24 @@ function PageItem({ data }: { data: any }) {
         <div className="">
           <a href={href}>
             <div className="font-semibold text-sm">
-              {data.title ?? "No title"}
+              {data.draft_title || data.published_title || "No title"}
             </div>
-            <div className="text-xs text-zinc-500">
-              <code className="">{isHomeSlug(data) ? "/" : data.slug}</code>
+            <div className="flex items-center gap-x-1 text-xs text-zinc-500">
+              <div
+                className={`flex items-center justify-center w-4 h-4 text-xs ${data.status == null ? "bg-red-200" : "bg-green-200"}`}
+              >
+                {data.status == null ? "D" : "P"}
+              </div>
+              <code className="">{getPageSlug(data)}</code>
             </div>
           </a>
         </div>
       </div>
       <div className="w-32 shrink-0">
         <div className="text-xs text-zinc-700">
-          {new Date(data.updated_at).toLocaleDateString("en-US", {
+          {new Date(
+            data.draft_updated_at || data.updated_at,
+          ).toLocaleDateString("en-US", {
             year: "numeric",
             month: "short",
             day: "numeric",

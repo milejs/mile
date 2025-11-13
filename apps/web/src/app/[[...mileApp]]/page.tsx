@@ -28,31 +28,13 @@ export async function generateMetadata(
   const { mileApp } = await params;
   const search = await searchParams;
   const res = await fetchPageBySlug(mileApp, search);
-  // console.log("res", res);
   if (!res.ok) {
     notFound();
   }
-  /**
-   * res.result
-   * {
-       "id": "dc3e0935a93736bfb9d396972b4b425a",
-       "parent_id": "bd610273067435e2490b173302d7df8d",
-       "slug": "/test2/test-6",
-       "title": "test 6",
-       "type": "page",
-       "content": "...",
-       "description": "aaa bbb cccc",
-       "keywords": null,
-       "llm": null,
-       "no_index": null,
-       "no_follow": null,
-       "created_at": "2025-10-22T14:02:45.275Z",
-       "updated_at": "2025-10-31T04:08:05.060Z"
-   }
-   */
   // console.log("res.result", res.result);
-
-  const { title, description, keywords, no_index, og_images } = res.result;
+  const path = mileApp ? mileApp.join("/") : "";
+  const { title, description, keywords, no_index, og_images, canonical_url } =
+    res.result;
 
   // optionally access and extend (rather than replace) parent metadata
   const previousImages = (await parent).openGraph?.images || [];
@@ -62,6 +44,9 @@ export async function generateMetadata(
     description: description ? description : META_DESCRIPTION,
     keywords: keywords ? keywords.split(",") : KEYWORDS,
     metadataBase: new URL(HOST_URL),
+    alternates: {
+      canonical: canonical_url ? canonical_url : `${HOST_URL}/${path}`,
+    },
     openGraph: {
       title: mileApp === undefined ? SITE_NAME : `${title} - ${SITE_NAME}`,
       description: description ? description : META_DESCRIPTION,

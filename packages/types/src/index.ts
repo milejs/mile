@@ -173,6 +173,7 @@ export type PageData = {
   llm?: string;
   no_index?: number;
   no_follow?: number;
+  canonical_url?: string;
   created_at?: number;
   updated_at?: number;
 };
