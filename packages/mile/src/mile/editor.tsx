@@ -877,7 +877,7 @@ class Persister implements MilePersister {
     console.log("mdxstring", mdxstring);
 
     return mutate(
-      [`/pages`, `/${draft_data.page_id}`],
+      [`/pages`, `/${draft_data.page_id}?preview=true`],
       async () => {
         const resp = await fetch(`${API}/pages/${draft_data.page_id}/draft`, {
           method: "PUT",

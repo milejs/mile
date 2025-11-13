@@ -507,7 +507,11 @@ function updateFileMetadata(
 ) {
   updateMediaMetadata(`${API}/medias/${file_id}`, data)
     .then((e) => {
-      mutate((k: string) => k === `/medias/${file_id}` || k === "/medias");
+      mutate(
+        (k: string) =>
+          typeof k === "string" &&
+          (k === `/medias/${file_id}` || k === "/medias"),
+      );
       done();
     })
     .catch((e) => {
@@ -997,7 +1001,7 @@ function FuzzySearchResult({ data }: { data: any }) {
       </div>
       <div className="h-[400px] overflow-auto">
         {items?.map((item: any) => {
-          const href = `/mile/${item.id}/edit?preview=true`;
+          const href = `/mile/${item.id}/__edit__?preview=true`;
 
           return (
             <a href={href} key={item.id}>
@@ -1279,7 +1283,7 @@ function getPageSlug(data: any): string {
 }
 
 function PageItem({ data }: { data: any }) {
-  const href = `/mile/${data.id}/edit?preview=true`;
+  const href = `/mile/${data.id}/__edit__?preview=true`;
 
   return (
     <div className="py-1.5 flex flex-row">
@@ -1467,7 +1471,7 @@ function NewPageSettings({ close }: any) {
         // console.log("e", e);
         if (e) {
           const last = e[e.length - 1];
-          window.location.assign(`/mile/${last.id}/edit?preview=true`);
+          window.location.assign(`/mile/${last.id}/__edit__?preview=true`);
         }
         // close();
       })

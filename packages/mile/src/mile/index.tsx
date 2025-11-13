@@ -133,10 +133,9 @@ const fetcher = (key: string[]) =>
 
 const resolvePath = (paths: string[] = []) => {
   const hasPath = paths.length > 0;
-  const isEdit = hasPath ? paths[paths.length - 1] === "edit" : false;
-  const isIframeContent = hasPath
-    ? paths[paths.length - 1] === "__iframe_content__"
-    : false;
+  const last_segment = hasPath ? paths[paths.length - 1] : "";
+  const isEdit = last_segment === "__edit__"; // TODO: change this to __edit__
+  const isIframeContent = last_segment === "__iframe_content__";
   return {
     isEdit,
     isIframeContent,
@@ -1137,28 +1136,7 @@ function EditRichtextComponent({
       });
 
       return image_url;
-
-      // const body = new FormData();
-      // body.append("file", file);
-      // const ret = await fetch("https://tmpfiles.org/api/v1/upload", {
-      //   method: "POST",
-      //   body: body,
-      // });
-      // return (await ret.json()).data.url.replace(
-      //   "tmpfiles.org/",
-      //   "tmpfiles.org/dl/",
-      // );
     },
-    // uploadFile: async (file) => {
-    //   const formData = new FormData();
-    //   formData.append("file", file);
-    //   const response = await fetch("/api/upload", {
-    //     method: "POST",
-    //     body: formData,
-    //   });
-    //   const data = await response.json();
-    //   return data.url;
-    // },
   });
 
   const getSlashMenuItems = useMemo(() => {
@@ -2545,6 +2523,7 @@ function MileHeaderPageSettings() {
 
 function PageSettings({ close }: { close: () => void }) {
   const editor = useEditor();
+  // TODO: move this inside SlugInput?
   const parent = useSWR(
     editor.draft_data.parent_id
       ? [`/pages/`, editor.draft_data.parent_id, "?preview=true"]
@@ -3334,7 +3313,11 @@ function updateFileMetadata(
 ) {
   updateMediaMetadata(`${API}/medias/${file_id}`, data)
     .then((e) => {
-      mutate((k: string) => k === `/medias/${file_id}` || k === "/medias");
+      mutate(
+        (k: string) =>
+          typeof k === "string" &&
+          (k === `/medias/${file_id}` || k === "/medias"),
+      );
       done();
     })
     .catch((e) => {

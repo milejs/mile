@@ -495,3 +495,23 @@ type TableCell = {
   content: InlineContent[];
 };
 ```
+
+## Editor Data fetching
+
+### Load page for Editor
+
+- `GET    /api/mile/pages/<page_id>?preview=true`: [Editor] Load page for Editor
+- `GET    /api/mile/pages/<page_id>?preview=true`: [SlugInput] Load parent page for SlugInput
+- `GET    /api/mile/pages/<page_id>/full-path`: [SlugInput] Get page full path when selecting parent in SlugInput
+- `GET    /api/mile/search-parent?q=<query>`: [SlugInput] Search parent pages by title/ slug in SlugInput
+- `PUT    /api/mile/pages/<page_id>/draft`: [Editor] Save draft
+- `GET    /api/mile/pages/all-pages`: [Dashboard] Load all pages
+- `GET    /api/mile/pages?page=x&limit=y`: [Dashboard] Load paginated pages
+- `GET    /api/mile/search?q=query&page=x&limit=y`: [Dashboard] Search page
+- `POST   /api/mile/pages`: [Dashboard] Create new page
+- `GET    /api/mile/page/<slug>`: [App] Load page for App
+- `GET    /api/mile/page/<slug>?preview=true`: [App] Load preview page for App
+- `GET    /api/mile/medias`: [Editor] Load all medias
+- `GET    /api/mile/medias/<media_id>`: [Editor] Load media
+- `PATCH  /api/mile/medias/<media_id>`: [Editor] Update media
+- `POST   /api/mile/medias`: [Editor] Upload media
