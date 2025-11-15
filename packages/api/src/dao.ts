@@ -295,6 +295,11 @@ export async function publishPage(page_id: string, updates: InsertDraft) {
     })
     .where(eq(pagesTable.id, page_id));
 
+  // TODO: rebuild full_slug for all children if this published page's slug has changed
+  //  - find all published drafts that have parent_id point to this page.
+  //  - update their full_slug with this page's new slug
+  //  - walk down the tree and update the descendants' full_slug with this page's new slug
+
   return draft;
 }
 
