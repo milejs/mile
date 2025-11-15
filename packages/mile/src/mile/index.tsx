@@ -168,14 +168,6 @@ export function Mile({
   );
 }
 
-const buildSearchParamsFetcherKey = (search: {
-  [key: string]: string | string[] | undefined;
-}) => {
-  // @ts-expect-error okk
-  const searchParams = new URLSearchParams(search);
-  return searchParams.toString();
-};
-
 function MileInner({
   isEdit,
   isIframeContent,
@@ -187,12 +179,11 @@ function MileInner({
   path: string;
   search: { [key: string]: string | string[] | undefined };
 }) {
-  const key = buildSearchParamsFetcherKey(search);
   const {
     data: page_data,
     error: pageError,
     isLoading: pageIsLoading,
-  } = useSWR(isEdit ? [`/pages`, path, `?`, key] : null, fetcher);
+  } = useSWR(isEdit ? [`/pages`, path] : null, fetcher);
   // console.log("path", path, isEdit, isIframeContent);
 
   if (pageError) return <div>failed to load</div>;
@@ -2537,7 +2528,7 @@ function PageSettings({ close }: { close: () => void }) {
   // TODO: move this inside SlugInput?
   const parent = useSWR(
     editor.draft_data.parent_id
-      ? [`/pages/`, editor.draft_data.parent_id, "?preview=true"]
+      ? [`/pages/`, editor.draft_data.parent_id]
       : null,
     fetcher,
   );

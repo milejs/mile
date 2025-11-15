@@ -964,7 +964,7 @@ class Persister implements MilePersister {
       [`/pages`, `/${draft_data.page_id}?preview=true`],
       async () => {
         const resp = await fetch(`${API}/pages/${draft_data.page_id}/draft`, {
-          method: "PUT",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...draft_data, content: mdxstring }),
         });

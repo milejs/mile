@@ -104,7 +104,11 @@ export function MileAPI(options: MileAPIOptions) {
 
   app.route("/medias", medias);
   app.route("/pages", pages);
-  app.route("/page", page_by_slug);
+  app.route("/page", frontend);
+  /**
+   * Search draft pages by title
+   *  - used in SlugInput combobox when selecting parent page
+   */
   app.get("/search-parent", async (c) => {
     // For parent picker search
     const { q, page = "1", limit = "30" } = c.req.query();
@@ -153,43 +157,19 @@ export function MileAPI(options: MileAPIOptions) {
 
 const medias = new Hono();
 const pages = new Hono();
-const page_by_slug = new Hono();
+const frontend = new Hono();
 
 /****************************************************************
  * Page by slug
  */
 
 // Get page by "/" slug
-page_by_slug.get("/", async (c) => {
-  const { preview } = c.req.query();
-
+frontend.get("/", async (c) => {
   let [single] = await getPublishedPageByFullSlug("/");
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
   // TODO: should we ensure "published" status?
-
-  // get the draft if preview mode
-  // if (preview === "true") {
-  //   [single] = await db
-  //     .select()
-  //     .from(draftsTable)
-  //     .where(
-  //       and(
-  //         eq(draftsTable.page_id, single.id),
-  //         eq(draftsTable.is_current_draft, 1),
-  //       ),
-  //     )
-  //     .limit(1);
-  //   if (!single) {
-  //     return c.json({ message: "Page not found" }, 404);
-  //   }
-  // } else {
-  //   // published mode must have "published" status
-  //   if (single.status !== "published") {
-  //     return c.json({ message: "Page not found" }, 404);
-  //   }
-  // }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
   if (single.drafts.og_image_ids && single.drafts.og_image_ids.length > 0) {
@@ -202,37 +182,14 @@ page_by_slug.get("/", async (c) => {
 });
 
 // Get page by slug
-page_by_slug.get("/:slug{.+}", async (c) => {
+frontend.get("/:slug{.+}", async (c) => {
   const slug = c.req.param("slug");
-  const { preview } = c.req.query();
 
   let [single] = await getPublishedPageByFullSlug(`/${slug}`);
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
   // TODO: should we ensure "published" status?
-
-  // get the draft if preview mode
-  // if (preview === "true") {
-  //   [single] = await db
-  //     .select()
-  //     .from(draftsTable)
-  //     .where(
-  //       and(
-  //         eq(draftsTable.page_id, single.id),
-  //         eq(draftsTable.is_current_draft, 1),
-  //       ),
-  //     )
-  //     .limit(1);
-  //   if (!single) {
-  //     return c.json({ message: "Page not found" }, 404);
-  //   }
-  // } else {
-  //   // published mode must have "published" status
-  //   if (single.status !== "published") {
-  //     return c.json({ message: "Page not found" }, 404);
-  //   }
-  // }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
   if (single.drafts.og_image_ids && single.drafts.og_image_ids.length > 0) {
@@ -248,7 +205,9 @@ page_by_slug.get("/:slug{.+}", async (c) => {
  * Pages
  */
 
-// List all pages with pagination
+/**
+ * List paginated pages
+ */
 pages.get("/", async (c) => {
   const { page = "1", limit = "30" } = c.req.query();
   const per_page = Math.min(100, parseInt(limit, 10));
@@ -270,6 +229,10 @@ pages.get("/", async (c) => {
   });
 });
 
+/**
+ * List all pages
+ *  - listing all pages in CMS for snappy interaction/ management
+ */
 pages.get("/all-pages", async (c) => {
   const result = await listAllPages();
   return c.json({
@@ -277,6 +240,9 @@ pages.get("/all-pages", async (c) => {
   });
 });
 
+/**
+ * Create new page
+ */
 pages.post("/", async (c) => {
   const body = await c.req.json();
   const parsed = createPageSchema.safeParse(body);
@@ -290,20 +256,23 @@ pages.post("/", async (c) => {
   return c.json({ data: id }, 201);
 });
 
-// Get page full path
-// - Builds full slug when parent is selected
+/**
+ * Build draft full slug
+ *  - used in SlugInput when parent is selected
+ */
 pages.get("/:id/full-path", async (c) => {
   const id = c.req.param("id");
-  const full_path = await getDraftFullSlug(id);
+  const full_slug = await getDraftFullSlug(id);
   return c.json({
-    data: full_path,
+    data: full_slug,
   });
 });
 
-// Get page by id
+/**
+ * Load page by id (for CMS)
+ */
 pages.get("/:id", async (c) => {
   const id = c.req.param("id");
-  const { preview, draft_id, version } = c.req.query();
   const single = await loadDraftByPageId(id);
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
@@ -319,10 +288,14 @@ pages.get("/:id", async (c) => {
   });
 });
 
-// Saving a draft creates new row in drafts with the passed data
-// - generate new id for new row and also overwrite "reason" to "manual-save"
-// - saveDraft will check for circular references with parent
-pages.put("/:id/draft", async (c) => {
+/**
+ * Saving a draft
+ *
+ * Saving a draft creates new row in drafts with the passed data.
+ *  - generate new id for new row and also overwrite "reason" to "manual-save"
+ *  - saveDraft will check for circular references with parent
+ */
+pages.post("/:id/draft", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
   if (body && body.created_at) {
@@ -336,12 +309,16 @@ pages.put("/:id/draft", async (c) => {
   return c.json({ data: updatedPage });
 });
 
-// Publishing a page saves new draft, calculate full_slug and updates pointer
-// - generate new id for new draft and also overwrite "reason" to "publish"
-// - calculate draft full_slug to be used as published full_slug
-//    - if page:e is under page:m in published version, and under page:n in draft version.
-//    - publishing page:e will construct full_slug as /.../page:n/page:e
-//    - parents of page:n (the /.../ part) is also calculated the same way using the draft version
+/**
+ * Publishing a page
+ *
+ * Publishing a page saves new draft, calculate full_slug and updates pointer.
+ *  - generate new id for new draft and also overwrite "reason" to "publish"
+ *  - calculate draft full_slug to be used as published full_slug
+ *    - if page:e is under page:m in published version, and under page:n in draft version.
+ *    - publishing page:e will construct full_slug as /.../page:n/page:e
+ *    - parents of page:n (the /.../ part) is also calculated the same way using the draft version
+ */
 pages.post("/:id/publish", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
@@ -356,24 +333,9 @@ pages.post("/:id/publish", async (c) => {
   return c.json({ data: updatedPage });
 });
 
-// Update page (not used for now)
-pages.put("/:id", async (c) => {
-  const id = c.req.param("id");
-  const body = await c.req.json();
-  if (body && body.created_at) {
-    delete body.created_at;
-  }
-
-  // Here you might want to add validation similar to the POST route
-  const [updatedPage] = await db
-    .update(pagesTable)
-    .set({ ...body, updated_at: new Date() })
-    .where(eq(pagesTable.id, id))
-    .returning();
-  return c.json(updatedPage);
-});
-
-// Delete page by id
+/**
+ * Delete page by id (not implemented)
+ */
 pages.delete("/:id", async (c) => {
   const id = c.req.param("id");
   await db.delete(pagesTable).where(eq(pagesTable.id, id));

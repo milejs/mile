@@ -725,10 +725,14 @@ function buildTree(
   return roots;
 }
 
+function hrefEditorPage(id: string) {
+  return `/mile/${id}/__edit__`;
+}
+
 function Item({ item }: { item: any }) {
   const [open, setOpen] = useState(false);
   const hasChildren = item.children.length > 0;
-  const href = `/mile/${item.id}/__edit__?preview=true`;
+  const href = hrefEditorPage(item.id);
 
   return (
     <div className="">
@@ -985,7 +989,7 @@ function FuzzySearchResult({ data }: { data: any }) {
       </div>
       <div className="h-[400px] overflow-auto">
         {items?.map((item: any) => {
-          const href = `/mile/${item.id}/__edit__?preview=true`;
+          const href = hrefEditorPage(item.id);
 
           return (
             <a href={href} key={item.id}>
@@ -1271,7 +1275,7 @@ function TableCol3({ children }: { children: React.ReactNode }) {
 }
 
 function PageItem({ data }: { data: any }) {
-  const href = `/mile/${data.id}/__edit__?preview=true`;
+  const href = hrefEditorPage(data.id);
 
   return (
     <TableRow>
@@ -1402,9 +1406,7 @@ function NewPageSettings({ close }: any) {
   });
   const [error, setError] = useState<string | null>(null);
   const parent = useSWR(
-    pageData.parent_id
-      ? [`/pages/`, pageData.parent_id, "?preview=true"]
-      : null,
+    pageData.parent_id ? [`/pages/`, pageData.parent_id] : null,
     fetcher,
   );
 
@@ -1477,7 +1479,7 @@ function NewPageSettings({ close }: any) {
       .then((e) => {
         console.log("createPage e", e);
         if (e) {
-          window.location.assign(`/mile/${e}/__edit__?preview=true`);
+          window.location.assign(hrefEditorPage(e));
         }
         // close();
       })

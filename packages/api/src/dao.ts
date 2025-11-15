@@ -3,8 +3,6 @@ import {
   pages as pagesTable,
   drafts as draftsTable,
   medias as mediasTable,
-  SelectPage,
-  SelectMedia,
   InsertDraft,
 } from "./db/schema";
 import { desc, eq, or, and, ilike, inArray, count, sql } from "drizzle-orm";
