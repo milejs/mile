@@ -134,7 +134,7 @@ const fetcher = (key: string[]) =>
 const resolvePath = (paths: string[] = []) => {
   const hasPath = paths.length > 0;
   const last_segment = hasPath ? paths[paths.length - 1] : "";
-  const isEdit = last_segment === "__edit__"; // TODO: change this to __edit__
+  const isEdit = last_segment === "__edit__";
   const isIframeContent = last_segment === "__iframe_content__";
   return {
     isEdit,
@@ -612,9 +612,36 @@ function OverlayTextEditor({
   } | null>;
   close: () => void;
 }) {
+  const { control, upload } = useMileUploadFile();
   const editor = useCreateBlockNote({
     schema: bn_schema,
     initialContent,
+    uploadFile: async (file) => {
+      const result = await upload(file);
+      console.log("result", result);
+      const dims = await getImageDimension(file).catch((e) => {
+        console.error("Error getting image dimensions", e);
+        return undefined;
+      });
+      const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${result.file.objectInfo.key}`;
+
+      // save db
+      mutate(`/medias`, async (prev: any) => {
+        const res = await saveImages([
+          {
+            id: generateId(),
+            type: result.file.type,
+            size: result.file.size,
+            filepath: result.file.objectInfo.key,
+            width: dims?.width,
+            height: dims?.height,
+          },
+        ]);
+        return prev ? [...prev, ...res] : res;
+      });
+
+      return image_url;
+    },
   });
 
   useImperativeHandle(ref, () => {
@@ -930,30 +957,20 @@ function MileContent({
   );
 }
 
-// function NodeInspector({ data }: { data: any }) {
-//   const editor = useEditor();
-//   const mile = useMileProvider();
-//   if (editor.activeNodeId === null) {
-//     return <div className="">Select a node to inspect.</div>;
-//   }
-
-//   const node = data[editor.activeNodeId];
-//   console.log("Inspector", editor.activeNodeId, node, data);
-//   const schema = mile.schema.get(node.type);
-
-//   if (schema.isMarkdown) {
-//     return <EditMarkdown node={node} />;
-//   }
-
-//   return (
-//     <div className="px-4 py-4">
-//       <EditNode node={node} />
-//     </div>
-//   );
-// }
-
-function EditMarkdown({ node }: { node: NodeData }) {
-  return <div className="">Edit markdown</div>;
+function useMileUploadFile() {
+  return useUploadFile({
+    route: "mileupload",
+    api: "/api/mile/upload",
+    onUploadComplete: async (upload) => {
+      toast.success(`Uploaded ${upload.file.name}`);
+    },
+    onUploadBegin: async ({ file }) => {
+      toast.info(`Uploading ${file.name}`);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
 }
 
 const primitiveTypes = [
@@ -1062,19 +1079,7 @@ function EditRichtextComponent({
 }: EditComponentProps) {
   const value = getFieldValue(state, path);
 
-  const { control, upload } = useUploadFile({
-    route: "mileupload",
-    api: "/api/mile/upload",
-    onUploadComplete: async (upload) => {
-      toast.success(`Uploaded ${upload.file.name}`);
-    },
-    onUploadBegin: async ({ file }) => {
-      toast.info(`Uploading ${file.name}`);
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
+  const { control, upload } = useMileUploadFile();
 
   const bn_editor = useCreateBlockNote({
     initialContent:
@@ -1098,32 +1103,16 @@ function EditRichtextComponent({
 
       // save db
       mutate(`/medias`, async (prev: any) => {
-        // TODO: dry this fetch in this file
-        const resp = await fetch(`${API}/medias`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([
-            {
-              id: generateId(),
-              type: result.file.type,
-              size: result.file.size,
-              filepath: result.file.objectInfo.key,
-              width: dims?.width,
-              height: dims?.height,
-            },
-          ]),
-        });
-        if (!resp.ok) {
-          const error = new Error("An error occurred while saving the images.");
-          const info = await resp.json();
-          console.error("Error saving images", info);
-          // @ts-expect-error okk
-          error.info = info;
-          // @ts-expect-error okk
-          error.status = resp.status;
-          throw error;
-        }
-        const res = await resp.json();
+        const res = await saveImages([
+          {
+            id: generateId(),
+            type: result.file.type,
+            size: result.file.size,
+            filepath: result.file.objectInfo.key,
+            width: dims?.width,
+            height: dims?.height,
+          },
+        ]);
         return prev ? [...prev, ...res] : res;
       });
 
@@ -1312,31 +1301,16 @@ function EditImageUrlComponent({
 
     // save db
     mutate(`/medias`, async (prev: any) => {
-      const resp = await fetch(`${API}/medias`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          {
-            id: generateId(),
-            type: upload.file.type,
-            size: upload.file.size,
-            filepath: upload.file.objectInfo.key,
-            width: upload.file.width,
-            height: upload.file.height,
-          },
-        ]),
-      });
-      if (!resp.ok) {
-        const error = new Error("An error occurred while saving the images.");
-        const info = await resp.json();
-        console.error("Error saving images", info);
-        // @ts-expect-error okk
-        error.info = info;
-        // @ts-expect-error okk
-        error.status = resp.status;
-        throw error;
-      }
-      const res = await resp.json();
+      const res = await saveImages([
+        {
+          id: generateId(),
+          type: upload.file.type,
+          size: upload.file.size,
+          filepath: upload.file.objectInfo.key,
+          width: upload.file.width,
+          height: upload.file.height,
+        },
+      ]);
       return prev ? [...prev, ...res] : res;
     });
   }
@@ -2796,31 +2770,16 @@ function PageOpenGraphImage({
   async function handleUploadSuccess(upload: any) {
     // save db
     const medias = await mutate(`/medias`, async (prev: any) => {
-      const resp = await fetch(`${API}/medias`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([
-          {
-            id: generateId(),
-            type: upload.file.type,
-            size: upload.file.size,
-            filepath: upload.file.objectInfo.key,
-            width: upload.file.width,
-            height: upload.file.height,
-          },
-        ]),
-      });
-      if (!resp.ok) {
-        const error = new Error("An error occurred while saving the images.");
-        const info = await resp.json();
-        console.error("Error saving images", info);
-        // @ts-expect-error okk
-        error.info = info;
-        // @ts-expect-error okk
-        error.status = resp.status;
-        throw error;
-      }
-      const res = await resp.json();
+      const res = await saveImages([
+        {
+          id: generateId(),
+          type: upload.file.type,
+          size: upload.file.size,
+          filepath: upload.file.objectInfo.key,
+          width: upload.file.width,
+          height: upload.file.height,
+        },
+      ]);
       if (res.length === 0) {
         console.error("No media uploaded");
         return prev;
@@ -2878,22 +2837,7 @@ function handleUploadsSuccess(upload: any) {
     };
   });
   mutate(`/medias`, async (prev: any) => {
-    const resp = await fetch(`${API}/medias`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) {
-      const error = new Error("An error occurred while saving the images.");
-      const info = await resp.json();
-      console.error("Error saving images", info);
-      // @ts-expect-error okk
-      error.info = info;
-      // @ts-expect-error okk
-      error.status = resp.status;
-      throw error;
-    }
-    const res = await resp.json();
+    const res = await saveImages(payload);
     return prev ? [...prev, ...res] : res;
   });
 }
@@ -3353,4 +3297,24 @@ function ArrowSvg(props: React.ComponentProps<"svg">) {
       />
     </svg>
   );
+}
+
+async function saveImages(payload: any) {
+  const resp = await fetch(`${API}/medias`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    const error = new Error("An error occurred while saving the images.");
+    const info = await resp.json();
+    console.error("Error saving images", info);
+    // @ts-expect-error okk
+    error.info = info;
+    // @ts-expect-error okk
+    error.status = resp.status;
+    throw error;
+  }
+  const res = await resp.json();
+  return res;
 }
