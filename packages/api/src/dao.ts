@@ -232,6 +232,30 @@ export async function getDraftFullSlug(
 
 /**
  * Creates a new draft and update page's pointer
+ *  - check circular reference
+ *  - TODO: [unique slug] check every page (both draft and published) that share the same parent don't have the same slug
+ *      check for draft conflict
+
+        SELECT 1
+        FROM Pages T1
+        JOIN PageVersions T2 ON T1.draft_version_id = T2.id
+        WHERE T1.id != :current_page_id  -- this page_id
+        AND T2.slug = 'our-team' -- this page's slug
+        AND T2.parent_page_id = 1; -- this page's parent_id
+
+        If this returns a row, block the save.
+
+        check for published conflict
+
+        SELECT 1
+        FROM Pages T1
+        JOIN PageVersions T2 ON T1.published_version_id = T2.id
+        WHERE T1.id != :current_page_id -- this page_id
+        AND T2.slug = 'our-team' -- this page's slug
+        AND T2.parent_page_id = 1; -- this page's parent_id
+
+        If this returns a row, block the save.
+        "This slug is already used by the other page. Please choose another."
  */
 export async function saveDraft(page_id: string, updates: InsertDraft) {
   // check circular reference with parent_id
