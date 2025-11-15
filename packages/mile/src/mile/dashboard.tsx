@@ -132,7 +132,7 @@ function MediaGallery() {
 
   return (
     <div className="py-5">
-      <div className="max-w-5xl mx-auto">
+      <MainContainer>
         <div className="mb-6 flex gap-2 items-center">
           <h1 className="font-bold text-3xl">Media Gallery</h1>
         </div>
@@ -165,7 +165,7 @@ function MediaGallery() {
             </Drawer>
           </div>
         </div>
-      </div>
+      </MainContainer>
     </div>
   );
 }
@@ -531,7 +531,7 @@ async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
 function DashboardMain() {
   return (
     <div className="py-5">
-      <div className="max-w-5xl mx-auto">
+      <MainContainer>
         <div className="mb-6 flex gap-2 items-center">
           <h1 className="font-bold text-3xl">Welcome</h1>
         </div>
@@ -543,7 +543,7 @@ function DashboardMain() {
             laborum laudantium!
           </div>
         </div>
-      </div>
+      </MainContainer>
     </div>
   );
 }
@@ -555,7 +555,7 @@ function SearchPage({
 }) {
   return (
     <div className="py-5">
-      <div className="max-w-5xl mx-auto">
+      <MainContainer>
         <div className="mb-6 flex gap-2 items-center">
           <h1 className="font-bold text-3xl">Search result</h1>
         </div>
@@ -563,7 +563,7 @@ function SearchPage({
           <SearchForm initialQuery={search.query} />
           <SearchFetcher search={search} />
         </div>
-      </div>
+      </MainContainer>
     </div>
   );
 }
@@ -653,7 +653,7 @@ function PaginatedPages({
   search: { [key: string]: string | string[] | undefined };
 }) {
   return (
-    <div className="max-w-5xl mx-auto">
+    <MainContainer>
       <div className="mb-6 flex justify-between items-center">
         <SearchForm />
       </div>
@@ -663,7 +663,7 @@ function PaginatedPages({
           <PagesFetcher search={search} />
         </div>
       </div>
-    </div>
+    </MainContainer>
   );
 }
 
@@ -673,17 +673,17 @@ function TreeViewAllPages() {
     error: pagesError,
     isLoading: pagesIsLoading,
   } = useSWR([`/pages/all-pages`], fetcher);
-  if (pagesError) return <div>Failed to load</div>;
-  if (pagesIsLoading) return <div>loading...</div>;
+  if (pagesError) return <MainContainer>Failed to load</MainContainer>;
+  if (pagesIsLoading) return <MainContainer>loading...</MainContainer>;
   if (pages && pages.error === true) {
     console.error("error", pages.message);
-    return <div className="">Failed to load</div>;
+    return <MainContainer>Failed to load</MainContainer>;
   }
 
   const { data } = pages;
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <MainContainer>
       <div className="mb-6 flex justify-between items-center">
         <FuzzySearchButton data={data} />
       </div>
@@ -693,7 +693,7 @@ function TreeViewAllPages() {
           <AllPagesTreeView data={data} />
         </div>
       </div>
-    </div>
+    </MainContainer>
   );
 }
 function buildTree(
@@ -725,24 +725,10 @@ function buildTree(
   return roots;
 }
 
-function Item({
-  item,
-  parent_slug,
-  draft_parent_slug,
-}: {
-  item: any;
-  parent_slug?: any;
-  draft_parent_slug?: any;
-}) {
+function Item({ item }: { item: any }) {
   const [open, setOpen] = useState(false);
   const hasChildren = item.children.length > 0;
-  const draft_full_slug = printSlug(item, draft_parent_slug, {
-    slug_key: "draft_slug",
-  });
-  const full_slug = printSlug(item, parent_slug, {
-    slug_key: "published_slug",
-  });
-  const is_slug_diff = draft_full_slug !== full_slug;
+  const href = `/mile/${item.id}/__edit__?preview=true`;
 
   return (
     <div className="">
@@ -762,15 +748,18 @@ function Item({
           </div>
         ) : null}
         <div className="pt-2 pb-2 flex-1 border-b border-zinc-200">
-          <div className="text-zinc-700 text-sm font-semibold">
-            {item.draft_title || item.published_title || "No title"}
-          </div>
+          <a href={href}>
+            <div className="text-zinc-700 text-sm font-semibold">
+              {item.title || "Untitled"}
+            </div>
+          </a>
           <div className="-mt-0.5 text-zinc-500 text-xs">
-            <span className="inline-block">/{draft_full_slug}</span>
-            {is_slug_diff && (
-              <span className="ml-2 inline-block">
-                (published: /{full_slug})
-              </span>
+            <div className="flex items-center gap-x-1 text-xs text-zinc-500">
+              <PageStatus data={item} />
+              <code className="">{item.draft_full_slug}</code>
+            </div>
+            {item.slug_changed && (
+              <div className="">(published: {item.full_slug})</div>
             )}
           </div>
         </div>
@@ -778,16 +767,7 @@ function Item({
       {hasChildren && open && (
         <div className="ml-10">
           {item.children.map((child: any) => (
-            <Item
-              key={child.id}
-              item={child}
-              parent_slug={printSlug(item, parent_slug, {
-                slug_key: "published_slug",
-              })}
-              draft_parent_slug={printSlug(item, draft_parent_slug, {
-                slug_key: "draft_slug",
-              })}
-            />
+            <Item key={child.id} item={child} />
           ))}
         </div>
       )}
@@ -795,31 +775,20 @@ function Item({
   );
 }
 
-function printSlug(
-  item: any,
-  parent_slug: any,
-  { slug_key = "published_slug" }: { slug_key?: string },
-) {
-  if (!parent_slug) return `${item[slug_key]}`; // or draft_slug
-  return `${parent_slug}/${item[slug_key]}`; // or draft_slug
-}
-
 function AllPagesTreeView({ data }: { data: any }) {
-  const tree = buildTree(data, { parent_id_key: "published_parent_id" });
-  console.log("data", data, tree);
+  const tree = buildTree(data, { parent_id_key: "parent_id" });
 
   return (
     <div className="">
       {tree.map((item: any) => (
-        <Item
-          key={item.id}
-          item={item}
-          parent_slug={null}
-          draft_parent_slug={null}
-        />
+        <Item key={item.id} item={item} />
       ))}
     </div>
   );
+}
+
+function MainContainer({ children }: { children: React.ReactNode }) {
+  return <div className="max-w-5xl mx-auto">{children}</div>;
 }
 
 function AllPages() {
@@ -828,27 +797,44 @@ function AllPages() {
     error: pagesError,
     isLoading: pagesIsLoading,
   } = useSWR([`/pages/all-pages`], fetcher);
-  if (pagesError) return <div>Failed to load</div>;
-  if (pagesIsLoading) return <div>loading...</div>;
+  if (pagesError) return <MainContainer>Failed to load</MainContainer>;
+  if (pagesIsLoading) return <MainContainer>loading...</MainContainer>;
   if (pages && pages.error === true) {
     console.error("error", pages.message);
-    return <div className="">Failed to load</div>;
+    return <MainContainer>Failed to load</MainContainer>;
   }
 
   const { data } = pages;
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <MainContainer>
       <div className="mb-6 flex justify-between items-center">
         <FuzzySearchButton data={data} />
       </div>
 
       <div className="">
-        <div className="space-y-8">
+        <div className="space-y-2">
+          <TableHeader />
           <AllPagesList data={data} />
         </div>
       </div>
-    </div>
+    </MainContainer>
+  );
+}
+
+function TableHeader() {
+  return (
+    <TableRow>
+      <TableCol1>
+        <span className="text-xs text-zinc-600 font-semibold">Page Name</span>
+      </TableCol1>
+      <TableCol2>
+        <span className="text-xs text-zinc-600 font-semibold">Last edited</span>
+      </TableCol2>
+      <TableCol3>
+        <span className="text-xs text-zinc-600 font-semibold">Created</span>
+      </TableCol3>
+    </TableRow>
   );
 }
 
@@ -869,8 +855,6 @@ function AllPagesList({ data }: { data: any }) {
       setCurrentPage(page_no);
     }
   };
-
-  console.log("currentItems", currentItems);
 
   return (
     <div className="space-y-10">
@@ -971,7 +955,7 @@ function FuzzySearchButton({ data }: { data: any }) {
 
 const fuse_options = {
   includeScore: true,
-  keys: ["published_title", "published_slug"],
+  keys: ["title", "slug", "draft_full_slug"],
 };
 
 function FuzzySearchResult({ data }: { data: any }) {
@@ -1006,11 +990,9 @@ function FuzzySearchResult({ data }: { data: any }) {
           return (
             <a href={href} key={item.id}>
               <div key={item.id} className="px-3 pt-1 py-1.5 hover:bg-zinc-100">
-                <div className="font-semibold text-sm">
-                  {item.published_title}
-                </div>
+                <div className="font-semibold text-sm">{item.title}</div>
                 <div className="text-xs text-gray-500">
-                  {item.published_slug}
+                  {item.draft_full_slug}
                 </div>
               </div>
             </a>
@@ -1028,7 +1010,7 @@ function Pages_bk_pagination({
 }) {
   return (
     <div className="py-5">
-      <div className="max-w-5xl mx-auto">
+      <MainContainer>
         <div className="mb-6 flex gap-2 items-center">
           <h1 className="font-bold text-3xl">Pages</h1>
           <CreatePageModal />
@@ -1037,7 +1019,7 @@ function Pages_bk_pagination({
           <SearchForm />
           <PagesFetcher search={search} />
         </div>
-      </div>
+      </MainContainer>
     </div>
   );
 }
@@ -1261,8 +1243,6 @@ function PagesData({ fetcher_key }: { fetcher_key: string[] }) {
 }
 
 function PagesList({ data }: { data: any }) {
-  console.log("data", data);
-
   if (!data || data.length === 0) {
     return <div className="">No pages</div>;
   }
@@ -1276,46 +1256,48 @@ function PagesList({ data }: { data: any }) {
   );
 }
 
-function getPageSlug(data: any): string {
-  const isHome = data.published_slug === "" && data.published_parent_id == null;
-  if (isHome) return "/";
-  return data.draft_slug || data.published_slug;
+function TableRow({ children }: { children: React.ReactNode }) {
+  return <div className="py-1.5 flex flex-row">{children}</div>;
+}
+
+function TableCol1({ children }: { children: React.ReactNode }) {
+  return <div className="truncate grow-1 w-full pr-4">{children}</div>;
+}
+function TableCol2({ children }: { children: React.ReactNode }) {
+  return <div className="w-32 shrink-0">{children}</div>;
+}
+function TableCol3({ children }: { children: React.ReactNode }) {
+  return <div className="w-32 shrink-0">{children}</div>;
 }
 
 function PageItem({ data }: { data: any }) {
   const href = `/mile/${data.id}/__edit__?preview=true`;
 
   return (
-    <div className="py-1.5 flex flex-row">
-      <div className="truncate grow-1 w-full">
+    <TableRow>
+      <TableCol1>
         <div className="">
           <a href={href}>
             <div className="font-semibold text-sm">
-              {data.draft_title || data.published_title || "No title"}
+              {data.title || "Untitled"}
             </div>
             <div className="flex items-center gap-x-1 text-xs text-zinc-500">
-              <div
-                className={`flex items-center justify-center w-4 h-4 text-xs ${data.status == null ? "bg-red-200" : "bg-green-200"}`}
-              >
-                {data.status == null ? "D" : "P"}
-              </div>
-              <code className="">{getPageSlug(data)}</code>
+              <PageStatus data={data} />
+              <code className="">{data.draft_full_slug}</code>
             </div>
           </a>
         </div>
-      </div>
-      <div className="w-32 shrink-0">
+      </TableCol1>
+      <TableCol2>
         <div className="text-xs text-zinc-700">
-          {new Date(
-            data.draft_updated_at || data.updated_at,
-          ).toLocaleDateString("en-US", {
+          {new Date(data.last_edited).toLocaleDateString("en-US", {
             year: "numeric",
             month: "short",
             day: "numeric",
           })}
         </div>
-      </div>
-      <div className="w-32 shrink-0">
+      </TableCol2>
+      <TableCol3>
         <div className="text-xs text-zinc-700">
           {new Date(data.created_at).toLocaleDateString("en-US", {
             year: "numeric",
@@ -1323,7 +1305,38 @@ function PageItem({ data }: { data: any }) {
             day: "numeric",
           })}
         </div>
-      </div>
+      </TableCol3>
+    </TableRow>
+  );
+}
+
+function PageStatus({ data }: { data: any }) {
+  if (!data.status) return null;
+  const status = data.status;
+
+  let classes = "";
+  switch (status) {
+    case "draft":
+      classes = "bg-yellow-200 text-yellow-600";
+      break;
+    case "unpublished":
+      classes = "bg-yellow-200 text-yellow-600";
+      break;
+    case "published":
+      classes = "bg-green-200 text-green-600";
+      break;
+    case "archived":
+      classes = "bg-gray-200 text-gray-600";
+      break;
+    default:
+      classes = "bg-red-200 text-red-600";
+      break;
+  }
+  return (
+    <div
+      className={`px-1 py-0.5 rounded-xs text-[9px] uppercase font-semibold ${classes}`}
+    >
+      {status} {data.slug_changed && "*"}
     </div>
   );
 }
@@ -1353,32 +1366,26 @@ function CreatePageModal() {
   );
 }
 
-function createPage(data: { [k: string]: any }) {
-  return mutate(
-    ["/pages"],
-    async (pages: any) => {
-      const resp = await fetch(`${API}/pages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!resp.ok) {
-        const error = new Error("An error occurred while creating the page.");
-        const info = await resp.json();
-        console.error("Error creating page", info);
-        // @ts-expect-error okk
-        error.info = info;
-        // @ts-expect-error okk
-        error.status = resp.status;
-        throw error;
-      }
-      const result = await resp.json();
-      // console.log("POST CREATE", pages, result);
+async function createPage(data: { [k: string]: any }) {
+  const resp = await fetch(`${API}/pages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!resp.ok) {
+    const error = new Error("An error occurred while creating the page.");
+    const info = await resp.json();
+    console.error("Error creating page", info);
+    // @ts-expect-error okk
+    error.info = info;
+    // @ts-expect-error okk
+    error.status = resp.status;
+    throw error;
+  }
+  const result = await resp.json();
+  // console.log("POST CREATE", pages, result);
 
-      return [...(pages ? pages.data : []), result];
-    },
-    // { revalidate: false },
-  );
+  return result?.data;
 }
 
 function NewPageSettings({ close }: any) {
@@ -1468,10 +1475,9 @@ function NewPageSettings({ close }: any) {
     // console.log("payload", pageData, payload);
     await createPage(payload)
       .then((e) => {
-        // console.log("e", e);
+        console.log("createPage e", e);
         if (e) {
-          const last = e[e.length - 1];
-          window.location.assign(`/mile/${last.id}/__edit__?preview=true`);
+          window.location.assign(`/mile/${e}/__edit__?preview=true`);
         }
         // close();
       })

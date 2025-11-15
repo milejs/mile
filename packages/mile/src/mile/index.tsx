@@ -1107,6 +1107,7 @@ function EditRichtextComponent({
 
       // save db
       mutate(`/medias`, async (prev: any) => {
+        // TODO: dry this fetch in this file
         const resp = await fetch(`${API}/medias`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2370,6 +2371,9 @@ function MileHeader({
   function handleHeaderSavePage() {
     editor.save();
   }
+  function handleHeaderPublishPage() {
+    editor.publish();
+  }
 
   return (
     <div className="mile-header h-[40px] bg-white" style={{ zIndex: 2 }}>
@@ -2478,6 +2482,13 @@ function MileHeader({
           onClick={handleHeaderSavePage}
         >
           Save
+        </button>
+        <button
+          type="button"
+          className="px-2 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={handleHeaderPublishPage}
+        >
+          Publish
         </button>
       </div>
     </div>

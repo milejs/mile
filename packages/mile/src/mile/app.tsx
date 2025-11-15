@@ -87,7 +87,7 @@ export async function App({
   return (
     <Suspense fallback={<LoadingComponent />}>
       <MDXRemote
-        source={page_data.content}
+        source={page_data.drafts.content}
         options={options}
         components={components}
         onError={ErrorComponent}

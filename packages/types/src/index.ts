@@ -123,6 +123,7 @@ export interface MileEditor {
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile"): void;
   mergeMarkdownData(node_id: string, md: string): void;
   save(): void;
+  publish(): void;
   updateData(data: TreeData, lastOperation?: Operation): void;
   findNode(id: string): NodeData | null;
   getNode(id: string): NodeData;
@@ -180,10 +181,9 @@ export type PageData = {
 
 export type DraftData = PageData & {
   page_id: string;
-  version: number;
-  is_current_draft: number;
+  version_number: number;
   created_by: string; // "admin" | string
-  published_at?: number;
+  reason?: string; // "admin" | string
 };
 
 export type TreeData = {
@@ -434,6 +434,16 @@ export type HistoryEntry = {
 export interface MilePersister {
   editor: MileEditor;
   save(
+    pageData: PageData,
+    content: TreeData,
+    components: Components,
+  ): Promise<
+    | {
+        message: any;
+      }
+    | undefined
+  >;
+  publish(
     pageData: PageData,
     content: TreeData,
     components: Components,

@@ -19,16 +19,16 @@ import slugify from "@sindresorhus/slugify";
 import { generateId } from "./lib/generate-id";
 import {
   createNewPage,
-  findHomePage,
-  findPageByFullSlug,
+  getPublishedPageByFullSlug,
   getMediasByIds,
-  getPageFullPath,
+  getDraftFullSlug,
   listAllPages,
   listPaginatedPages,
-  loadPageById,
+  loadDraftByPageId,
   saveDraft,
   searchPages,
-  searchPagesByTitle,
+  searchDraftPagesByTitle,
+  publishPage,
 } from "./dao";
 
 type MileAPIOptions = {
@@ -109,7 +109,7 @@ export function MileAPI(options: MileAPIOptions) {
     // For parent picker search
     const { q, page = "1", limit = "30" } = c.req.query();
     const per_page = Math.min(100, parseInt(limit, 10));
-    const result = await searchPagesByTitle(q, per_page);
+    const result = await searchDraftPagesByTitle(q, per_page);
     return c.json({
       query: q,
       data: result,
@@ -163,36 +163,37 @@ const page_by_slug = new Hono();
 page_by_slug.get("/", async (c) => {
   const { preview } = c.req.query();
 
-  let [single] = await findHomePage();
+  let [single] = await getPublishedPageByFullSlug("/");
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
+  // TODO: should we ensure "published" status?
 
   // get the draft if preview mode
-  if (preview === "true") {
-    [single] = await db
-      .select()
-      .from(draftsTable)
-      .where(
-        and(
-          eq(draftsTable.page_id, single.id),
-          eq(draftsTable.is_current_draft, 1),
-        ),
-      )
-      .limit(1);
-    if (!single) {
-      return c.json({ message: "Page not found" }, 404);
-    }
-  } else {
-    // published mode must have "published" status
-    if (single.status !== "published") {
-      return c.json({ message: "Page not found" }, 404);
-    }
-  }
+  // if (preview === "true") {
+  //   [single] = await db
+  //     .select()
+  //     .from(draftsTable)
+  //     .where(
+  //       and(
+  //         eq(draftsTable.page_id, single.id),
+  //         eq(draftsTable.is_current_draft, 1),
+  //       ),
+  //     )
+  //     .limit(1);
+  //   if (!single) {
+  //     return c.json({ message: "Page not found" }, 404);
+  //   }
+  // } else {
+  //   // published mode must have "published" status
+  //   if (single.status !== "published") {
+  //     return c.json({ message: "Page not found" }, 404);
+  //   }
+  // }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
-  if (single.og_image_ids && single.og_image_ids.length > 0) {
-    og_images = await getMediasByIds(single.og_image_ids);
+  if (single.drafts.og_image_ids && single.drafts.og_image_ids.length > 0) {
+    og_images = await getMediasByIds(single.drafts.og_image_ids);
   }
   return c.json({
     ...single,
@@ -205,35 +206,37 @@ page_by_slug.get("/:slug{.+}", async (c) => {
   const slug = c.req.param("slug");
   const { preview } = c.req.query();
 
-  let single = await findPageByFullSlug(`/${slug}`);
+  let [single] = await getPublishedPageByFullSlug(`/${slug}`);
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
+  // TODO: should we ensure "published" status?
+
   // get the draft if preview mode
-  if (preview === "true") {
-    [single] = await db
-      .select()
-      .from(draftsTable)
-      .where(
-        and(
-          eq(draftsTable.page_id, single.id),
-          eq(draftsTable.is_current_draft, 1),
-        ),
-      )
-      .limit(1);
-    if (!single) {
-      return c.json({ message: "Page not found" }, 404);
-    }
-  } else {
-    // published mode must have "published" status
-    if (single.status !== "published") {
-      return c.json({ message: "Page not found" }, 404);
-    }
-  }
+  // if (preview === "true") {
+  //   [single] = await db
+  //     .select()
+  //     .from(draftsTable)
+  //     .where(
+  //       and(
+  //         eq(draftsTable.page_id, single.id),
+  //         eq(draftsTable.is_current_draft, 1),
+  //       ),
+  //     )
+  //     .limit(1);
+  //   if (!single) {
+  //     return c.json({ message: "Page not found" }, 404);
+  //   }
+  // } else {
+  //   // published mode must have "published" status
+  //   if (single.status !== "published") {
+  //     return c.json({ message: "Page not found" }, 404);
+  //   }
+  // }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
-  if (single.og_image_ids && single.og_image_ids.length > 0) {
-    og_images = await getMediasByIds(single.og_image_ids);
+  if (single.drafts.og_image_ids && single.drafts.og_image_ids.length > 0) {
+    og_images = await getMediasByIds(single.drafts.og_image_ids);
   }
   return c.json({
     ...single,
@@ -283,15 +286,15 @@ pages.post("/", async (c) => {
       400,
     );
   }
-  const [newPage] = await createNewPage(parsed.data, "admin");
-  return c.json(newPage, 201);
+  const id = await createNewPage(parsed.data, "admin");
+  return c.json({ data: id }, 201);
 });
 
 // Get page full path
 // - Builds full slug when parent is selected
 pages.get("/:id/full-path", async (c) => {
   const id = c.req.param("id");
-  const full_path = await getPageFullPath(id);
+  const full_path = await getDraftFullSlug(id);
   return c.json({
     data: full_path,
   });
@@ -301,37 +304,56 @@ pages.get("/:id/full-path", async (c) => {
 pages.get("/:id", async (c) => {
   const id = c.req.param("id");
   const { preview, draft_id, version } = c.req.query();
-  const single = await loadPageById(id, {
-    preview: !!preview,
-    draft_id: draft_id,
-    version_number: version ? parseInt(version, 10) : undefined,
-  });
-
+  const single = await loadDraftByPageId(id);
   if (!single) {
     return c.json({ message: "Page not found" }, 404);
   }
   // Fetch related media if og_image_ids exist
   let og_images: SelectMedia[] = [];
-  if (single.og_image_ids && single.og_image_ids.length > 0) {
-    og_images = await getMediasByIds(single.og_image_ids);
+  if (single.drafts.og_image_ids && single.drafts.og_image_ids.length > 0) {
+    og_images = await getMediasByIds(single.drafts.og_image_ids);
   }
   return c.json({
-    ...single,
+    ...single.drafts,
     og_images,
   });
 });
 
-// Save draft
+// Saving a draft creates new row in drafts with the passed data
+// - generate new id for new row and also overwrite "reason" to "manual-save"
+// - saveDraft will check for circular references with parent
 pages.put("/:id/draft", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
   if (body && body.created_at) {
     delete body.created_at;
   }
+  body.id = generateId();
+  body.reason = "manual-save";
 
   // Here you might want to add validation similar to the POST route
-  const [updatedPage] = await saveDraft(id, body);
-  return c.json(updatedPage);
+  const updatedPage = await saveDraft(id, body);
+  return c.json({ data: updatedPage });
+});
+
+// Publishing a page saves new draft, calculate full_slug and updates pointer
+// - generate new id for new draft and also overwrite "reason" to "publish"
+// - calculate draft full_slug to be used as published full_slug
+//    - if page:e is under page:m in published version, and under page:n in draft version.
+//    - publishing page:e will construct full_slug as /.../page:n/page:e
+//    - parents of page:n (the /.../ part) is also calculated the same way using the draft version
+pages.post("/:id/publish", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  if (body && body.created_at) {
+    delete body.created_at;
+  }
+  body.id = generateId();
+  body.reason = "publish";
+
+  // Here you might want to add validation similar to the POST route
+  const updatedPage = await publishPage(id, body);
+  return c.json({ data: updatedPage });
 });
 
 // Update page (not used for now)

@@ -1,5 +1,5 @@
 {
-  "id": "6dc8f7df-bf2f-488b-aefb-beffc36f1c52",
+  "id": "db4bcc90-d736-43a9-a31b-99a2d27ad98d",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -20,8 +20,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "version": {
-          "name": "version",
+        "version_number": {
+          "name": "version_number",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
@@ -99,25 +99,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "is_current_draft": {
-          "name": "is_current_draft",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "published_at": {
-          "name": "published_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_by": {
           "name": "created_by",
           "type": "char(32)",
@@ -131,16 +112,16 @@
           "notNull": true,
           "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
+        "reason": {
+          "name": "reason",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         }
       },
       "indexes": {
-        "draft_version_idx": {
-          "name": "draft_version_idx",
+        "drafts_id_version__idx": {
+          "name": "drafts_id_version__idx",
           "columns": [
             {
               "expression": "page_id",
@@ -149,7 +130,7 @@
               "nulls": "last"
             },
             {
-              "expression": "version",
+              "expression": "version_number",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -160,17 +141,11 @@
           "method": "btree",
           "with": {}
         },
-        "current_draft_idx": {
-          "name": "current_draft_idx",
+        "drafts_page_id__idx": {
+          "name": "drafts_page_id__idx",
           "columns": [
             {
               "expression": "page_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "is_current_draft",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -285,26 +260,20 @@
           "primaryKey": true,
           "notNull": true
         },
-        "parent_id": {
-          "name": "parent_id",
+        "published_version_id": {
+          "name": "published_version_id",
           "type": "char(32)",
           "primaryKey": false,
           "notNull": false
         },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
+        "draft_version_id": {
+          "name": "draft_version_id",
+          "type": "char(32)",
           "primaryKey": false,
           "notNull": false
         },
-        "type": {
-          "name": "type",
+        "full_slug": {
+          "name": "full_slug",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -315,52 +284,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "content": {
-          "name": "content",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "keywords": {
-          "name": "keywords",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "og_image_ids": {
-          "name": "og_image_ids",
-          "type": "char(32)[]",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "ARRAY[]::char(32)[]"
-        },
-        "llm": {
-          "name": "llm",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "no_index": {
-          "name": "no_index",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "no_follow": {
-          "name": "no_follow",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "canonical_url": {
-          "name": "canonical_url",
-          "type": "text",
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -378,10 +304,49 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "pages_full_slug__idx": {
+          "name": "pages_full_slug__idx",
+          "columns": [
+            {
+              "expression": "full_slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "pages_status__idx": {
+          "name": "pages_status__idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "pages_full_slug_unique": {
+          "name": "pages_full_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "full_slug"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -475,7 +475,89 @@ export class Editor implements MileEditor {
     } catch (error) {
       this.is_disabled = false;
       this.forceReRender();
-      toast.error("Failed to save");
+      console.log("error", error);
+      // @ts-expect-error okk
+      if (error.cause) {
+        // @ts-expect-error okk
+        if (error.cause.message === "circular_reference") {
+          toast.error(
+            "Unable to save draft: the selected parent page is a descendant of this page, which creates a circular reference. Select another parent.",
+            {
+              closeButton: true,
+              duration: Infinity,
+            },
+          );
+          return { ok: false, error };
+        }
+        // @ts-expect-error okk
+        if (error.cause.message === "tree_to_mdx_failed") {
+          toast.error(
+            "Unable to save draft: page content is invalid. Please contact admin.",
+            {
+              closeButton: true,
+              duration: Infinity,
+            },
+          );
+          return { ok: false, error };
+        }
+      }
+
+      toast.error("Failed to save draft. Please try again.", {
+        closeButton: true,
+        duration: Infinity,
+      });
+      return { ok: false, error };
+    }
+  }
+
+  async publish() {
+    this.is_disabled = true;
+    this.forceReRender();
+    try {
+      const result = await this.persister.publish(
+        this.draft_data,
+        this.tree.data,
+        this.mile.registry.components,
+      );
+      this.is_disabled = false;
+      this.forceReRender();
+      toast.success("Published successfully");
+      window.location.reload();
+      return { ok: true, error: undefined };
+    } catch (error) {
+      this.is_disabled = false;
+      this.forceReRender();
+      console.log("error", error);
+      // @ts-expect-error okk
+      if (error.cause) {
+        // @ts-expect-error okk
+        if (error.cause.message === "circular_reference") {
+          toast.error(
+            "Unable to publish a page: the selected parent page is a descendant of this page, which creates a circular reference. Select another parent.",
+            {
+              closeButton: true,
+              duration: Infinity,
+            },
+          );
+          return { ok: false, error };
+        }
+        // @ts-expect-error okk
+        if (error.cause.message === "tree_to_mdx_failed") {
+          toast.error(
+            "Unable to publish a page: page content is invalid. Please contact admin.",
+            {
+              closeButton: true,
+              duration: Infinity,
+            },
+          );
+          return { ok: false, error };
+        }
+      }
+
+      toast.error("Failed to publish a page. Please try again.", {
+        closeButton: true,
+        duration: Infinity,
+      });
       return { ok: false, error };
     }
   }
@@ -871,6 +953,8 @@ class Persister implements MilePersister {
       mdxstring = treeToMDXstring(content, components);
     } catch (error) {
       console.error("Error converting tree to MDX", error);
+      // @ts-expect-error okk
+      error.cause = { message: "tree_to_mdx_failed" };
       throw error;
     }
 
@@ -889,13 +973,58 @@ class Persister implements MilePersister {
           const info = await resp.json();
           console.error("Error saving page", info);
           // @ts-expect-error okk
-          error.info = info;
+          error.cause = info;
           // @ts-expect-error okk
           error.status = resp.status;
           throw error;
         }
         const result = await resp.json();
-        return result;
+        return result.data;
+      },
+      // { revalidate: false },
+    );
+  }
+
+  async publish(
+    draft_data: DraftData,
+    content: TreeData,
+    components: Components,
+  ) {
+    console.log("save", draft_data, content);
+
+    // convert json to mdx string
+    let mdxstring = "";
+    try {
+      mdxstring = treeToMDXstring(content, components);
+    } catch (error) {
+      console.error("Error converting tree to MDX", error);
+      // @ts-expect-error okk
+      error.cause = { message: "tree_to_mdx_failed" };
+      throw error;
+    }
+
+    console.log("mdxstring", mdxstring);
+
+    return mutate(
+      [`/pages`, `/${draft_data.page_id}?preview=true`],
+      async () => {
+        const resp = await fetch(`${API}/pages/${draft_data.page_id}/publish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...draft_data, content: mdxstring }),
+        });
+        if (!resp.ok) {
+          const error = new Error("An error occurred while saving the page.");
+          const info = await resp.json();
+          console.error("Error saving page", info);
+          // @ts-expect-error okk
+          error.cause = info;
+          // @ts-expect-error okk
+          error.status = resp.status;
+          throw error;
+        }
+        const result = await resp.json();
+        return result.data;
       },
       // { revalidate: false },
     );

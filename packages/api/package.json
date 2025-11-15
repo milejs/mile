@@ -24,7 +24,7 @@
     "@milejs/typescript-config": "workspace:*",
     "@types/node": "^22",
     "@types/ws": "^8.18.1",
-    "drizzle-kit": "^0.31.5",
+    "drizzle-kit": "^0.31.6",
     "tsup": "^8.5.0",
     "typescript": "^5"
   },
@@ -33,7 +33,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "@sindresorhus/slugify": "^3.0.0",
     "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.44.6",
+    "drizzle-orm": "^0.44.7",
     "hono": "^4.9.9",
     "nanoid": "^5.1.6",
     "ws": "^8.18.3",

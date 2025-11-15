@@ -10,86 +10,160 @@ import {
 import { desc, eq, or, and, ilike, inArray, count, sql } from "drizzle-orm";
 import { generateId } from "./lib/generate-id";
 
-export async function searchPagesByTitle(query: string, limit = 20) {
+// Aliases for joins
+import { alias } from "drizzle-orm/pg-core";
+export const publishedVersion = alias(draftsTable, "published_version");
+export const draftVersion = alias(draftsTable, "draft_version");
+
+// Search pages in slug's combobox
+export async function searchDraftPagesByTitle(query: string, limit = 20) {
   const searchCondition = or(
-    ilike(pagesTable.title, `%${query}%`),
-    ilike(pagesTable.slug, `%${query}%`),
+    ilike(draftVersion.title, `%${query}%`),
+    ilike(draftVersion.slug, `%${query}%`),
   );
   const results = await db
     .select({
       id: pagesTable.id,
-      title: pagesTable.title,
+      title: draftVersion.title,
+      slug: draftVersion.slug,
     })
     .from(pagesTable)
+    .innerJoin(draftVersion, eq(pagesTable.draft_version_id, draftVersion.id))
     .where(searchCondition)
     .limit(limit);
 
   return results;
 }
 
+// Search pages in CMS
 export async function searchPages(query: string, limit = 20, offset = 0) {
   const searchCondition = or(
-    ilike(pagesTable.title, `%${query}%`),
-    ilike(pagesTable.slug, `%${query}%`),
+    ilike(draftVersion.title, `%${query}%`),
+    ilike(draftVersion.slug, `%${query}%`),
   );
-  return await Promise.all([
+  const [pagesList, totalCount] = await Promise.all([
     // Get paginated results
     db
-      .select()
+      .select({
+        id: pagesTable.id,
+        status: pagesTable.status,
+        created_at: pagesTable.created_at,
+        updated_at: pagesTable.updated_at,
+        published_at: pagesTable.published_at,
+        full_slug: pagesTable.full_slug,
+
+        // Published version
+        published_version_id: pagesTable.published_version_id,
+        // ignore publishedVersion because it's not used in searchCondition above
+        // published_slug: publishedVersion.slug,
+        // published_title: publishedVersion.title,
+        // published_parent_id: publishedVersion.parent_id,
+
+        // Draft version
+        draft_version_id: pagesTable.draft_version_id,
+        draft_slug: draftVersion.slug,
+        draft_title: draftVersion.title,
+        draft_parent_id: draftVersion.parent_id,
+        draft_created_at: draftVersion.created_at,
+      })
       .from(pagesTable)
+      .innerJoin(draftVersion, eq(pagesTable.draft_version_id, draftVersion.id))
       .where(searchCondition)
       .limit(limit)
       .offset(offset)
-      .orderBy(pagesTable.title), // order by title
+      .orderBy(draftVersion.title), // order by title
 
     // Get total count for pagination
     db
       .select({ count: count() })
       .from(pagesTable)
+      .innerJoin(draftVersion, eq(pagesTable.draft_version_id, draftVersion.id))
       .where(searchCondition)
       .then((result) => result[0].count),
   ]);
+
+  const results = await pageListDto(pagesList);
+  return [results, totalCount];
 }
 
+const page_list_columns = {
+  id: pagesTable.id,
+  status: pagesTable.status,
+  created_at: pagesTable.created_at,
+  updated_at: pagesTable.updated_at,
+  published_at: pagesTable.published_at,
+  full_slug: pagesTable.full_slug,
+
+  // Published version
+  published_version_id: pagesTable.published_version_id,
+  published_slug: publishedVersion.slug,
+  published_title: publishedVersion.title,
+  published_parent_id: publishedVersion.parent_id,
+
+  // Draft version
+  draft_version_id: pagesTable.draft_version_id,
+  draft_slug: draftVersion.slug,
+  draft_title: draftVersion.title,
+  draft_parent_id: draftVersion.parent_id,
+  draft_created_at: draftVersion.created_at,
+};
+
+async function pageListDto(pagesList: any[]) {
+  const results: PageListItem[] = [];
+
+  for (const p of pagesList) {
+    let displayFullSlug = p.full_slug;
+
+    // this "if" should be necessary because draft should always exist
+    if (p.draft_version_id) {
+      try {
+        const draftFullSlug = await getDraftFullSlug(p.id);
+        displayFullSlug = draftFullSlug || displayFullSlug;
+      } catch (e) {
+        // Fallback to page full_slug if computation fails
+        displayFullSlug = p.full_slug;
+      }
+    }
+
+    results.push({
+      id: p.id,
+      title: p.draft_title || p.published_title || "Untitled",
+      slug: p.draft_slug || p.published_slug || "",
+      parent_id: p.draft_parent_id,
+      published_parent_id: p.published_parent_id,
+      full_slug: p.full_slug,
+      draft_full_slug: displayFullSlug,
+      status: p.status || "unpublished",
+      has_unpublished_changes:
+        p.published_version_id !== null &&
+        p.draft_version_id !== p.published_version_id,
+      slug_changed:
+        displayFullSlug !== p.full_slug && p.published_version_id !== null,
+      published_at: p.published_at,
+      // draft has only created_at (no updated_at) because it gets created every time editor saves the draft.
+      last_edited: p.draft_created_at || p.updated_at,
+      created_at: p.created_at,
+    });
+  }
+
+  return results;
+}
+
+// List paginated pages for CMS
 export async function listPaginatedPages(limit = 20, offset = 0) {
-  return await Promise.all([
+  const [pagesList, totalCount] = await Promise.all([
     // Get the current page of data
     db
-      .select({
-        // Page info
-        id: pagesTable.id,
-        type: pagesTable.type,
-        created_at: pagesTable.created_at,
-        updated_at: pagesTable.updated_at,
-
-        // Status info
-        status: pagesTable.status, // NULL = unpublished, 'published', 'archived'
-
-        // Published version info
-        published_parent_id: pagesTable.parent_id,
-        published_slug: pagesTable.slug,
-        published_title: pagesTable.title,
-
-        // Draft version info (if exists)
-        draft_id: draftsTable.id,
-        draft_parent_id: draftsTable.parent_id,
-        draft_slug: draftsTable.slug,
-        draft_title: draftsTable.title,
-        draft_updated_at: draftsTable.updated_at,
-        draft_published_at: draftsTable.published_at,
-        draft_version: draftsTable.version,
-      })
+      .select(page_list_columns)
       .from(pagesTable)
       .leftJoin(
-        draftsTable,
-        and(
-          eq(draftsTable.page_id, pagesTable.id),
-          eq(draftsTable.is_current_draft, 1),
-        ),
+        publishedVersion,
+        eq(publishedVersion.id, pagesTable.published_version_id),
       )
+      .leftJoin(draftVersion, eq(draftVersion.id, pagesTable.draft_version_id))
       .limit(limit)
       .offset(offset)
-      .orderBy(desc(pagesTable.created_at)), // or whatever ordering you want
+      .orderBy(desc(pagesTable.updated_at)),
 
     // Get total count
     db
@@ -97,123 +171,189 @@ export async function listPaginatedPages(limit = 20, offset = 0) {
       .from(pagesTable)
       .then((result) => result[0].count),
   ]);
+
+  const results = await pageListDto(pagesList);
+  return [results, totalCount];
 }
 
-export async function listAllPages() {
-  return await db
-    .select({
-      // Page info
-      id: pagesTable.id,
-      type: pagesTable.type,
-      created_at: pagesTable.created_at,
-      updated_at: pagesTable.updated_at,
+export interface PageListItem {
+  id: string;
+  title: string;
+  slug: string;
+  parent_id: string | null;
+  published_parent_id: string | null;
+  full_slug: string | null;
+  draft_full_slug: string;
+  status: string;
+  has_unpublished_changes: boolean;
+  slug_changed: boolean;
+  published_at: Date | null;
+  last_edited: Date;
+  created_at: Date;
+}
 
-      // Status info
-      status: pagesTable.status, // NULL = unpublished, 'published', 'archived'
-
-      // Published version info
-      published_parent_id: pagesTable.parent_id,
-      published_slug: pagesTable.slug,
-      published_title: pagesTable.title,
-
-      // Draft version info (if exists)
-      draft_id: draftsTable.id,
-      draft_parent_id: draftsTable.parent_id,
-      draft_slug: draftsTable.slug,
-      draft_title: draftsTable.title,
-      draft_updated_at: draftsTable.updated_at,
-      draft_published_at: draftsTable.published_at,
-      draft_version: draftsTable.version,
-    })
+// List all pages for CMS
+export async function listAllPages(): Promise<PageListItem[]> {
+  const pagesList = await db
+    .select(page_list_columns)
     .from(pagesTable)
     .leftJoin(
-      draftsTable,
-      and(
-        eq(draftsTable.page_id, pagesTable.id),
-        eq(draftsTable.is_current_draft, 1),
-      ),
+      publishedVersion,
+      eq(publishedVersion.id, pagesTable.published_version_id),
     )
-    .orderBy(desc(pagesTable.created_at));
-}
-// export async function listAllPages() {
-//   return await db
-//     .select({
-//       id: pagesTable.id,
-//       parent_id: pagesTable.parent_id,
-//       slug: pagesTable.slug,
-//       title: pagesTable.title,
-//       created_at: pagesTable.created_at,
-//       updated_at: pagesTable.updated_at,
-//     })
-//     .from(pagesTable)
-//     .orderBy(desc(pagesTable.created_at));
-// }
+    .leftJoin(draftVersion, eq(draftVersion.id, pagesTable.draft_version_id))
+    .orderBy(desc(pagesTable.updated_at));
 
-export async function saveDraft(
+  const results = await pageListDto(pagesList);
+  return results;
+}
+
+// get draft's full slug
+export async function getDraftFullSlug(
   page_id: string,
-  updates: Partial<InsertDraft>,
-) {
-  return await db
-    .update(draftsTable)
+): Promise<string | undefined> {
+  const versions = await db
+    .select({ slug: draftsTable.slug, parent_id: draftsTable.parent_id })
+    .from(pagesTable)
+    .innerJoin(draftsTable, eq(pagesTable.draft_version_id, draftsTable.id))
+    .where(eq(pagesTable.id, page_id));
+  if (!versions || versions.length === 0) {
+    return undefined;
+  }
+  const version = versions[0];
+  if (version.parent_id == null) {
+    return "/" + version.slug;
+  } else {
+    const parentPath = await getDraftFullSlug(version.parent_id);
+    if (!parentPath) {
+      return undefined;
+    }
+    return parentPath + "/" + version.slug;
+  }
+}
+
+/**
+ * Creates a new draft and update page's pointer
+ */
+export async function saveDraft(page_id: string, updates: InsertDraft) {
+  // check circular reference with parent_id
+  if (updates.parent_id) {
+    const is_circular = await checkDraftCircularReference(
+      page_id,
+      updates.parent_id,
+    );
+    if (is_circular) {
+      throw new Error("circular_reference");
+    }
+  }
+
+  return await db.transaction(async (tx) => {
+    const insert = await tx
+      .insert(draftsTable)
+      .values({
+        ...updates,
+        created_at: new Date(),
+      })
+      .returning();
+    const new_draft = insert[0];
+    if (!new_draft) {
+      throw new Error("Failed to create draft");
+    }
+    await tx
+      .update(pagesTable)
+      .set({
+        draft_version_id: new_draft.id, // update pointer
+        updated_at: new Date(),
+      })
+      .where(eq(pagesTable.id, page_id));
+    return new_draft;
+  });
+}
+
+/**
+ * Publishing a page is just a pointer update.
+ *  - save new draft
+ *  - calculate draft full_slug
+ *  - update published pointer and full_slug
+ *
+ Now, both the draft and published pointers point to the same version.
+ If editor makes a new change, they'll get a new draft_version_id,
+ but the published one will remain, pointing to the last published version.
+ */
+export async function publishPage(page_id: string, updates: InsertDraft) {
+  // create new draft
+  // at the end of this function, this draft.id will be the published_version_id too.
+  const draft = await saveDraft(page_id, updates);
+  // walk up the tree to calculate draft full_slug to be used for publish full_slug
+  let draft_full_slug = await getDraftFullSlug(page_id);
+  // update pointer and other status
+  await db
+    .update(pagesTable)
     .set({
-      ...updates,
-      updated_at: new Date(),
+      published_version_id: draft.id,
+      full_slug: draft_full_slug,
+      status: "published",
+      published_at: new Date(),
     })
-    .where(
-      and(
-        eq(draftsTable.page_id, page_id),
-        eq(draftsTable.is_current_draft, 1),
-      ),
-    )
-    .returning();
+    .where(eq(pagesTable.id, page_id));
+
+  return draft;
 }
 
 // Create a page
+export interface CreatePageData {
+  id: string;
+  slug: string;
+  title?: string;
+  parent_id?: string | null;
+  type?: string;
+  content?: string;
+  description?: string;
+  keywords?: string;
+  og_image_ids?: string[];
+  llm?: string;
+  no_index?: number;
+  no_follow?: number;
+  canonical_url?: string;
+}
 export async function createNewPage(
-  data: {
-    id: string;
-    slug: string;
-    title?: string;
-    parent_id?: string | null;
-    type?: string;
-    content?: string;
-    description?: string;
-    keywords?: string;
-    og_image_ids?: string[];
-    llm?: string;
-    no_index?: number;
-    no_follow?: number;
-  },
+  data: CreatePageData,
   userId: string,
-) {
-  const inserted_pages = await db.transaction(async (tx) => {
-    // Create page record (minimal, NO STATUS or status is NULL)
-    const inserted_pages = await tx
-      .insert(pagesTable)
-      .values({
-        id: data.id,
-        parent_id: data.parent_id,
-        slug: data.slug,
-        title: data.title || "Untitled",
-        type: data.type,
-        status: null, // NULL = never published yet
-        content: data.content,
-        description: data.description,
-        keywords: data.keywords,
-        og_image_ids: data.og_image_ids || [],
-        llm: data.llm,
-        no_index: data.no_index,
-        no_follow: data.no_follow,
-      })
-      .returning();
+): Promise<string> {
+  return await db.transaction(async (tx) => {
+    const page_id = data.id;
 
-    // Create first draft version with actual content
-    const versionId = generateId();
+    // parent_id (optional) points to a pages.id
+    // we don't store full_slug at this point (we do it at publish time)
+    // but we calculate draft full slug now to check if the slug is not taken
+    if (data.parent_id) {
+      const draft_parent_full_slug = await getDraftFullSlug(data.parent_id);
+      if (draft_parent_full_slug) {
+        const full_slug = `${draft_parent_full_slug}/${data.slug}`;
+        const page = await getPublishedPageByFullSlug(`/${full_slug}`);
+        if (page) {
+          throw new Error(
+            `Published page with slug "${full_slug}" already exists. Try again with a different slug.`,
+          );
+        }
+      }
+    }
+
+    const version_id = generateId();
+
+    // Create page record
+    await tx.insert(pagesTable).values({
+      id: page_id,
+      draft_version_id: version_id, // point to draft below
+      status: null, // Unpublished
+    });
+
+    // Create first draft version
     await tx.insert(draftsTable).values({
-      id: versionId,
-      page_id: data.id,
-      version: 1,
-      parent_id: data.parent_id,
+      id: version_id,
+      page_id: page_id, // point to page
+      version_number: 1,
+      parent_id: data.parent_id || null,
       slug: data.slug,
       title: data.title || "Untitled",
       type: data.type,
@@ -224,267 +364,112 @@ export async function createNewPage(
       llm: data.llm,
       no_index: data.no_index,
       no_follow: data.no_follow,
-      status: "draft", // draft exists only in versions table
-      is_current_draft: 1,
-      published_at: null,
+      canonical_url: data.canonical_url,
       created_by: userId,
+      reason: "create",
     });
 
-    return inserted_pages;
+    return page_id;
   });
-
-  return inserted_pages;
 }
 
-export async function getPageFullPath(pageId: string) {
-  if (!pageId) {
-    return "/";
-  }
+// export async function getPageFullPath(pageId: string) {
+//   if (!pageId) {
+//     return "/";
+//   }
 
-  try {
-    // Use recursive CTE to build full slug path
-    const result = await db.execute(sql`
-        WITH RECURSIVE page_path AS (
-          -- Base case: start with the target page
-          SELECT
-            id,
-            slug,
-            parent_id,
-            ARRAY[slug] as path_segments,
-            1 as depth
-          FROM pages
-          WHERE id = ${pageId}
+//   try {
+//     // Use recursive CTE to build full slug path
+//     const result = await db.execute(sql`
+//         WITH RECURSIVE page_path AS (
+//           -- Base case: start with the target page
+//           SELECT
+//             id,
+//             slug,
+//             parent_id,
+//             ARRAY[slug] as path_segments,
+//             1 as depth
+//           FROM pages
+//           WHERE id = ${pageId}
 
-          UNION ALL
+//           UNION ALL
 
-          -- Recursive case: traverse up to parents
-          SELECT
-            p.id,
-            p.slug,
-            p.parent_id,
-            ARRAY[p.slug] || pp.path_segments as path_segments,
-            pp.depth + 1
-          FROM pages p
-          INNER JOIN page_path pp ON p.id = pp.parent_id
-          WHERE pp.parent_id IS NOT NULL
-        )
-        SELECT
-          path_segments,
-          depth
-        FROM page_path
-        ORDER BY depth DESC
-        LIMIT 1
-      `);
+//           -- Recursive case: traverse up to parents
+//           SELECT
+//             p.id,
+//             p.slug,
+//             p.parent_id,
+//             ARRAY[p.slug] || pp.path_segments as path_segments,
+//             pp.depth + 1
+//           FROM pages p
+//           INNER JOIN page_path pp ON p.id = pp.parent_id
+//           WHERE pp.parent_id IS NOT NULL
+//         )
+//         SELECT
+//           path_segments,
+//           depth
+//         FROM page_path
+//         ORDER BY depth DESC
+//         LIMIT 1
+//       `);
 
-    if (!result.rows || result.rows.length === 0) {
-      return null; // Page not found
-    }
+//     if (!result.rows || result.rows.length === 0) {
+//       return null; // Page not found
+//     }
 
-    const segments = (result.rows[0].path_segments as string[]).filter(Boolean); // Remove empty strings
-    return segments.length > 0 ? "/" + segments.join("/") : null;
-  } catch (error) {
-    console.error("Error in getPageFullPath:", error);
-    throw error;
-  }
-}
+//     const segments = (result.rows[0].path_segments as string[]).filter(Boolean); // Remove empty strings
+//     return segments.length > 0 ? "/" + segments.join("/") : null;
+//   } catch (error) {
+//     console.error("Error in getPageFullPath:", error);
+//     throw error;
+//   }
+// }
 
-export async function loadPageById(
-  page_id: string,
-  options?: {
-    preview?: boolean;
-    draft_id?: string;
-    version_number?: number;
-  },
-) {
-  console.info("loadPageById", options);
-
-  // Load specific version by ID
-  if (options?.draft_id) {
-    const version = await db
-      .select()
-      .from(draftsTable)
-      .where(eq(draftsTable.id, options.draft_id))
-      .limit(1);
-
-    return version[0];
-  }
-
-  // Load specific version by number
-  if (options?.version_number) {
-    const version = await db
-      .select()
-      .from(draftsTable)
-      .where(
-        and(
-          eq(draftsTable.page_id, page_id),
-          eq(draftsTable.version, options.version_number),
-        ),
-      )
-      .limit(1);
-
-    return version[0];
-  }
-
-  // Preview mode: load current draft
-  if (options?.preview) {
-    const draft = await db
-      .select()
-      .from(draftsTable)
-      .where(
-        and(
-          eq(draftsTable.page_id, page_id),
-          eq(draftsTable.is_current_draft, 1),
-        ),
-      )
-      .limit(1);
-
-    if (draft.length > 0) {
-      return draft[0];
-    }
-  }
-
-  // Default: load published page
-  const page = await db
-    .select()
-    .from(pagesTable)
-    .where(and(eq(pagesTable.id, page_id), eq(pagesTable.status, "published")))
-    .limit(1);
-
-  return page[0];
-}
-
-async function publishDraft(versionId: string) {
+// Load page for CMS
+export async function loadDraftByPageId(page_id: string) {
   const draft = await db
     .select()
-    .from(draftsTable)
-    .where(eq(draftsTable.id, versionId))
-    .limit(1);
-
-  if (!draft.length) throw new Error("Draft not found");
-  if (draft[0].status !== "draft") throw new Error("Not a draft");
-
-  await db.transaction(async (tx) => {
-    // Update the main pages table
-    await tx
-      .update(pagesTable)
-      .set({
-        parent_id: draft[0].parent_id,
-        slug: draft[0].slug,
-        title: draft[0].title,
-        type: draft[0].type,
-        content: draft[0].content,
-        description: draft[0].description,
-        keywords: draft[0].keywords,
-        og_image_ids: draft[0].og_image_ids,
-        llm: draft[0].llm,
-        no_index: draft[0].no_index,
-        no_follow: draft[0].no_follow,
-        status: "published",
-        updated_at: new Date(),
-      })
-      .where(eq(pagesTable.id, draft[0].page_id));
-
-    // Mark this version as published
-    await tx
-      .update(draftsTable)
-      .set({
-        status: "published",
-        is_current_draft: 0,
-        published_at: new Date(),
-      })
-      .where(eq(draftsTable.id, versionId));
-  });
-}
-
-// Routing
-export async function findHomePage() {
-  return await db.select().from(pagesTable).where(eq(pagesTable.slug, ""));
-}
-// Routing
-export async function findPageByFullSlug(fullSlug: string) {
-  // Split the slug path into segments
-  const segments = fullSlug.split("/").filter(Boolean);
-  if (segments.length === 0) {
-    return null;
-  }
-
-  // Use recursive CTE to match the full path
-  const result = await db.execute(sql`
-    WITH RECURSIVE page_path AS (
-      -- Base case: find root pages with matching first segment
-      SELECT
-        id,
-        slug,
-        parent_id,
-        ARRAY[slug] as path_array,
-        1 as depth
-      FROM pages
-      WHERE parent_id IS NULL
-        AND slug = ${segments[0]}
-
-      UNION ALL
-
-      -- Recursive case: traverse down to children
-      SELECT
-        p.id,
-        p.slug,
-        p.parent_id,
-        pp.path_array || p.slug,
-        pp.depth + 1
-      FROM pages p
-      INNER JOIN page_path pp ON p.parent_id = pp.id
-      WHERE pp.depth < ${segments.length}
-    )
-    SELECT
-      p.id,
-      p.parent_id,
-      p.slug,
-      p.title,
-      p.type,
-      p.status,
-      p.content,
-      p.description,
-      p.keywords,
-      p.og_image_ids,
-      p.llm,
-      p.no_index,
-      p.no_follow,
-      p.canonical_url,
-      p.created_at,
-      p.updated_at
-    FROM page_path pp
-    INNER JOIN pages p ON pp.id = p.id
-    WHERE pp.path_array = ARRAY[${sql.join(
-      segments.map((s) => sql`${s}`),
-      sql.raw(`, `),
-    )}]
-    LIMIT 1;
-  `);
-
-  return (result.rows[0] as SelectPage) || null;
-}
-
-async function getPageWithParent(page_id: string) {
-  const result = await db
-    .select({
-      id: pagesTable.id,
-      title: pagesTable.title,
-      slug: pagesTable.slug,
-      parent_id: pagesTable.parent_id,
-      content: pagesTable.content,
-      created_at: pagesTable.created_at,
-      updated_at: pagesTable.updated_at,
-      // Join parent page
-      parent_title: sql`parent.title`,
-      parent_slug: sql`parent.slug`,
-    })
     .from(pagesTable)
-    .leftJoin(sql`pages as parent`, eq(pagesTable.parent_id, sql`parent.id`))
+    .innerJoin(draftsTable, eq(pagesTable.draft_version_id, draftsTable.id))
     .where(eq(pagesTable.id, page_id))
     .limit(1);
-
-  return result[0] || null;
+  if (draft.length === 0) {
+    return undefined;
+  }
+  return draft[0];
 }
+
+// Routing
+export async function getPublishedPageByFullSlug(full_slug: string) {
+  return await db
+    .select()
+    .from(pagesTable)
+    .innerJoin(draftsTable, eq(pagesTable.published_version_id, draftsTable.id))
+    .where(eq(pagesTable.full_slug, full_slug))
+    .limit(1);
+}
+
+// async function getPageWithParent(page_id: string) {
+//   const result = await db
+//     .select({
+//       id: pagesTable.id,
+//       title: pagesTable.title,
+//       slug: pagesTable.slug,
+//       parent_id: pagesTable.parent_id,
+//       content: pagesTable.content,
+//       created_at: pagesTable.created_at,
+//       updated_at: pagesTable.updated_at,
+//       // Join parent page
+//       parent_title: sql`parent.title`,
+//       parent_slug: sql`parent.slug`,
+//     })
+//     .from(pagesTable)
+//     .leftJoin(sql`pages as parent`, eq(pagesTable.parent_id, sql`parent.id`))
+//     .where(eq(pagesTable.id, page_id))
+//     .limit(1);
+
+//   return result[0] || null;
+// }
 
 /**
  * Usage
@@ -544,35 +529,35 @@ async function getPageWithParent(page_id: string) {
 // ============================================
 // QUERY 7: Change page parent
 // ============================================
-async function changePageParent(page_id: string, newParentId: string | null) {
-  // Prevent circular reference
-  if (newParentId) {
-    const isCircular = await db.execute(sql`
-      WITH RECURSIVE ancestors AS (
-        SELECT id, parent_id FROM pages WHERE id = ${newParentId}
-        UNION ALL
-        SELECT p.id, p.parent_id FROM pages p
-        INNER JOIN ancestors a ON p.id = a.parent_id
-      )
-      SELECT EXISTS(SELECT 1 FROM ancestors WHERE id = ${page_id}) as is_circular
-    `);
+// async function changePageParent(page_id: string, newParentId: string | null) {
+//   // Prevent circular reference
+//   if (newParentId) {
+//     const isCircular = await db.execute(sql`
+//       WITH RECURSIVE ancestors AS (
+//         SELECT id, parent_id FROM pages WHERE id = ${newParentId}
+//         UNION ALL
+//         SELECT p.id, p.parent_id FROM pages p
+//         INNER JOIN ancestors a ON p.id = a.parent_id
+//       )
+//       SELECT EXISTS(SELECT 1 FROM ancestors WHERE id = ${page_id}) as is_circular
+//     `);
 
-    if (isCircular.rows[0]?.is_circular) {
-      throw new Error("Cannot set parent: would create circular reference");
-    }
-  }
+//     if (isCircular.rows[0]?.is_circular) {
+//       throw new Error("Cannot set parent: would create circular reference");
+//     }
+//   }
 
-  // Update parent
-  await db
-    .update(pagesTable)
-    .set({
-      parent_id: newParentId,
-      updated_at: new Date(),
-    })
-    .where(eq(pagesTable.id, page_id));
+//   // Update parent
+//   await db
+//     .update(pagesTable)
+//     .set({
+//       parent_id: newParentId,
+//       updated_at: new Date(),
+//     })
+//     .where(eq(pagesTable.id, page_id));
 
-  return { updated: true };
-}
+//   return { updated: true };
+// }
 
 // ============================================
 // QUERY 8: Build full slug for multiple pages at once
@@ -585,104 +570,169 @@ async function changePageParent(page_id: string, newParentId: string | null) {
 //   { page_id: 'id2', full_slug: '/services/consulting' },
 // ]
 // ============================================
-async function buildFullSlugsForPages(page_ids: string[]) {
-  if (page_ids.length === 0) return [];
+// async function buildFullSlugsForPages(page_ids: string[]) {
+//   if (page_ids.length === 0) return [];
 
-  const result = await db.execute(sql`
-    WITH RECURSIVE page_paths AS (
-      -- Base case: all target pages
-      SELECT
-        id,
-        slug,
-        parent_id,
-        slug as path_segment,
-        1 as depth,
-        id as root_page_id
-      FROM pages
-      WHERE id = ANY(${page_ids})
+//   const result = await db.execute(sql`
+//     WITH RECURSIVE page_paths AS (
+//       -- Base case: all target pages
+//       SELECT
+//         id,
+//         slug,
+//         parent_id,
+//         slug as path_segment,
+//         1 as depth,
+//         id as root_page_id
+//       FROM pages
+//       WHERE id = ANY(${page_ids})
 
-      UNION ALL
+//       UNION ALL
 
-      -- Recursive case: traverse up to parents
-      SELECT
-        p.id,
-        p.slug,
-        p.parent_id,
-        p.slug as path_segment,
-        pp.depth + 1,
-        pp.root_page_id
-      FROM pages p
-      INNER JOIN page_paths pp ON p.id = pp.parent_id
-    )
-    SELECT
-      root_page_id as page_id,
-      '/' || string_agg(path_segment, '/' ORDER BY depth DESC) as full_slug
-    FROM page_paths
-    GROUP BY root_page_id
-  `);
+//       -- Recursive case: traverse up to parents
+//       SELECT
+//         p.id,
+//         p.slug,
+//         p.parent_id,
+//         p.slug as path_segment,
+//         pp.depth + 1,
+//         pp.root_page_id
+//       FROM pages p
+//       INNER JOIN page_paths pp ON p.id = pp.parent_id
+//     )
+//     SELECT
+//       root_page_id as page_id,
+//       '/' || string_agg(path_segment, '/' ORDER BY depth DESC) as full_slug
+//     FROM page_paths
+//     GROUP BY root_page_id
+//   `);
 
-  return result.rows;
-}
+//   return result.rows;
+// }
 
-async function revertToVersion(
-  pageId: string,
-  versionNumber: number,
-  userId: string,
-) {
-  const targetVersion = await db
-    .select()
-    .from(draftsTable)
-    .where(
-      and(
-        eq(draftsTable.page_id, pageId),
-        eq(draftsTable.version, versionNumber),
-      ),
-    )
-    .limit(1);
+// async function revertToVersion(
+//   pageId: string,
+//   versionNumber: number,
+//   userId: string,
+// ) {
+//   const targetVersion = await db
+//     .select()
+//     .from(draftsTable)
+//     .where(
+//       and(
+//         eq(draftsTable.page_id, pageId),
+//         eq(draftsTable.version, versionNumber),
+//       ),
+//     )
+//     .limit(1);
 
-  if (!targetVersion.length) throw new Error("Version not found");
+//   if (!targetVersion.length) throw new Error("Version not found");
 
-  // Create a new draft based on the old version
-  const latestVersion = await db
-    .select({ version: draftsTable.version })
-    .from(draftsTable)
-    .where(eq(draftsTable.page_id, pageId))
-    .orderBy(desc(draftsTable.version))
-    .limit(1);
+//   // Create a new draft based on the old version
+//   const latestVersion = await db
+//     .select({ version: draftsTable.version })
+//     .from(draftsTable)
+//     .where(eq(draftsTable.page_id, pageId))
+//     .orderBy(desc(draftsTable.version))
+//     .limit(1);
 
-  const nextVersionNumber = latestVersion[0].version + 1;
+//   const nextVersionNumber = latestVersion[0].version + 1;
 
-  // Mark existing current draft as old
-  await db
-    .update(draftsTable)
-    .set({ is_current_draft: 0 })
-    .where(
-      and(eq(draftsTable.page_id, pageId), eq(draftsTable.is_current_draft, 1)),
-    );
+//   // Mark existing current draft as old
+//   await db
+//     .update(draftsTable)
+//     .set({ is_current_draft: 0 })
+//     .where(
+//       and(eq(draftsTable.page_id, pageId), eq(draftsTable.is_current_draft, 1)),
+//     );
 
-  // Create new draft from old version
-  const draftId = generateId();
-  await db.insert(draftsTable).values({
-    id: draftId,
-    page_id: pageId,
-    version: nextVersionNumber,
-    parent_id: targetVersion[0].parent_id,
-    slug: targetVersion[0].slug,
-    title: targetVersion[0].title,
-    type: targetVersion[0].type,
-    content: targetVersion[0].content,
-    description: targetVersion[0].description,
-    keywords: targetVersion[0].keywords,
-    og_image_ids: targetVersion[0].og_image_ids,
-    llm: targetVersion[0].llm,
-    no_index: targetVersion[0].no_index,
-    no_follow: targetVersion[0].no_follow,
-    status: "draft",
-    is_current_draft: 1,
-    created_by: userId,
-  });
+//   // Create new draft from old version
+//   const draftId = generateId();
+//   await db.insert(draftsTable).values({
+//     id: draftId,
+//     page_id: pageId,
+//     version: nextVersionNumber,
+//     parent_id: targetVersion[0].parent_id,
+//     slug: targetVersion[0].slug,
+//     title: targetVersion[0].title,
+//     type: targetVersion[0].type,
+//     content: targetVersion[0].content,
+//     description: targetVersion[0].description,
+//     keywords: targetVersion[0].keywords,
+//     og_image_ids: targetVersion[0].og_image_ids,
+//     llm: targetVersion[0].llm,
+//     no_index: targetVersion[0].no_index,
+//     no_follow: targetVersion[0].no_follow,
+//     status: "draft",
+//     is_current_draft: 1,
+//     created_by: userId,
+//   });
 
-  return draftId;
+//   return draftId;
+// }
+
+/***********************************************************************
+ * Helpers
+ */
+
+// Escape regex special characters
+// function escapeRegex(str: string): string {
+//   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// }
+
+/**
+ * Check for circular reference when setting parent
+ *
+ * saving draft of page:b with parent_id: d
+ *
+ * a
+ *   - b // saving draft with parent:d
+ *     - c // <-- 2. this is circular (c's parent is b)
+ *       - d // <-- 1. start here
+ *
+ * start with page:d (the new parent), walk up the tree and check if there is parent_id = b
+ */
+async function checkDraftCircularReference(
+  page_id: string,
+  new_parent_id: string,
+  tx?: any,
+): Promise<boolean> {
+  const dbConn = tx || db;
+  let current_id: string | null = new_parent_id;
+  const visited = new Set<string>();
+
+  while (current_id) {
+    if (current_id === page_id) {
+      return true; // Circular reference detected
+    }
+
+    if (visited.has(current_id)) {
+      break; // Prevent infinite loop
+    }
+
+    visited.add(current_id);
+
+    // walking up the tree
+    // @ts-expect-error okk
+    const page = await dbConn
+      .select({ draft_version_id: pagesTable.draft_version_id })
+      .from(pagesTable)
+      .where(eq(pagesTable.id, current_id))
+      .limit(1);
+
+    if (!page.length || !page[0].draft_version_id) break;
+    // @ts-expect-error okk
+    const draft = await dbConn
+      .select({ parent_id: draftsTable.parent_id })
+      .from(draftsTable)
+      .where(eq(draftsTable.id, page[0].draft_version_id))
+      .limit(1);
+
+    if (!draft.length) break;
+
+    current_id = draft[0].parent_id;
+  }
+
+  return false;
 }
 
 /***********************************************************************
@@ -695,175 +745,3 @@ export async function getMediasByIds(media_ids: string[]) {
     .from(mediasTable)
     .where(inArray(mediasTable.id, media_ids));
 }
-
-/**
- * New schema
- */
-// const pages = pgTable("pages", {
-//   id: char("id", { length: 32 }).primaryKey(),
-//   published_version_id: char("published_version_id", { length: 32 }),
-//   draft_version_id: char("draft_version_id", { length: 32 }),
-//   slug: text("slug").notNull(),
-//   status: text("status"), // NULL, 'published', 'archived'
-//   published_at: timestamp("published_at"),
-//   created_at: timestamp("created_at").notNull().defaultNow(),
-//   updated_at: timestamp("updated_at").notNull().$onUpdate(() => new Date()),
-// }, (table) => ({
-//   publishedAtIdx: index("published_at_idx").on(table.published_at),
-//   statusIdx: index("status_idx").on(table.status),
-// }));
-
-// const page_versions = pgTable("page_versions", {
-//   id: char("id", { length: 32 }).primaryKey(),
-//   page_id: char("page_id", { length: 32 }).notNull().references(() => pages.id, { onDelete: 'cascade' }),
-//   version_number: integer("version_number").notNull(),
-
-//   // All content fields
-//   parent_id: char("parent_id", { length: 32 }),
-//   slug: text("slug").notNull(),
-//   title: text("title"),
-//   type: text("type"),
-//   content: text("content"),
-//   description: text("description"),
-//   keywords: text("keywords"),
-//   og_image_ids: char("og_image_ids", { length: 32 }).array().default(sq`ARRAY[]::char(32)[]`),
-//   llm: text("llm"),
-//   no_index: integer("no_index"),
-//   no_follow: integer("no_follow"),
-
-//   // Version metadata
-//   created_by: char("created_by", { length: 32 }),
-//   created_at: timestamp("created_at").notNull().defaultNow(),
-
-//   // Optional: why this version was created
-//   reason: text("reason"), // 'auto-save', 'manual-save', 'publish', 'revert'
-// }, (table) => ({
-//   pageVersionIdx: index("page_version_idx").on(table.page_id, table.version_number),
-// }));
-
-// // Load page for editing (always loads draft if exists, otherwise published)
-// async function loadPageForEditing(pageId: string) {
-//   const page = await db
-//     .select()
-//     .from(pages)
-//     .where(eq(pages.id, pageId))
-//     .limit(1);
-
-//   if (!page.length) throw new Error('Page not found');
-
-//   // Load draft version if exists
-//   if (page[0].draft_version_id) {
-//     const version = await db
-//       .select()
-//       .from(page_versions)
-//       .where(eq(page_versions.id, page[0].draft_version_id))
-//       .limit(1);
-//     return version[0];
-//   }
-
-//   // Load published version
-//   if (page[0].published_version_id) {
-//     const version = await db
-//       .select()
-//       .from(page_versions)
-//       .where(eq(page_versions.id, page[0].published_version_id))
-//       .limit(1);
-//     return version[0];
-//   }
-
-//   throw new Error('No versions found');
-// }
-
-// async function listPagesForCMS() {
-//   const pagesList = await db
-//     .select({
-//       id: pages.id,
-//       status: pages.status,
-//       published_at: pages.published_at,
-//       created_at: pages.created_at,
-//       updated_at: pages.updated_at,
-
-//       // Published version info
-//       published_version_id: pages.published_version_id,
-//       published_slug: publishedVersion.slug,
-//       published_title: publishedVersion.title,
-
-//       // Draft version info
-//       draft_version_id: pages.draft_version_id,
-//       draft_slug: draftVersion.slug,
-//       draft_title: draftVersion.title,
-//       draft_updated_at: draftVersion.created_at,
-//     })
-//     .from(pages)
-//     .leftJoin(
-//       publishedVersion,
-//       eq(publishedVersion.id, pages.published_version_id)
-//     )
-//     .leftJoin(
-//       draftVersion,
-//       eq(draftVersion.id, pages.draft_version_id)
-//     )
-//     .orderBy(desc(pages.updated_at));
-
-//   return pagesList;
-// }
-
-// // Save creates new version, updates draft pointer
-// async function saveDraft(pageId: string, updates: PageContent, userId: string) {
-//   const page = await db.select().from(pages).where(eq(pages.id, pageId)).limit(1);
-//   if (!page.length) throw new Error('Page not found');
-
-//   // Get next version number
-//   const latestVersion = await db
-//     .select({ version_number: page_versions.version_number })
-//     .from(page_versions)
-//     .where(eq(page_versions.page_id, pageId))
-//     .orderBy(desc(page_versions.version_number))
-//     .limit(1);
-
-//   const nextVersionNumber = latestVersion.length > 0 ? latestVersion[0].version_number + 1 : 1;
-
-//   // Create new version
-//   const versionId = generateId();
-//   await db.insert(page_versions).values({
-//     id: versionId,
-//     page_id: pageId,
-//     version_number: nextVersionNumber,
-//     ...updates,
-//     created_by: userId,
-//     reason: 'manual-save',
-//   });
-
-//   // Update draft pointer
-//   await db
-//     .update(pages)
-//     .set({ draft_version_id: versionId })
-//     .where(eq(pages.id, pageId));
-
-//   return versionId;
-// }
-
-// // Publish updates published pointer, clears draft pointer
-// async function publishDraft(pageId: string) {
-//   const page = await db.select().from(pages).where(eq(pages.id, pageId)).limit(1);
-//   if (!page.length || !page[0].draft_version_id) throw new Error('No draft to publish');
-
-//   await db
-//     .update(pages)
-//     .set({
-//       published_version_id: page[0].draft_version_id,
-//       draft_version_id: null, // Clear draft pointer
-//       status: 'published',
-//       published_at: new Date(),
-//     })
-//     .where(eq(pages.id, pageId));
-// }
-
-// // Get all versions (for history view)
-// async function getVersionHistory(pageId: string) {
-//   return await db
-//     .select()
-//     .from(page_versions)
-//     .where(eq(page_versions.page_id, pageId))
-//     .orderBy(desc(page_versions.version_number));
-// }

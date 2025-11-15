@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FolderOpen, Home, Link2, Loader2, Search } from "lucide-react";
+import { FolderOpen, Home, Link2, Loader2, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import debounce from "debounce";
 import slugify from "@sindresorhus/slugify";
@@ -237,7 +237,7 @@ export function SlugInput({
             {/* Search Input */}
             <div className="p-3 border-b border-gray-200">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                <SearchIcon className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                 <Input
                   value={searchQuery}
                   onChange={(e) => handleSearchQueryChange(e.target.value)}
