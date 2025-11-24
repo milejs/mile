@@ -40,6 +40,7 @@ import { PageData } from "@milejs/types";
 import { Kbd } from "@/components/ui/kbd";
 import Fuse from "fuse.js";
 import { tinykeys } from "@/lib/tinykeys";
+import { Textarea } from "@/components/ui/textarea";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
@@ -410,14 +411,11 @@ function TextAreaImageCaption({
         defaultValue={defaultValue ?? undefined}
         onBlur={handleBlur}
         onValueChange={handleChange}
-        render={<textarea rows={2} className={textareaClasses} />}
+        render={<Textarea rows={2} />}
       />
     </div>
   );
 }
-
-const textareaClasses =
-  "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive";
 
 function InputImageTitle({
   fileId,
@@ -491,7 +489,7 @@ function TextAreaImageAltText({
         value={value}
         onBlur={handleBlur}
         onValueChange={handleChange}
-        render={<textarea rows={4} className={textareaClasses} />}
+        render={<Textarea rows={4} />}
       />
       {/* <Button onClick={() => { }} className="text-xs">
         Fill it
@@ -1539,7 +1537,7 @@ function NewPageSettings({ close }: any) {
               id="metadescription"
               value={pageData.description}
               onValueChange={handleMetaDescriptionChange}
-              render={<textarea rows={4} className={textareaClasses} />}
+              render={<Textarea rows={4} />}
             />
           </div>
         </div>

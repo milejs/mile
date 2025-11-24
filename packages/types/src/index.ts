@@ -121,7 +121,8 @@ export interface MileEditor {
   is_disabled: boolean;
   setZoom(level: number): void;
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile"): void;
-  mergeMarkdownData(node_id: string, md: string): void;
+  // mergeMarkdownData(node_id: string, md: string): void;
+  mergeTreeData(node_id: string, content: TreeData): void;
   save(): void;
   publish(): void;
   updateData(data: TreeData, lastOperation?: Operation): void;
@@ -138,6 +139,7 @@ export interface MileEditor {
 export interface MileSchema {
   schema: Schema;
   user_schema: Schema;
+  component_schema: Schema;
   schemaMap: Map<string, SchemaTypeDefinition | FieldDefinition>;
   buildSchemaMap(): Map<string, SchemaTypeDefinition | FieldDefinition>;
   get(name: string): SchemaTypeDefinition | FieldDefinition;
@@ -651,6 +653,7 @@ interface TypeAliasDefinition<
     : unknown;
   // validation?: SchemaValidationValue;
   initialValue?: InitialValueProperty<any>;
+  preview?: any;
   // preview?: PreviewConfig;
   fields?: FieldDefinition[];
   components?: {

@@ -1,6 +1,7 @@
 import { Hero } from "../../components/hero";
 import { Lead } from "../../components/lead_server";
 import { BannerBlue } from "../../components/banner_blue_server";
+import React from "react";
 
 export const components = {
   h1: (props: React.ComponentPropsWithoutRef<"h1">) => (
@@ -33,10 +34,16 @@ export const components = {
       <Heading level="6" {...props} />
     </MarkdownBlockContainer>
   ),
+  strong: (props: React.ComponentPropsWithoutRef<"p">) => {
+    return <strong {...props} className="font-bold" />;
+  },
   p: (props: React.ComponentPropsWithoutRef<"p">) => {
+    const { children, ...rest } = props;
     return (
       <MarkdownBlockContainer>
-        <p {...props} className="mb-2.5" />
+        <p {...rest} className="mb-2.5">
+          {newlineToBr(children)}
+        </p>
       </MarkdownBlockContainer>
     );
   },
@@ -63,6 +70,36 @@ export const components = {
   Lead,
   BannerBlue,
 };
+
+function newlineToBr(children: any): any {
+  return React.Children.map(children, (child) => {
+    // If it's a string -> replace newlines
+    if (typeof child === "string") {
+      const lines = child.split("\n");
+      return (
+        <>
+          {lines.map((line, index) => (
+            <React.Fragment key={index}>
+              {line}
+              {index < lines.length - 1 && <br />}
+            </React.Fragment>
+          ))}
+        </>
+      );
+    }
+
+    // If it's a React element, recurse into its children
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, {
+        // @ts-expect-error okk
+        children: newlineToBr(child.props.children),
+      });
+    }
+
+    // Anything else: return unchanged
+    return child;
+  });
+}
 
 function Heading(
   props: React.ComponentPropsWithoutRef<

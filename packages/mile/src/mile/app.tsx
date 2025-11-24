@@ -19,8 +19,8 @@ export async function fetchPageBySlug(
   search?: { [key: string]: string | string[] | undefined },
 ) {
   const slug = getSlug(paths);
-  const isPreview = search?.preview === "true";
-  const url = `${API}/page${slug}${isPreview ? "?preview=true" : ""}`;
+  // const isPreview = search?.preview === "true";
+  const url = `${API}/page${slug}`;
   const res = await fetch(url);
   if (!res.ok) {
     const text = await res.text();

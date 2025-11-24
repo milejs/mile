@@ -55,17 +55,16 @@ import { Input } from "@/components/ui/input";
 import { Dashboard } from "./dashboard";
 import useSWR, { mutate } from "swr";
 import { Popover } from "@base-ui-components/react/popover";
-import { convertNodeDataToBlocks, mdxToTree } from "./data";
+import {
+  convertBlocksToNodeData,
+  convertNodeDataToBlocks,
+  mdxToTree,
+} from "./data";
 import { generateId } from "@/lib/generate-id";
 import { toast, Toaster } from "sonner";
-import {
-  getImageDimension,
-  Uploader,
-  Uploaders,
-} from "@/components/ui/uploader";
+import { Uploader, Uploaders } from "@/components/ui/uploader";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@base-ui-components/react/dialog";
-import { filesize } from "./utils";
 import { Field } from "@base-ui-components/react/field";
 import { Checkbox } from "@base-ui-components/react/checkbox";
 import { SlugInput } from "./shared";
@@ -80,7 +79,8 @@ import {
   CreateLinkButton,
   DefaultReactSuggestionItem,
   FileCaptionButton,
-  FileReplaceButton,
+  // FileReplaceButton,
+  FilePanelController,
   FormattingToolbar,
   FormattingToolbarController,
   getDefaultReactSlashMenuItems,
@@ -94,11 +94,8 @@ import { BlockNoteView } from "@blocknote/mantine"; // Or, you can use ariakit, 
 import "@blocknote/mantine/style.css"; // Default styles for the mantine editor
 import "@blocknote/core/fonts/inter.css"; // Include the included Inter font
 import {
-  BlockNoteEditor,
   BlockNoteSchema,
   defaultBlockSpecs,
-  defaultInlineContentSpecs,
-  defaultStyleSpecs,
   filterSuggestionItems,
   insertOrUpdateBlock,
 } from "@blocknote/core";
@@ -121,6 +118,14 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { pointerOutsideOfPreview } from "@atlaskit/pragmatic-drag-and-drop/element/pointer-outside-of-preview";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
+import {
+  makeUploadFile,
+  saveImagesToDB,
+  FileReplaceButton,
+  UploadFilePanel,
+  ImageGallery,
+} from "./uploads";
+import { Textarea } from "@/components/ui/textarea";
 
 export { BlockNoteView, useCreateBlockNote };
 
@@ -268,7 +273,7 @@ function MileReady({
 
   // console.log('page_data ----', page_data);
   // console.log("MileReady render ---- data", data);
-  // console.log('tree', tree);
+  // console.log("tree_data", tree_data);
 
   return (
     <>
@@ -545,9 +550,17 @@ function MileFrame({
                 <Button
                   onClick={() => {
                     const md = markdownEditorRef.current?.getMarkdown();
-                    if (state.activeNodeId && md) {
-                      editor.mergeMarkdownData(state.activeNodeId, md);
+                    const doc = markdownEditorRef.current?.getDocument();
+                    console.log("md", md);
+                    console.log("doc", doc);
+
+                    if (state.activeNodeId && doc) {
+                      const tree = convertBlocksToNodeData(doc);
+                      editor.mergeTreeData(state.activeNodeId, tree);
                     }
+                    // if (state.activeNodeId && md) {
+                    //   editor.mergeMarkdownData(state.activeNodeId, md);
+                    // }
                     dispatch({ type: AppActionType.DeselectNode });
                   }}
                   className="px-3 py-1 rounded text-sm"
@@ -557,7 +570,7 @@ function MileFrame({
                 </Button>
               </div>
             </div>
-            <div className="overflow-y-auto h-full pb-20">
+            <div className="overflow-y-auto h-full pb-20 z-10">
               {Boolean(state.activeNodeId) && state.isMarkdownEditorOpen && (
                 <OverlayTextEditor
                   key={state.activeNodeId}
@@ -616,32 +629,7 @@ function OverlayTextEditor({
   const editor = useCreateBlockNote({
     schema: bn_schema,
     initialContent,
-    uploadFile: async (file) => {
-      const result = await upload(file);
-      console.log("result", result);
-      const dims = await getImageDimension(file).catch((e) => {
-        console.error("Error getting image dimensions", e);
-        return undefined;
-      });
-      const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${result.file.objectInfo.key}`;
-
-      // save db
-      mutate(`/medias`, async (prev: any) => {
-        const res = await saveImages([
-          {
-            id: generateId(),
-            type: result.file.type,
-            size: result.file.size,
-            filepath: result.file.objectInfo.key,
-            width: dims?.width,
-            height: dims?.height,
-          },
-        ]);
-        return prev ? [...prev, ...res] : res;
-      });
-
-      return image_url;
-    },
+    uploadFile: makeUploadFile(upload),
   });
 
   useImperativeHandle(ref, () => {
@@ -657,9 +645,9 @@ function OverlayTextEditor({
   }, [editor]);
 
   const getSlashMenuItems = useMemo(() => {
-    return async (query: string) =>
-      // @ts-expect-error okk
-      filterSuggestionItems(getCustomSlashMenuItems(editor), query);
+    return async (query: string) => {
+      return filterSuggestionItems(getCustomSlashMenuItems(editor), query);
+    };
   }, [editor]);
 
   return (
@@ -667,6 +655,7 @@ function OverlayTextEditor({
       editor={editor}
       formattingToolbar={false}
       slashMenu={false}
+      filePanel={false}
       theme="light"
     >
       <SuggestionMenuController
@@ -714,6 +703,7 @@ function OverlayTextEditor({
           </FormattingToolbar>
         )}
       />
+      <FilePanelController filePanel={UploadFilePanel} />
     </BlockNoteView>
   );
 }
@@ -974,6 +964,7 @@ function useMileUploadFile() {
 }
 
 const primitiveTypes = [
+  "array",
   "string",
   "number",
   "boolean",
@@ -990,6 +981,8 @@ function isPrimitiveType(type: string) {
 
 function getPrimitiveComponent(type: string) {
   switch (type) {
+    case "array":
+      return EditArrayComponent;
     case "string":
       return EditStringComponent;
     case "number":
@@ -1011,7 +1004,7 @@ function getPrimitiveComponent(type: string) {
   }
 }
 
-const insertHelloWorldItem = (editor: BlockNoteEditor) => ({
+const insertHelloWorldItem = (editor: typeof bn_schema.BlockNoteEditor) => ({
   title: "Insert Hello World",
   onItemClick: () =>
     // If the block containing the text caret is empty, `insertOrUpdateBlock`
@@ -1029,11 +1022,23 @@ const insertHelloWorldItem = (editor: BlockNoteEditor) => ({
 });
 
 const getCustomSlashMenuItems = (
-  editor: BlockNoteEditor,
+  editor: typeof bn_schema.BlockNoteEditor,
 ): DefaultReactSuggestionItem[] => {
-  // const defaults = getDefaultReactSlashMenuItems(editor);
+  const d = getDefaultReactSlashMenuItems(editor);
+  console.log("d", d);
+
   const defaults = getDefaultReactSlashMenuItems(editor).filter(
-    (e) => !e.title.startsWith("Toggle Heading"),
+    (e) =>
+      !(
+        e.title.toLowerCase().startsWith("toggle heading") ||
+        e.title.toLowerCase() === "toggle list" ||
+        e.title.toLowerCase() === "check list" ||
+        e.title.toLowerCase() === "code block" ||
+        e.title.toLowerCase() === "image" ||
+        e.title.toLowerCase() === "video" ||
+        e.title.toLowerCase() === "audio" ||
+        e.title.toLowerCase() === "file"
+      ),
   );
 
   return [...defaults, insertHelloWorldItem(editor)];
@@ -1041,24 +1046,42 @@ const getCustomSlashMenuItems = (
 
 const bn_schema = BlockNoteSchema.create({
   blockSpecs: {
-    // audio: defaultBlockSpecs.audio,
-    bulletListItem: defaultBlockSpecs.bulletListItem,
-    checkListItem: defaultBlockSpecs.checkListItem,
-    // codeBlock: defaultBlockSpecs.codeBlock,
-    divider: defaultBlockSpecs.divider,
-    file: defaultBlockSpecs.file,
-    heading: defaultBlockSpecs.heading,
-    image: defaultBlockSpecs.image,
-    numberedListItem: defaultBlockSpecs.numberedListItem,
-    paragraph: defaultBlockSpecs.paragraph,
-    quote: defaultBlockSpecs.quote,
-    table: defaultBlockSpecs.table,
-    // toggleListItem: defaultBlockSpecs.toggleListItem,
-    video: defaultBlockSpecs.video,
+    ...defaultBlockSpecs,
+    image: {
+      ...defaultBlockSpecs.image,
+      config: {
+        ...defaultBlockSpecs.image.config,
+        propSchema: {
+          ...defaultBlockSpecs.image.config.propSchema,
+          previewWidth: {
+            ...defaultBlockSpecs.image.config.propSchema.previewWidth,
+            default: 512 as const,
+          },
+        },
+      },
+    },
   },
-  inlineContentSpecs: defaultInlineContentSpecs,
-  styleSpecs: defaultStyleSpecs,
 });
+// const bn_schema = BlockNoteSchema.create({
+//   blockSpecs: {
+//     // audio: defaultBlockSpecs.audio,
+//     bulletListItem: defaultBlockSpecs.bulletListItem,
+//     checkListItem: defaultBlockSpecs.checkListItem,
+//     // codeBlock: defaultBlockSpecs.codeBlock,
+//     divider: defaultBlockSpecs.divider,
+//     file: defaultBlockSpecs.file,
+//     heading: defaultBlockSpecs.heading,
+//     image: defaultBlockSpecs.image,
+//     numberedListItem: defaultBlockSpecs.numberedListItem,
+//     paragraph: defaultBlockSpecs.paragraph,
+//     quote: defaultBlockSpecs.quote,
+//     table: defaultBlockSpecs.table,
+//     // toggleListItem: defaultBlockSpecs.toggleListItem,
+//     video: defaultBlockSpecs.video,
+//   },
+//   inlineContentSpecs: defaultInlineContentSpecs,
+//   styleSpecs: defaultStyleSpecs,
+// });
 
 type EditComponentProps = {
   editor: MileEditor;
@@ -1078,6 +1101,7 @@ function EditRichtextComponent({
   field,
 }: EditComponentProps) {
   const value = getFieldValue(state, path);
+  console.log("value", value);
 
   const { control, upload } = useMileUploadFile();
 
@@ -1092,41 +1116,16 @@ function EditRichtextComponent({
           ]
         : value,
     schema: bn_schema,
-    uploadFile: async (file) => {
-      const result = await upload(file);
-      console.log("result", result);
-      const dims = await getImageDimension(file).catch((e) => {
-        console.error("Error getting image dimensions", e);
-        return undefined;
-      });
-      const image_url = `${NEXT_PUBLIC_IMAGE_URL}/${result.file.objectInfo.key}`;
-
-      // save db
-      mutate(`/medias`, async (prev: any) => {
-        const res = await saveImages([
-          {
-            id: generateId(),
-            type: result.file.type,
-            size: result.file.size,
-            filepath: result.file.objectInfo.key,
-            width: dims?.width,
-            height: dims?.height,
-          },
-        ]);
-        return prev ? [...prev, ...res] : res;
-      });
-
-      return image_url;
-    },
+    uploadFile: makeUploadFile(upload),
   });
 
   const getSlashMenuItems = useMemo(() => {
-    return async (query: string) =>
-      // @ts-expect-error okk
-      filterSuggestionItems(getCustomSlashMenuItems(bn_editor), query);
+    return async (query: string) => {
+      return filterSuggestionItems(getCustomSlashMenuItems(bn_editor), query);
+    };
   }, [bn_editor]);
 
-  function handleEditorChange(editor: BlockNoteEditor) {
+  function handleEditorChange(editor: typeof bn_schema.BlockNoteEditor) {
     const content = editor.document;
     handleChange({ path, value: content });
   }
@@ -1135,7 +1134,6 @@ function EditRichtextComponent({
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
       <BlockNoteView
-        // @ts-expect-error okk
         editor={bn_editor}
         onChange={handleEditorChange}
         formattingToolbar={false}
@@ -1236,7 +1234,8 @@ function EditUrlComponent({
 function getAltTextPath(path: string[]): string[] {
   if (
     path.length >= 2 &&
-    path[path.length - 2] === "image" &&
+    // remove this check because some array path won't have "image" in path but a numberic index instead
+    // path[path.length - 2] === "image" &&
     path[path.length - 1] === "image_url"
   ) {
     return [...path.slice(0, -1), "alt_text"];
@@ -1256,7 +1255,9 @@ function EditImageUrlComponent({
   const [selectedFileId, setSelectedFileId] = useState("");
   const [open, setOpen] = useState(false);
 
+  // path can be ["image", "image_url"] or ["images",0,"image_url"] (in this case, image is implicitly inferred from 0, which is images' item type)
   const value = getFieldValue(state, path);
+  // console.log("image url node", node, path, state, field, value);
 
   function handleConfirmFile(file_id: string, data: any) {
     setSelectedFileId(file_id);
@@ -1301,7 +1302,7 @@ function EditImageUrlComponent({
 
     // save db
     mutate(`/medias`, async (prev: any) => {
-      const res = await saveImages([
+      const res = await saveImagesToDB([
         {
           id: generateId(),
           type: upload.file.type,
@@ -1329,7 +1330,7 @@ function EditImageUrlComponent({
           onSuccess={handleUploadSuccess}
           label={value ? "Change image" : "Upload image"}
         />
-        <ImageGallery
+        <ImageGalleryDialog
           key={selectedFileId}
           is_disabled={editor.is_disabled}
           open={open}
@@ -1340,6 +1341,478 @@ function EditImageUrlComponent({
       </div>
     </div>
   );
+}
+
+function EditArrayComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
+  const mile = useMileProvider();
+  const [selectedFileId, setSelectedFileId] = useState("");
+  const [open, setOpen] = useState(false);
+  const [add_path, setAddPath] = useState<string[] | null>(null);
+
+  const value = getFieldValue(state, path);
+  console.log("(node)", node, path, state, field, value);
+
+  // support only one type of item type
+  // @ts-expect-error okk
+  const item_field = field.of[0];
+  const item_schema = mile.schema.get(item_field.type);
+
+  // TODO: if click add but exit, we got field value as empty state
+  // figure out how to handle empty state
+  function handleAddClick() {
+    console.log("--- click add", path, state);
+    // console.log("schema", item_schema);
+    // console.log("node", node, path, state, field, value);
+    const [item_key, ...ignore] = path; // e.g. ["images"]
+    const thisstate = state[item_key]; // pick array from node state
+
+    const initializeState = createInitialValue(null, item_schema, mile.schema);
+    console.log("initializeState", initializeState);
+
+    const new_item_path = path.concat([thisstate.length]);
+    setOpen(true);
+    setAddPath(new_item_path);
+    handleChange({
+      op: "add",
+      value: initializeState,
+      path: new_item_path,
+    });
+  }
+
+  function handleReorderItems(new_items: any) {
+    console.log("--- handleReorderItems", path, state, new_items);
+    // console.log("schema", item_schema);
+    // console.log("node", node, path, state, field, value);
+    const [item_key, ...ignore] = path; // e.g. ["images"]
+    const thisstate = state[item_key]; // pick array from node state
+    console.log("thisstate", thisstate);
+
+    // const initializeState = createInitialValue(null, item_schema, mile.schema);
+    // console.log("initializeState", initializeState);
+
+    // const new_item_path = path.concat([thisstate.length]);
+    handleChange({
+      value: new_items,
+      path: path,
+    });
+  }
+
+  function handleOpenChange(v: boolean) {
+    console.log("------ handleOpenChange----", v);
+
+    setOpen(v);
+  }
+
+  return (
+    <div className="flex flex-col gap-y-1">
+      <label className="text-sm font-semibold">{field.title}</label>
+      {value.length > 0 && (
+        <ArrayItems
+          handleReorderItems={handleReorderItems}
+          items={value}
+          schema={field}
+          item_schema={item_schema}
+        />
+      )}
+      <Button onClick={handleAddClick}>Add</Button>
+      <Dialog.Root
+        open={open}
+        onOpenChange={handleOpenChange}
+        dismissible={false}
+      >
+        <Dialog.Portal>
+          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
+          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+            <div className="mb-4 flex flex-row justify-between items-center">
+              <Dialog.Title className="text-lg font-medium">Add</Dialog.Title>
+              <div className="flex flex-row items-center gap-x-2">
+                <Button
+                  // onClick={() => dispatch({ type: AppActionType.DeselectNode })}
+                  onClick={() => {
+                    setOpen(false);
+                  }}
+                  className="px-3 py-1 rounded text-sm"
+                  variant="secondary"
+                  size="sm"
+                >
+                  Discard
+                </Button>
+                <Button
+                  onClick={() => {
+                    setOpen(false);
+                  }}
+                  className="px-3 py-1 rounded text-sm"
+                  size="sm"
+                >
+                  Done
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-y-auto h-full pb-20 z-10">
+              <EditField
+                node={node}
+                path={add_path ?? []}
+                state={state}
+                handleChange={handleChange}
+                parent={field}
+                field={item_field}
+              />
+            </div>
+          </Dialog.Popup>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </div>
+  );
+}
+
+function ArrayItems({
+  items,
+  schema,
+  item_schema,
+  handleReorderItems,
+}: {
+  items: any[];
+  schema: SchemaTypeDefinition | FieldDefinition;
+  item_schema: SchemaTypeDefinition | FieldDefinition;
+  handleReorderItems: (new_items: any[]) => void;
+}) {
+  console.log("schema", schema);
+  console.log("items schema", item_schema);
+  const { options } = schema;
+  console.log("options", options);
+  // support "list" layout only for now
+  // @ts-expect-error okk
+  const layout = options?.layout || "list";
+
+  if (layout === "list") {
+    return (
+      <ArrayItemsList
+        handleReorderItems={handleReorderItems}
+        items={items}
+        schema={schema}
+        item_schema={item_schema}
+      />
+    );
+  }
+
+  throw new Error(`Unsupported layout: ${layout}`);
+}
+
+function ArrayItemsList({
+  items,
+  schema,
+  item_schema,
+  handleReorderItems,
+}: {
+  items: any[];
+  schema: SchemaTypeDefinition | FieldDefinition;
+  item_schema: SchemaTypeDefinition | FieldDefinition;
+  handleReorderItems: (new_items: any[]) => void;
+}) {
+  useEffect(() => {
+    return monitorForElements({
+      canMonitor({ source }) {
+        return !!source.data;
+      },
+      onDrop({ location, source }) {
+        const target = location.current.dropTargets[0];
+        if (!target || !source.data || !target.data || !items) {
+          return;
+        }
+
+        const indexOfTarget = items.findIndex(
+          (item) => item.id === (target.data.item as any).id,
+        );
+        if (indexOfTarget < 0) {
+          return;
+        }
+        const closestEdgeOfTarget = extractClosestEdge(target.data);
+        const startIndex = source.data.index as number;
+        const finishIndex = getReorderDestinationIndex({
+          startIndex,
+          closestEdgeOfTarget,
+          indexOfTarget,
+          axis: "vertical",
+        });
+        console.log("drop", {
+          items,
+          source: source.data,
+          target: target.data,
+          closestEdgeOfTarget,
+          startIndex,
+          finishIndex,
+        });
+        if (finishIndex === startIndex) {
+          // If there would be no change, we skip the update
+          return;
+        }
+        const new_items = reorder({
+          list: items,
+          startIndex,
+          finishIndex,
+        });
+        handleReorderItems(new_items);
+      },
+    });
+  }, [items]);
+
+  return (
+    <div className="bg-slate-200 px-3 py-1.5 flex flex-col gap-y-1.5">
+      {items?.map((e, index) => {
+        return (
+          <ArrayItemListItem
+            key={index}
+            item_schema={item_schema}
+            index={index}
+            item={e}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function getReorderDestinationIndex({
+  startIndex,
+  closestEdgeOfTarget,
+  indexOfTarget,
+  axis,
+}: {
+  startIndex: number;
+  closestEdgeOfTarget: Edge | null;
+  indexOfTarget: number;
+  axis: "vertical" | "horizontal";
+}): number {
+  // invalid index's
+  if (startIndex === -1 || indexOfTarget === -1) {
+    return startIndex;
+  }
+
+  // if we are targeting the same index we don't need to do anything
+  if (startIndex === indexOfTarget) {
+    return startIndex;
+  }
+
+  if (closestEdgeOfTarget == null) {
+    return indexOfTarget;
+  }
+
+  const isGoingAfter: boolean =
+    (axis === "vertical" && closestEdgeOfTarget === "bottom") ||
+    (axis === "horizontal" && closestEdgeOfTarget === "right");
+
+  const isMovingForward: boolean = startIndex < indexOfTarget;
+  // moving forward
+  if (isMovingForward) {
+    return isGoingAfter ? indexOfTarget : indexOfTarget - 1;
+  }
+  // moving backwards
+  return isGoingAfter ? indexOfTarget + 1 : indexOfTarget;
+}
+
+function reorder<Value>({
+  list,
+  startIndex,
+  finishIndex,
+}: {
+  list: Value[];
+  startIndex: number;
+  finishIndex: number;
+}): Value[] {
+  if (startIndex === -1 || finishIndex === -1) {
+    // Making this function consistently return a new array reference.
+    // This is consistent with .toSorted() which always returns a new array
+    // even when it does not do anything
+    return Array.from(list);
+  }
+
+  const result = Array.from(list);
+  const [removed] = result.splice(startIndex, 1);
+  result.splice(finishIndex, 0, removed);
+
+  return result;
+}
+
+function ArrayItemListItem({
+  index,
+  item,
+  item_schema,
+}: {
+  index: number;
+  item: any;
+  item_schema: SchemaTypeDefinition | FieldDefinition;
+}) {
+  console.log("item", item, index);
+
+  const ref = useRef<HTMLDivElement>(null);
+  const [draggableState, setDraggableState] =
+    useState<DraggableState>(idleState);
+  const [closestEdge, setClosestEdge] = useState<Edge | null>(null);
+
+  useEffect(() => {
+    const element = ref.current;
+    // const dragHandle = dragHandleRef.current;
+    invariant(element);
+    // invariant(dragHandle);
+
+    const dragData = {
+      item,
+      index,
+    };
+
+    function onChange({ source, self }: ElementDropTargetEventBasePayload) {
+      const isSource = source.element === element;
+      if (isSource) {
+        setClosestEdge(null);
+        return;
+      }
+
+      const closestEdge = extractClosestEdge(self.data);
+
+      const sourceIndex = source.data.index;
+      invariant(typeof sourceIndex === "number");
+
+      const isItemBeforeSource = index === sourceIndex - 1;
+      const isItemAfterSource = index === sourceIndex + 1;
+
+      const isDropIndicatorHidden =
+        (isItemBeforeSource && closestEdge === "bottom") ||
+        (isItemAfterSource && closestEdge === "top");
+
+      if (isDropIndicatorHidden) {
+        setClosestEdge(null);
+        return;
+      }
+
+      setClosestEdge(closestEdge);
+    }
+
+    return combine(
+      // registerItem({ itemId: item.id, element }),
+      draggable({
+        element,
+        getInitialData: () => dragData,
+        onGenerateDragPreview({ nativeSetDragImage }) {
+          setCustomNativeDragPreview({
+            nativeSetDragImage,
+            // getOffset: () => ({ x: 18, y: 18 }),
+            getOffset: pointerOutsideOfPreview({
+              x: "16px",
+              y: "8px",
+            }),
+            render({ container }) {
+              setDraggableState({ type: "preview", container });
+              return () => setDraggableState(draggingState);
+            },
+          });
+        },
+        onDragStart() {
+          setDraggableState(draggingState);
+        },
+        onDrop() {
+          setDraggableState(idleState);
+        },
+      }),
+      dropTargetForElements({
+        element,
+        // canDrop({ source }) {
+        //   return source.data.instanceId === instanceId;
+        // },
+        getData({ input }) {
+          return attachClosestEdge(dragData, {
+            element,
+            input,
+            allowedEdges: ["top", "bottom"],
+          });
+        },
+        onDragEnter: onChange,
+        onDrag: onChange,
+        onDragLeave() {
+          setClosestEdge(null);
+        },
+        onDrop() {
+          setClosestEdge(null);
+        },
+      }),
+    );
+  }, [index, item]);
+
+  const preview = getPreview(item_schema, item);
+  console.log("preview", preview);
+
+  return (
+    <>
+      <div ref={ref} className="relative flex gap-x-2">
+        {preview.media && (
+          <div className="w-16 h-16">
+            {item.image_url && (
+              <img
+                src={item.image_url}
+                alt={item.alt_text}
+                className="object-cover w-full h-full"
+                draggable={false}
+              />
+            )}
+          </div>
+        )}
+        <div className="grow">
+          <div className="text-sm">{preview.title}</div>
+        </div>
+        {closestEdge && <DropIndicator edge={closestEdge} gap="1px" />}
+      </div>
+      {draggableState.type === "preview" &&
+        ReactDOM.createPortal(
+          <div
+            style={{
+              /**
+               * Ensuring the preview has the same dimensions as the original.
+               *
+               * Using `border-box` sizing here is not necessary in this
+               * specific example, but it is safer to include generally.
+               */
+              boxSizing: "border-box",
+              position: "relative",
+              // width: state.rect.width,
+              // height: state.rect.height,
+              // width: 36,
+              height: 36,
+            }}
+          >
+            {/*<DragPreview />*/}
+            <div className="px-3 py-1.5 bg-white shadow-lg">image</div>
+          </div>,
+          draggableState.container,
+        )}
+    </>
+  );
+}
+
+function getPreview(item_schema: any, item: any) {
+  const preview = item_schema.preview;
+  if (!preview || !preview.select) {
+    throw new Error(`Missing preview for item type: ${item_schema.type}`);
+  }
+  const select = {};
+  for (const key in preview.select) {
+    if (preview.select.hasOwnProperty(key)) {
+      const pick = preview.select[key];
+      // @ts-expect-error okk
+      select[key] = item[pick];
+    }
+  }
+  const ret = {};
+  if (preview.prepare) {
+    const prepared = preview.prepare(select);
+    return prepared;
+  }
+  return ret;
 }
 
 function EditBooleanComponent({
@@ -1387,7 +1860,19 @@ function EditNumberComponent({ editor, node, field }: EditComponentProps) {
   );
 }
 
+/**
+ * path can be ["image", "image_url"] or ["images",0,"image_url"]
+ * in this case, image is implicitly inferred from 0, which is images' item type
+ *
+ * {
+    "images": [
+      {"image_url": "", "alt_text": ""}
+    ],
+    "mode": ""
+ }
+ */
 function getFieldValue(state: any, path: string[]) {
+  // console.log("getFieldValue", state, path);
   if (path.length === 0) {
     return state;
   }
@@ -1395,7 +1880,28 @@ function getFieldValue(state: any, path: string[]) {
     return state;
   }
   const [first, ...rest] = path;
-  invariant(first);
+  // invariant(first);
+  if (typeof first === "string") {
+    // edge case: this child state can be empty array when editor clicks "add" new item of array
+    // state (e.g. "images") will transition from initial empty array [] to an initialized state of array item [{initialized item state}]
+    // therefore, field component first renders with [], then [{initialized item state}]
+    // this edge case is that first render.
+    const child_state = state[first];
+    if (child_state) {
+      return getFieldValue(child_state, rest);
+    }
+  } else if (typeof first === "number") {
+    if (Array.isArray(state)) {
+      // if state is empty array, child_state will be undefined
+      // this will cause the calling component to render with undefined
+      // and may cause react warning of uncontrolled to controlled input component
+      // we solve this in calling component (e.g. EditStringComponent) by prevent undefined value
+      const child_state = state[first];
+      if (child_state) {
+        return getFieldValue(child_state, rest);
+      }
+    }
+  }
   return getFieldValue(state[first], rest);
 }
 
@@ -1407,7 +1913,8 @@ function EditStringComponent({
   handleChange,
   field,
 }: EditComponentProps) {
-  const value = getFieldValue(state, path);
+  const value = getFieldValue(state, path) ?? "";
+  console.log("---string", state, path, value);
 
   function handleInputChange(e: any) {
     const nextValue = e.target.value;
@@ -1475,6 +1982,8 @@ function createInitialValue(current: unknown, field: any, schema: MileSchema) {
 function getDefaultValueForType(type: string): any {
   // "string", "number", "boolean", "url", "date", "richtext"
   switch (type) {
+    case "array":
+      return [];
     case "string":
       return "";
     case "number":
@@ -1503,6 +2012,7 @@ function initializeFields(
   // console.log('initializeFields', fields, schema);
   return fields.reduce(
     (acc: Record<string, any>, field: any) => {
+      // console.log("field.type", field.type);
       const isPrimitive = isPrimitiveType(field.type);
       if (isPrimitive) {
         acc[field.name] = getDefaultValueForType(field.type);
@@ -1532,8 +2042,7 @@ function createInitialEmptyValue(field: any, schema: MileSchema) {
 
 function updateState(
   state: unknown,
-  path: string[],
-  value: any,
+  change: Change,
   field: any,
   breakpoint: "desktop" | "tablet" | "mobile",
   schema: MileSchema,
@@ -1541,15 +2050,14 @@ function updateState(
   if (state == null) {
     const initializeState = createInitialValue(state, field, schema);
     // console.log("field", field, initializeState);
-    return updateNestedState(initializeState, path, value, field, breakpoint);
+    return updateNestedState(initializeState, change, field, breakpoint);
   }
-  return updateNestedState(state, path, value, field, breakpoint);
+  return updateNestedState(state, change, field, breakpoint);
 }
 
 function updateNestedState(
   state: any,
-  path: string[],
-  value: any,
+  change: Change,
   field: any,
   breakpoint: "desktop" | "tablet" | "mobile",
 ): any {
@@ -1558,38 +2066,141 @@ function updateNestedState(
       ...state,
       [breakpoint]: updateNestedStateRec(
         state[breakpoint],
-        path,
-        value,
+        change,
         field,
         breakpoint,
       ),
     };
   }
-  return updateNestedStateRec(state, path, value, field, breakpoint);
+  return updateNestedStateRec(state, change, field, breakpoint);
 }
 
 function updateNestedStateRec(
   state: any,
-  path: string[],
-  value: any,
+  change: Change,
   field: any,
   breakpoint: "desktop" | "tablet" | "mobile",
 ): any {
-  // console.log('state', state, path, value);
-  if (path.length === 0) {
-    return value;
+  console.log("updateState ----", state, change, field);
+  /**
+   *
+   * {
+       "path": ["images", 0, "alt_text"],
+       "value": "o"
+   }
+
+   * {
+       "images": [
+         {"image_url": "", "alt_text": ""}
+       ],
+       "mode": ""
+   }
+   */
+
+  // default op is to "set" passed value for passed path
+  const op = change.op ?? "set";
+
+  if (op === "set") {
+    if (change.path.length === 0) {
+      return change.value;
+    }
+    invariant(
+      typeof state !== "string" &&
+        typeof state !== "number" &&
+        typeof state !== "boolean",
+    );
+    const [key, ...restPath] = change.path;
+    invariant(key != null);
+    const key_schema = field.fields.find((e: any) => e.name === key);
+    if (key_schema?.type === "array") {
+      console.log("-------- set array", change.path, state);
+
+      const nextPathHead = restPath[0];
+      const isNumericIndex =
+        nextPathHead !== undefined && !isNaN(Number(nextPathHead));
+      if (isNumericIndex) {
+        const index = Number(nextPathHead);
+        const existingArr = Array.isArray(state[key]) ? state[key] : [];
+        // Recurse into the specific array element
+        const newChange = {
+          value: change.value,
+          path: restPath.slice(1), // skip index
+        };
+
+        const updatedValue = updateNestedStateRec(
+          existingArr[index],
+          newChange,
+          field,
+          breakpoint,
+        );
+
+        // immutable array update
+        const newArr = [...existingArr];
+        newArr[index] = updatedValue;
+        // const newArr = [
+        //   ...existingArr.slice(0, index),
+        //   updatedValue,
+        //   ...existingArr.slice(index),
+        // ];
+        console.log("-------", key, newArr);
+
+        return {
+          ...state,
+          [key]: newArr,
+        };
+      } else {
+        // set the array value itself, not the item
+        const newChange = {
+          value: change.value,
+          path: restPath,
+        };
+        return {
+          ...state,
+          [key]: updateNestedStateRec(state[key], newChange, field, breakpoint),
+        };
+      }
+    } else {
+      const newChange = {
+        value: change.value,
+        path: restPath,
+      };
+      return {
+        ...state,
+        [key]: updateNestedStateRec(state[key], newChange, field, breakpoint),
+      };
+    }
   }
-  invariant(
-    typeof state !== "string" &&
-      typeof state !== "number" &&
-      typeof state !== "boolean",
-  );
-  const [key, ...restPath] = path;
-  invariant(key);
-  return {
-    ...state,
-    [key]: updateNestedStateRec(state[key], restPath, value, field, breakpoint),
-  };
+
+  if (op === "add") {
+    // TODO: when adding a new item to an array, ensure the index is correct
+    // console.log("add ----", state, change, field);
+    invariant(
+      typeof state !== "string" &&
+        typeof state !== "number" &&
+        typeof state !== "boolean",
+    );
+    const index = change.path.at(-1);
+    const key = change.path.at(-2);
+    invariant(index !== undefined);
+    invariant(key);
+    const index_num = parseInt(index, 10);
+
+    const oldArr = Array.isArray(state[key]) ? state[key] : [];
+
+    // Pure immutable insert
+    const newArr = [
+      ...oldArr.slice(0, index_num),
+      change.value,
+      ...oldArr.slice(index_num),
+    ];
+
+    return {
+      ...state,
+      [key]: newArr,
+    };
+  }
+
+  return state;
 }
 
 /*************************************************************
@@ -1633,17 +2244,19 @@ function EditField({
   path,
   state,
   handleChange,
+  parent,
   field,
 }: {
   node: NodeData;
   path: string[];
   state: any;
   handleChange: (changes: Change[] | Change) => void;
+  parent: SchemaTypeDefinition | FieldDefinition;
   field: FieldDefinition;
 }) {
   const mile = useMileProvider();
 
-  // console.log('EditField', path, field.type, state);
+  // console.log("EditField", path, field, state, parent);
   const type = field.type;
   const isPrimitive = isPrimitiveType(type);
   if (isPrimitive) {
@@ -1658,6 +2271,34 @@ function EditField({
     );
   }
 
+  // handle parent array type
+  if (parent.type === "array") {
+    console.log("path.at(-1)", path.at(-1));
+    console.log("path.at(-2)", path.at(-2));
+
+    if (path.at(-1) !== type && path.at(-2) === parent.name) {
+      // render specific item of the array
+      // get type of item
+      // @ts-expect-error okk
+      const type = parent.of[0].type; // e.g. if parent.name is images, this type would be image
+      const schema = mile.schema.get(type);
+      return schema.fields?.map((e) => {
+        return (
+          <EditField
+            key={e.name}
+            node={node}
+            path={e.name ? path.concat(e.name) : path}
+            state={state}
+            handleChange={handleChange}
+            parent={schema}
+            field={e}
+          />
+        );
+      });
+    }
+    throw new Error(`Invalid path "${path.join(".")}" for type: ${field.type}`);
+  }
+
   const schema = mile.schema.get(type);
   invariant(path.at(-1) === type);
   invariant(schema.name);
@@ -1670,6 +2311,7 @@ function EditField({
         path={path.slice(0, -1).concat(schema.name)}
         state={state}
         handleChange={handleChange}
+        parent={schema}
         fields={schema.fields}
       />
     </div>
@@ -1681,12 +2323,14 @@ function EditFields({
   path,
   state,
   handleChange,
+  parent,
   fields,
 }: {
   node: NodeData;
   path: string[];
   state: any;
   handleChange: (changes: Change[] | Change) => void;
+  parent: SchemaTypeDefinition | FieldDefinition;
   fields: FieldDefinition[] | undefined;
 }) {
   // console.log("EditFields", {
@@ -1710,6 +2354,7 @@ function EditFields({
             path={e.name ? path.concat(e.name) : path}
             state={state}
             handleChange={handleChange}
+            parent={parent}
             field={e}
           />
         );
@@ -1718,7 +2363,7 @@ function EditFields({
   );
 }
 
-type Change = { path: string[]; value: any };
+type Change = { op?: string; path: string[]; value: any };
 
 function EditNode({ node }: { node: NodeData }) {
   const editor = useEditor();
@@ -1729,8 +2374,12 @@ function EditNode({ node }: { node: NodeData }) {
     console.log("no fields");
     return null;
   }
+  console.log("schema", schema);
+  console.log("node", node);
 
   const treenode = editor.getNode(node.id);
+  console.log("treenode", treenode);
+
   const optionValue = treenode.options; // undefined or option value
 
   const [initialValue] = useState(() =>
@@ -1739,21 +2388,14 @@ function EditNode({ node }: { node: NodeData }) {
   const [state, setState] = useState(() =>
     createInitialValue(optionValue, schema, mile.schema),
   );
-  console.log("EditNode", editor, node, schema, optionValue, state);
+  // console.log("EditNode", editor, node, schema, optionValue, state);
 
   const handleChange = (changes: Change[] | Change) => {
     const changeList = Array.isArray(changes) ? changes : [changes];
 
     const updatedState = changeList.reduce(
-      (accState, { path, value }) =>
-        updateState(
-          accState,
-          path,
-          value,
-          schema,
-          editor.breakpoint,
-          mile.schema,
-        ),
+      (accState, change) =>
+        updateState(accState, change, schema, editor.breakpoint, mile.schema),
       state,
     );
 
@@ -1776,6 +2418,7 @@ function EditNode({ node }: { node: NodeData }) {
         path={[]}
         state={state}
         handleChange={handleChange}
+        parent={schema}
         fields={schema.fields}
       />
     </div>
@@ -1910,7 +2553,7 @@ function PopoverComponentPicker({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner sideOffset={12}>
-          <Popover.Popup className="w-lg origin-[var(--transform-origin)] rounded-lg bg-[canvas] px-6 py-4 text-gray-900 shadow-lg shadow-gray-200 outline-1 outline-gray-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+          <Popover.Popup className="w-lg h-[500px] overflow-y-auto origin-[var(--transform-origin)] rounded-lg bg-[canvas] px-6 py-4 text-gray-900 shadow-lg shadow-gray-200 outline-1 outline-gray-200 transition-[transform,scale,opacity] data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
             <Popover.Arrow className="data-[side=bottom]:top-[-8px] data-[side=left]:right-[-13px] data-[side=left]:rotate-90 data-[side=right]:left-[-13px] data-[side=right]:-rotate-90 data-[side=top]:bottom-[-8px] data-[side=top]:rotate-180">
               <ArrowSvg />
             </Popover.Arrow>
@@ -2184,38 +2827,6 @@ function buildNewUserNodePayload(schema: SchemaTypeDefinition) {
   };
 }
 
-const markdown_schema = {
-  type: "paragraph",
-  name: "paragraph",
-  title: "Markdown",
-  thumbnail: "/mile-thumbnails/markdown.png",
-  fields: [],
-  getInitialNodes: (node_id: string, generateId: () => string) => {
-    const child_id = generateId();
-    return {
-      [node_id]: {
-        id: node_id,
-        type: "paragraph",
-        props: {},
-        options: undefined,
-        children: [child_id],
-      },
-      [child_id]: {
-        id: child_id,
-        type: "text",
-        props: { value: "Paragraph" },
-        options: undefined,
-        children: [],
-      },
-    };
-  },
-};
-
-function combineSchema(schema: MileSchema) {
-  const combinedSchema = schema.user_schema.concat([markdown_schema]);
-  return combinedSchema;
-}
-
 function ComponentPicker({
   schema,
   close,
@@ -2226,11 +2837,10 @@ function ComponentPicker({
   dispatch: React.ActionDispatch<[action: AppAction]>;
 }) {
   const editor = useEditor();
-  const combined_schema = combineSchema(schema);
 
   return (
     <div className="grid grid-cols-2 gap-x-4 gap-y-5">
-      {combined_schema.map((e) => {
+      {schema.component_schema.map((e) => {
         function handleClick() {
           const payload = buildNewUserNodePayload(e);
           console.log("payload", payload);
@@ -2434,6 +3044,13 @@ function MileHeader({
       </div>
       <MileHeaderPageSettings />
       <div className="mile-headRight">
+        <button
+          type="button"
+          className="px-2 py-1.5 flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+          onClick={() => console.log("print------", editor.tree.data)}
+        >
+          Print
+        </button>
         <a
           type="button"
           href="#"
@@ -2463,7 +3080,7 @@ function MileHeader({
 function MileHeaderPageSettings() {
   const editor = useEditor();
   const [isOpen, setIsOpen] = useState(false);
-  console.log("editor.draft_data", editor.draft_data);
+  // console.log("editor.draft_data", editor.draft_data);
 
   return (
     <div className="mile-headCenter">
@@ -2601,7 +3218,7 @@ function PageSettingsReady({ parent, close }: any) {
                   payload: { key: "description", value },
                 });
               }}
-              render={<textarea rows={4} className={textareaClasses} />}
+              render={<Textarea rows={4} />}
             />
           </div>
         </div>
@@ -2646,7 +3263,7 @@ function PageSettingsReady({ parent, close }: any) {
                   payload: { key: "canonical_url", value },
                 });
               }}
-              render={<textarea rows={2} className={textareaClasses} />}
+              render={<Textarea rows={2} />}
             />
           </div>
         </div>
@@ -2669,7 +3286,7 @@ function PageSettingsReady({ parent, close }: any) {
                   payload: { key: "keywords", value },
                 });
               }}
-              render={<textarea rows={4} className={textareaClasses} />}
+              render={<Textarea rows={4} />}
             />
             <div className="mt-1 text-xs text-zinc-600">
               Comma-separated list of keywords for search engines
@@ -2691,7 +3308,7 @@ function PageSettingsReady({ parent, close }: any) {
                   payload: { key: "content", value },
                 });
               }}
-              render={<textarea rows={4} className={textareaClasses} />}
+              render={<Textarea rows={4} />}
             />
           </div>
         </div>
@@ -2744,6 +3361,18 @@ function PageSettingsReady({ parent, close }: any) {
   );
 }
 
+function fetchStringKey(key: string) {
+  return fetch(`${API}${key}`).then((r) => r.json());
+}
+
+function useMediaFile(media_id?: string) {
+  return useSWR(media_id ? `/medias/${media_id}` : null, fetchStringKey);
+}
+
+function getImageUrl(key: string) {
+  return `${NEXT_PUBLIC_IMAGE_URL}/${key}`;
+}
+
 function PageOpenGraphImage({
   image_id,
   onImageIdChange,
@@ -2770,7 +3399,7 @@ function PageOpenGraphImage({
   async function handleUploadSuccess(upload: any) {
     // save db
     const medias = await mutate(`/medias`, async (prev: any) => {
-      const res = await saveImages([
+      const res = await saveImagesToDB([
         {
           id: generateId(),
           type: upload.file.type,
@@ -2804,7 +3433,7 @@ function PageOpenGraphImage({
           onSuccess={handleUploadSuccess}
           label={image_id ? "Change image" : "Upload image"}
         />
-        <ImageGallery
+        <ImageGalleryDialog
           key={selectedFileId}
           is_disabled={false}
           open={open}
@@ -2837,12 +3466,12 @@ function handleUploadsSuccess(upload: any) {
     };
   });
   mutate(`/medias`, async (prev: any) => {
-    const res = await saveImages(payload);
+    const res = await saveImagesToDB(payload);
     return prev ? [...prev, ...res] : res;
   });
 }
 
-function ImageGallery({
+function ImageGalleryDialog({
   open,
   setOpen,
   initialSelectedFileId,
@@ -2855,10 +3484,6 @@ function ImageGallery({
   handleConfirmFile: (file_id: string, data: any) => void;
   is_disabled: boolean;
 }) {
-  const [selectedFileId, setSelectedFileId] = useState(initialSelectedFileId);
-  const [isPending, setIsPending] = useState(false);
-  const { data, isValidating } = useMediaFile(selectedFileId);
-
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger
@@ -2870,7 +3495,7 @@ function ImageGallery({
       />
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-        <Dialog.Popup className="flex flex-col justify-between fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-full max-h-6/7 -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl bg-gray-50 outline-1 outline-gray-400 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+        <Dialog.Popup className="flex flex-col fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-[calc(100vh*6/7)] -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl bg-gray-50 outline-1 outline-gray-400 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
           <div className="py-2 px-3 flex items-center justify-between">
             <div className="flex items-center gap-x-4">
               <Dialog.Title className="text-lg font-medium">
@@ -2887,397 +3512,14 @@ function ImageGallery({
               </Dialog.Close>
             </div>
           </div>
-          <div className="px-3 grid grid-cols-[1fr_300px] gap-2 grow overflow-hidden">
-            <div className="/pt-4 pb-8 overflow-y-auto">
-              <MediaFiles
-                selectedFileId={selectedFileId}
-                handleSelectFile={setSelectedFileId}
-              />
-            </div>
-            <div className="overflow-y-auto pt-4 pb-8 px-4 bg-gray-100">
-              <MediaMetadata
-                selectedFileId={selectedFileId}
-                setIsPending={setIsPending}
-              />
-            </div>
-          </div>
-          <div className="py-2 px-3 bg-zinc-200 rounded-b-lg flex justify-end">
-            <button
-              disabled={isPending || isValidating}
-              onClick={() => {
-                if (selectedFileId) {
-                  handleConfirmFile(selectedFileId, data);
-                }
-              }}
-              className="mr-2 my-1 py-2 px-3 rounded-md bg-blue-600 text-xs text-white hover:bg-blue-700 transition-colors cursor-default disabled:opacity-50"
-            >
-              Select
-            </button>
-          </div>
+          <ImageGallery
+            initialSelectedFileId={initialSelectedFileId}
+            handleConfirmFile={handleConfirmFile}
+          />
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>
   );
-}
-
-function fetchStringKey(key: string) {
-  return fetch(`${API}${key}`).then((r) => r.json());
-}
-
-function useMediaFiles() {
-  return useSWR(`/medias`, fetchStringKey);
-}
-
-function MediaFiles({
-  selectedFileId,
-  handleSelectFile,
-}: {
-  selectedFileId?: string;
-  handleSelectFile: (fileId: string) => void;
-}) {
-  const { data, error, isLoading } = useMediaFiles();
-  if (error || data?.error) return <div>failed to load</div>;
-  if (isLoading) return <div>loading...</div>;
-  // console.log('data', data);
-  return (
-    <div className="">
-      <MediaFilesGrid
-        data={data}
-        selectedFileId={selectedFileId}
-        handleSelectFile={handleSelectFile}
-      />
-    </div>
-  );
-}
-
-function MediaFilesGrid({
-  data,
-  selectedFileId,
-  handleSelectFile,
-}: {
-  data: any[];
-  selectedFileId?: string;
-  handleSelectFile: (fileId: string) => void;
-}) {
-  if (!data || data.length === 0) {
-    return <div className="">No files</div>;
-  }
-  return (
-    <div className="grid grid-cols-4 gap-4 items-start">
-      {data.map((e: any) => (
-        <MediaFileCard
-          data={e}
-          key={e.id}
-          selectedFileId={selectedFileId}
-          handleSelectFile={handleSelectFile}
-        />
-      ))}
-    </div>
-  );
-}
-
-function getImageUrl(key: string) {
-  return `${NEXT_PUBLIC_IMAGE_URL}/${key}`;
-}
-
-function getFileName(filepath: string) {
-  return filepath.split("/").at(-1) ?? "Unknown name";
-}
-
-function MediaFileCard({
-  data,
-  selectedFileId,
-  handleSelectFile,
-}: {
-  data: any;
-  selectedFileId?: string;
-  handleSelectFile: (fileId: string) => void;
-}) {
-  return (
-    <button
-      className={`bg-white flex w-full flex-col border ${selectedFileId === data.id ? "border-zinc-500" : "border-zinc-300"} hover:border-zinc-400`}
-      onClick={() => {
-        handleSelectFile(data.id);
-      }}
-    >
-      <div
-        className={`py-5 ${selectedFileId === data.id ? "bg-blue-100" : "bg-zinc-100"} h-[180px] flex justify-center`}
-      >
-        <img
-          src={getImageUrl(data.filepath)}
-          alt=""
-          className="max-h-full max-w-full object-contain"
-        />
-      </div>
-      <div className="px-2 py-2">
-        <div className="text-sm leading-4 select-text">
-          {getFileName(data.filepath)}
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function useMediaFile(media_id?: string) {
-  return useSWR(media_id ? `/medias/${media_id}` : null, fetchStringKey);
-}
-
-function MediaMetadata({
-  selectedFileId,
-  setIsPending,
-}: {
-  selectedFileId?: string;
-  setIsPending: (v: boolean) => void;
-}) {
-  const { data, error, isLoading, isValidating } = useMediaFile(selectedFileId);
-  if (error || data?.error) return <div>failed to load</div>;
-  if (isLoading) return <div>loading...</div>;
-
-  if (!data) return null;
-  if (data.type == null) {
-    return (
-      <div className="">
-        <h2 className="mb-4">Media details</h2>
-        <div className="mb-4 text-xs">
-          <h3 className="mb-1 font-medium">Unknown media file type.</h3>
-        </div>
-      </div>
-    );
-  }
-  if (selectedFileId) {
-    if (data.type.startsWith("image/")) {
-      return (
-        <ImageDetails
-          selectedFileId={selectedFileId}
-          data={data}
-          setIsPending={setIsPending}
-        />
-      );
-    }
-  }
-
-  return null;
-}
-
-function ImageDetails({
-  selectedFileId,
-  data,
-  setIsPending,
-}: {
-  selectedFileId: string;
-  data: any;
-  setIsPending: (v: boolean) => void;
-}) {
-  return (
-    <div className="">
-      <h2 className="mb-4 font-semibold">Media details</h2>
-
-      <div className="mb-4 grid grid-cols-[112px_1fr] gap-x-3">
-        <div className="mb-2">
-          <img src={getImageUrl(data.filepath)} alt="" />
-        </div>
-        <div className="mb-4 text-xs">
-          <h3 className="mb-1.5 font-medium">{data.filepath}</h3>
-          <div className="mb-0.5">{filesize(data.size)}</div>
-          <div className="text-gray-500">
-            {new Date(data.created_at).toString()}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-y-3">
-        <div className="">
-          <TextAreaImageAltText
-            key={`alt_${selectedFileId}`}
-            fileId={data.id}
-            defaultValue={data.alt}
-            setIsPending={setIsPending}
-          />
-        </div>
-        <div className="">
-          <InputImageTitle
-            key={`title_${selectedFileId}`}
-            fileId={data.id}
-            defaultValue={data.title ?? getFileName(data.filepath)}
-            setIsPending={setIsPending}
-          />
-        </div>
-        <div className="">
-          <TextAreaImageCaption
-            key={`caption_${selectedFileId}`}
-            fileId={data.id}
-            defaultValue={data.caption}
-            setIsPending={setIsPending}
-          />
-        </div>
-        <div className="">
-          <ImageURL defaultValue={getImageUrl(data.filepath)} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ImageURL({ defaultValue }: any) {
-  return (
-    <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">
-        File url
-      </label>
-      <Input readOnly defaultValue={defaultValue} className="truncate" />
-    </div>
-  );
-}
-
-function TextAreaImageCaption({
-  fileId,
-  defaultValue,
-  setIsPending,
-}: {
-  fileId: string;
-  defaultValue: string | null;
-  setIsPending: (v: boolean) => void;
-}) {
-  const [isDirty, setIsDirty] = useState(false);
-  const [value, setValue] = useState("");
-  function handleBlur() {
-    if (isDirty) {
-      updateFileMetadata(fileId, { caption: value }, () => setIsPending(false));
-      setIsDirty(false);
-    }
-  }
-  function handleChange(v: string) {
-    setValue(v);
-    if (!isDirty) {
-      setIsDirty(true);
-    }
-  }
-
-  return (
-    <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">
-        Caption
-      </label>
-      <Field.Control
-        defaultValue={defaultValue ?? undefined}
-        onBlur={handleBlur}
-        onValueChange={handleChange}
-        render={<textarea rows={4} className={textareaClasses} />}
-      />
-    </div>
-  );
-}
-
-const textareaClasses =
-  "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground border-zinc-300 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-zinc-500 focus-visible:inset-ring-2 focus-visible:inset-ring-zinc-200 focus-visible:shadow-md aria-invalid:ring-destructive/20 aria-invalid:border-destructive";
-
-function InputImageTitle({
-  fileId,
-  defaultValue,
-  setIsPending,
-}: {
-  fileId: string;
-  defaultValue: string | null;
-  setIsPending: (v: boolean) => void;
-}) {
-  const [isDirty, setIsDirty] = useState(false);
-  const [value, setValue] = useState("");
-  function handleBlur() {
-    if (isDirty) {
-      updateFileMetadata(fileId, { title: value }, () => setIsPending(false));
-      setIsDirty(false);
-    }
-  }
-  function handleChange(e: any) {
-    setValue(e.target.value);
-    if (!isDirty) {
-      setIsDirty(true);
-    }
-  }
-
-  return (
-    <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">
-        Title
-      </label>
-      <Input
-        defaultValue={defaultValue ?? undefined}
-        onBlur={handleBlur}
-        onChange={handleChange}
-        className="truncate"
-      />
-    </div>
-  );
-}
-
-function TextAreaImageAltText({
-  fileId,
-  defaultValue,
-  setIsPending,
-}: {
-  fileId: string;
-  defaultValue: string | null;
-  setIsPending: (v: boolean) => void;
-}) {
-  const [isDirty, setIsDirty] = useState(false);
-  const [value, setValue] = useState(defaultValue ?? "");
-  function handleBlur() {
-    if (isDirty) {
-      setIsPending(true);
-      updateFileMetadata(fileId, { alt: value }, () => setIsPending(false));
-      setIsDirty(false);
-    }
-  }
-  function handleChange(v: string) {
-    setValue(v);
-    if (!isDirty) {
-      setIsDirty(true);
-    }
-  }
-  return (
-    <div className="flex flex-col">
-      <label htmlFor="" className="mb-1 text-xs font-semibold">
-        Alt text
-      </label>
-      <Field.Control
-        value={value}
-        onBlur={handleBlur}
-        onValueChange={handleChange}
-        render={<textarea rows={4} className={textareaClasses} />}
-      />
-      {/* <Button onClick={() => { }} className="text-xs">
-        Fill it
-      </Button> */}
-    </div>
-  );
-}
-
-function updateFileMetadata(
-  file_id: string,
-  data: { [k: string]: string },
-  done: () => void,
-) {
-  updateMediaMetadata(`${API}/medias/${file_id}`, data)
-    .then((e) => {
-      mutate(
-        (k: string) =>
-          typeof k === "string" &&
-          (k === `/medias/${file_id}` || k === "/medias"),
-      );
-      done();
-    })
-    .catch((e) => {
-      console.error("error", e);
-      done();
-    });
-}
-
-async function updateMediaMetadata(url: string, data: { [k: string]: string }) {
-  return await fetch(url, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  }).then((r) => r.json());
 }
 
 function ArrowSvg(props: React.ComponentProps<"svg">) {
@@ -3297,24 +3539,4 @@ function ArrowSvg(props: React.ComponentProps<"svg">) {
       />
     </svg>
   );
-}
-
-async function saveImages(payload: any) {
-  const resp = await fetch(`${API}/medias`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!resp.ok) {
-    const error = new Error("An error occurred while saving the images.");
-    const info = await resp.json();
-    console.error("Error saving images", info);
-    // @ts-expect-error okk
-    error.info = info;
-    // @ts-expect-error okk
-    error.status = resp.status;
-    throw error;
-  }
-  const res = await resp.json();
-  return res;
 }

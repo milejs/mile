@@ -60,12 +60,21 @@ function initializeSchema(userSchema?: Schema): Schema {
   return [...internalSchema, ...userSchema];
 }
 
+function initializeComponentSchema(userSchema?: Schema): Schema {
+  if (!userSchema) return internalComponentSchema;
+  return [...internalComponentSchema, ...userSchema];
+}
+
 class MileSchema implements MileSchemaType {
   user_schema: Schema;
+  component_schema: Schema;
   schema: Schema;
   schemaMap: Map<string, SchemaTypeDefinition | FieldDefinition>;
   constructor(schema: Schema) {
     this.user_schema = schema; // from config.schema
+    // component_schema is used in "add" component picker. it combines built-in component schema and user schema
+    // it needs to have 'type', 'getInitialNodes', 'thumbnail' and 'title'
+    this.component_schema = initializeComponentSchema(schema);
     this.schema = initializeSchema(schema); // combine user and internal schema
     this.schemaMap = this.buildSchemaMap();
   }
@@ -91,32 +100,57 @@ class MileSchema implements MileSchemaType {
   resolveField(field: FieldDefinition): FieldDefinition | SchemaTypeDefinition {
     throw new Error("Method not implemented.");
   }
-  // resolveField(field: FieldDefinition) {
-  //   if (isBuiltinSchemaType(field.type)) {
-  //     return field;
-  //   } else if (this.schemaMap.has(field.type)) {
-  //     const resolvedField = this.schemaMap.get(field.type);
-  //     if (!resolvedField) {
-  //       throw new Error("Unknown field");
-  //     }
-  //     return resolvedField;
-  //   } else {
-  //     throw new Error("Unknown field");
-  //   }
-  // }
 }
 
-// const primitiveTypes = ["string", "number", "boolean", "url", "date", "richtext"];
-// function isBuiltinSchemaType(type: string) {
-//   return (
-//     type === "string" ||
-//     type === "number" ||
-//     type === "boolean" ||
-//     type === "url" ||
-//     type === "date" ||
-//     type === "richtext"
-//   );
-// }
+const internalComponentSchema = [
+  {
+    // component schema for markdown (we use paragraph as a default type)
+    type: "paragraph",
+    name: "paragraph",
+    title: "Markdown",
+    thumbnail: "/mile-thumbnails/markdown.png",
+    fields: [],
+    getInitialNodes: (node_id: string, generateId: () => string) => {
+      const child_id = generateId();
+      return {
+        [node_id]: {
+          id: node_id,
+          type: "paragraph",
+          props: {},
+          options: undefined,
+          children: [child_id],
+        },
+        [child_id]: {
+          id: child_id,
+          type: "text",
+          props: { value: "Paragraph" },
+          options: undefined,
+          children: [],
+        },
+      };
+    },
+  },
+  {
+    type: "image_container",
+    name: "image_container",
+    title: "Images",
+    thumbnail: "/mile-thumbnails/image_container.png",
+    fields: [],
+    getInitialNodes: (node_id: string) => {
+      return {
+        [node_id]: {
+          id: node_id,
+          type: "image_container",
+          props: {
+            className: "",
+          },
+          options: undefined,
+          children: [],
+        },
+      };
+    },
+  },
+];
 
 const internalSchema = [
   {
@@ -157,6 +191,58 @@ const internalSchema = [
         title: "Alt Text",
       },
     ],
+    preview: {
+      select: {
+        url: "image_url",
+        alt: "alt_text",
+      },
+      prepare({ url, alt }: any) {
+        return {
+          title: alt,
+          media: url,
+        };
+      },
+    },
+  },
+  {
+    type: "image_container",
+    name: "image_container",
+    title: "Images",
+    thumbnail: "/mile-thumbnails/image_container.png",
+    fields: [
+      {
+        type: "array",
+        name: "images",
+        title: "Images",
+        of: [
+          {
+            type: "image",
+            name: "image",
+            title: "Image",
+          },
+        ],
+        options: {
+          layout: "list",
+        },
+      },
+      {
+        type: "string",
+        name: "mode",
+        title: "Mode",
+      },
+    ],
+    getInitialNodes: (node_id: string) => {
+      return {
+        [node_id]: {
+          id: node_id,
+          type: "image_container",
+          props: {
+            className: "",
+          },
+          options: undefined,
+        },
+      };
+    },
   },
   {
     type: "heading",
@@ -186,6 +272,13 @@ const internalSchema = [
     fields: [],
     isMarkdown: true,
   },
+  {
+    type: "thematicBreak",
+    name: "thematicBreak",
+    title: "Thematic break",
+    fields: [],
+    isMarkdown: true,
+  },
 ];
 
 // markdown components
@@ -194,6 +287,10 @@ const builtinComponents: Components = {
     name: "heading",
     component: Heading,
   },
+  image_container: {
+    name: "image_container",
+    component: ImageContainer,
+  },
   paragraph: {
     name: "paragraph",
     component: Paragraph,
@@ -201,6 +298,13 @@ const builtinComponents: Components = {
   strong: {
     name: "strong",
     component: Strong,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  emphasis: {
+    name: "emphasis",
+    component: Emphasis,
     settings: {
       isInlineContent: true,
     },
@@ -236,6 +340,20 @@ const builtinComponents: Components = {
   break: {
     name: "break",
     component: Break,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  thematicBreak: {
+    name: "thematicBreak",
+    component: ThematicBreak,
+    settings: {
+      isInlineContent: true,
+    },
+  },
+  image: {
+    name: "image",
+    component: MDImage,
     settings: {
       isInlineContent: true,
     },
@@ -302,20 +420,25 @@ function Heading(props: any) {
 function Paragraph(props: any) {
   return (
     <MarkdownBlockContainer>
-      <p className="text-left">{props.children}</p>
+      <div className="text-left">{props.children}</div>
     </MarkdownBlockContainer>
   );
 }
 
 function Strong(props: any) {
-  return <span className="font-bold">{props.children}</span>;
+  // return <span className="font-bold">{props.children}</span>;
+  return <strong className="font-bold">{props.children}</strong>;
+}
+
+function Emphasis(props: any) {
+  return <em>{props.children}</em>;
 }
 
 function List(props: any) {
   // console.log("List --- props", props);
   const ListType = props.ordered ? "ol" : "ul";
   return (
-    <ListType className="relative px-4 md:px-0 mb-4 w-full max-w-5xl mx-auto space-y-3">
+    <ListType className="relative px-4 md:px-0 mb-4 w-full max-w-5xl mx-auto space-y-2">
       {props.children}
     </ListType>
   );
@@ -327,7 +450,7 @@ function ListItem(props: any) {
   const index = props.options?.index;
 
   return (
-    <li className={`flex [&_ul]:pt-2 [&_ol]:pt-2`}>
+    <li className={`flex [&_ul]:pt-2 [&_ul]:mb-0 [&_ol]:pt-2 [&_ol]:pt-2`}>
       {ordered ? (
         <div className="px-1 text-black">{index + 1}.</div>
       ) : (
@@ -338,9 +461,28 @@ function ListItem(props: any) {
   );
 }
 
+function MDImage(props: any) {
+  console.log("props", props);
+
+  return (
+    <div>
+      <img src={props.url} alt={props.alt} title={props.title} />
+    </div>
+  );
+}
+
 function Break(props: any) {
   // console.log("Break ---- props", props);
   return <br />;
+}
+
+function ThematicBreak(props: any) {
+  // console.log("Break ---- props", props);
+  return (
+    <MarkdownBlockContainer>
+      <hr />
+    </MarkdownBlockContainer>
+  );
 }
 
 function Text(props: any) {
@@ -382,6 +524,38 @@ function ListBullet({ className }: { className?: string }) {
       <circle cx="12.1" cy="12.1" r="3"></circle>
     </svg>
   );
+}
+
+function ImageContainer(props: any) {
+  console.log("--- ImageContainer props", props);
+  const { options } = props;
+  if (!options) return null;
+
+  const { images, mode } = options;
+  if (!images) return null;
+
+  if (!mode || mode === "list") {
+    return (
+      <div className="max-w-5xl mx-auto flex flex-col gap-y-4">
+        {images.map((image: any, index: number) => {
+          if (image.image_url) {
+            return (
+              <div key={index} className="">
+                <img
+                  src={image.image_url}
+                  alt={image.alt_text}
+                  className="h-full w-full"
+                />
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    );
+  }
+
+  return null;
 }
 
 class Registry implements MileRegistry {

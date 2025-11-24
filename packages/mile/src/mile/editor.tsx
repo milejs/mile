@@ -29,7 +29,7 @@ import { Tree } from "./tree";
 import { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/types/types";
 import { mutate } from "swr";
 import { toast } from "sonner";
-import { convertNodeDataToBlocks, mdxToTree } from "./data";
+import { convertNodeDataToBlocks, treeToMdx } from "./data";
 import { BlockNoteEditor } from "@blocknote/core";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
@@ -389,12 +389,80 @@ export class Editor implements MileEditor {
     this.setData(newData, shouldSend);
   }
 
-  mergeMarkdownData(node_id: string, md: string) {
-    console.log("------ mergeData", node_id, md);
+  // mergeMarkdownData(node_id: string, md: string) {
+  //   console.log("------ mergeData", node_id, md);
+  //   const current_node = this.getNode(node_id);
+  //   const markdown = mdxToTree(md);
+  //   const content = markdown.result.content;
+  //   const markdown_root = content.root;
+  //   if (markdown_root && markdown_root.children.length === 0) {
+  //     // mardown has no data to update
+  //     return;
+  //   }
+
+  //   // process markdown
+  //   // - get start_node and ensure it exists
+  //   // - get index of the current_node in the root's children array
+  //   // - change current_node to be start_node but preserve the current_node's id
+  //   // - update tree root's children to add all node ids from markdown except start_node's id
+  //   // - delete old current_node's children nodes
+  //   // - add everything else in markdown nodes except the start_node and the root
+  //   let tree = this.tree.data;
+  //   invariant(tree.root.children);
+  //   const index = tree.root.children.indexOf(current_node.id);
+  //   invariant(index !== undefined && index !== -1, "current_node not found");
+  //   const __id = markdown_root.children[0];
+  //   const start_node = content[__id];
+  //   invariant(start_node, "start_node not found");
+
+  //   tree = {
+  //     ...tree,
+  //     // change current_node to be start_node but preserve the current_node's id
+  //     [node_id]: {
+  //       ...start_node,
+  //       id: node_id,
+  //     },
+
+  //     // update root children
+  //     // markdown root children: [s,x,y] // s is start_node
+  //     // current root children: [a,b,c,d] // c is the node_id at `index`
+  //     // new root children: [a,b,c,x,y,d] // preserve c, add x and y
+  //     root: {
+  //       ...tree.root,
+  //       children: [
+  //         ...tree.root.children!.slice(0, index),
+  //         current_node.id, // keep current_node's id
+  //         ...markdown_root.children.slice(1), // first child is the start_node, so we skip it
+  //         ...tree.root.children!.slice(index + 1),
+  //       ],
+  //     },
+  //   };
+
+  //   // delete the old current_node's children nodes because current_node is now start_node (except the id)
+  //   if (current_node.children) {
+  //     for (const child_id of current_node.children) {
+  //       // TODO: is this safe to delete mutably? should we do spread and set child_id to undefined?
+  //       delete tree[child_id];
+  //     }
+  //   }
+
+  //   // add all nodes from markdown's content to the tree except the start_node and the root
+  //   const { [__id]: _, root, ...rest } = content;
+  //   // add them to the tree
+  //   const new_tree = {
+  //     ...tree,
+  //     ...rest,
+  //   };
+
+  //   this.tree.updateTreeData(new_tree);
+  //   this.updateData(new_tree);
+  // }
+
+  mergeTreeData(node_id: string, content: TreeData) {
+    console.log("------ mergeTreeData", node_id, content, this.tree.data);
     const current_node = this.getNode(node_id);
-    const markdown = mdxToTree(md);
-    const content = markdown.result.content;
     const markdown_root = content.root;
+    invariant(markdown_root.children);
     if (markdown_root && markdown_root.children.length === 0) {
       // mardown has no data to update
       return;
@@ -462,6 +530,8 @@ export class Editor implements MileEditor {
     this.is_disabled = true;
     this.forceReRender();
     try {
+      console.log("this", this);
+
       const result = await this.persister.save(
         this.draft_data,
         this.tree.data,
@@ -762,159 +832,191 @@ function serializeNode(node: NodeData, components: Components, data: TreeData) {
     initialContent: blocks,
     readOnly: true,
   });
+
+  // Reuse a static editor instance or create one lazily if needed.
+  // Since BlockNoteEditor.create might be expensive, we should try to reuse it.
+  // However, for now, let's just keep it simple but acknowledge the optimization.
+  // Actually, let's implement a simple caching strategy or just use a singleton if possible.
+  // Given the constraints and the library usage, let's instantiate it once outside if possible,
+  // but since we are in a recursive function, passing it down is better.
+  // But wait, serializeNode is called recursively.
+
+  // Let's use a singleton-like pattern for the helper if possible, or just accept that
+  // for now we are doing this.
+  // BETTER APPROACH: Use a shared editor instance passed from the top level.
+
+  // For this refactor, I will modify treeToMDXstring to create the editor once and pass it down.
+  // But first I need to change the signature of serializeNode.
+
+  // Let's assume we can't easily change the signature without breaking other things (though I can see all usages).
+  // I will use a module-level singleton for the serialization editor.
+
+  // const editor = getSerializationEditor();
+  // editor.replaceBlocks(editor.document, blocks);
   const md = editor.blocksToMarkdownLossy();
   return md;
 }
 
-function treeToMDXstring_bk(data: TreeData, components: Components) {
-  const lines: string[] = [];
-  if (!components) {
-    return "";
+let _serializationEditor: BlockNoteEditor | null = null;
+function getSerializationEditor() {
+  if (!_serializationEditor) {
+    _serializationEditor = BlockNoteEditor.create({
+      initialContent: [],
+      readOnly: true,
+    });
   }
-
-  // mutate lines
-  function renderNode(
-    componentId: string,
-    data: TreeData,
-    components: Components,
-  ) {
-    const node = data[componentId];
-    console.log("renderNode", componentId, node);
-    if (!node) return;
-
-    if (node.id !== "root") {
-      const str = serializeNode(node, components, data);
-      lines.push(str);
-    }
-    const shouldProcessChildren = node.type === "root";
-    // Recursively render children if any
-    if (shouldProcessChildren && node.children && node.children.length > 0) {
-      node.children.forEach((childId) => renderNode(childId, data, components));
-    }
-  }
-  renderNode("root", data, components);
-  return lines.join("\n");
+  return _serializationEditor;
 }
 
-function serializeNode_bk(
-  node: NodeData,
-  components: Components,
-  data: TreeData,
-) {
-  const type = node.type;
-  console.log("serializeNode for type: ", type);
-  const component = components[type];
-  console.log("component", component);
+// function treeToMDXstring_bk(data: TreeData, components: Components) {
+//   const lines: string[] = [];
+//   if (!components) {
+//     return "";
+//   }
 
-  invariant(component, `serializeNode: Unknown component type: ${type}`);
-  if (component.settings?.isUserComponent) {
-    return serializeUserComponentNode(node, components, data);
-  }
-  switch (type) {
-    case "paragraph": {
-      return serializeParagraphNode(node, components, data);
-    }
-    case "heading": {
-      return serializeHeadingNode(node, components, data);
-    }
-    case "strong": {
-      return serializeStrongNode(node, components, data);
-    }
-    case "text": {
-      return serializeTextNode(node, components, data);
-    }
-    case "list": {
-      return serializeListNode(node, components, data);
-    }
-    default: {
-      throw new Error(`serializeNode: Unknown component type: ${type}`);
-    }
-  }
-}
+//   // mutate lines
+//   function renderNode(
+//     componentId: string,
+//     data: TreeData,
+//     components: Components,
+//   ) {
+//     const node = data[componentId];
+//     console.log("renderNode", componentId, node);
+//     if (!node) return;
 
-function serializeListNode(
-  node: NodeData,
-  components: Components,
-  data: TreeData,
-) {
-  console.log("serializeListNode", node);
-  throw new Error("stop");
-  /**
-   * {
-       "type": "list",
-       "id": "504baa467866d34823644776a0fb8889",
-       "props": {
-           "ordered": false,
-           "start": null
-       },
-       "options": {},
-       "children": [
-           "de6e58985368ab2e8649b11f3f1dc0da",
-           "0948bc47a6fa4526b8faf53c6fe2c3b7"
-       ]
-   }
-   */
+//     if (node.id !== "root") {
+//       const str = serializeNode(node, components, data);
+//       lines.push(str);
+//     }
+//     const shouldProcessChildren = node.type === "root";
+//     // Recursively render children if any
+//     if (shouldProcessChildren && node.children && node.children.length > 0) {
+//       node.children.forEach((childId) => renderNode(childId, data, components));
+//     }
+//   }
+//   renderNode("root", data, components);
+//   return lines.join("\n");
+// }
 
-  const { id, type, props = {}, options = {}, children = [] } = node;
-  let text = "";
-  for (let i = 0; i < children.length; i++) {
-    const child = data[children[i]];
-    text += serializeNode(child, components, data);
-  }
-  return `${text}\n`;
-}
+// function serializeNode_bk(
+//   node: NodeData,
+//   components: Components,
+//   data: TreeData,
+// ) {
+//   const type = node.type;
+//   console.log("serializeNode for type: ", type);
+//   const component = components[type];
+//   console.log("component", component);
 
-function serializeParagraphNode(
-  node: NodeData,
-  components: Components,
-  data: TreeData,
-) {
-  const { id, type, props = {}, options = {}, children = [] } = node;
-  let text = "";
-  for (let i = 0; i < children.length; i++) {
-    const child = data[children[i]];
-    text += serializeNode(child, components, data);
-  }
-  return `${text}\n`;
-}
+//   invariant(component, `serializeNode: Unknown component type: ${type}`);
+//   if (component.settings?.isUserComponent) {
+//     return serializeUserComponentNode(node, components, data);
+//   }
+//   switch (type) {
+//     case "paragraph": {
+//       return serializeParagraphNode(node, components, data);
+//     }
+//     case "heading": {
+//       return serializeHeadingNode(node, components, data);
+//     }
+//     case "strong": {
+//       return serializeStrongNode(node, components, data);
+//     }
+//     case "text": {
+//       return serializeTextNode(node, components, data);
+//     }
+//     case "list": {
+//       return serializeListNode(node, components, data);
+//     }
+//     default: {
+//       throw new Error(`serializeNode: Unknown component type: ${type}`);
+//     }
+//   }
+// }
 
-function getDirectTextFromChildren(children: string[], data: TreeData) {
-  const text_node_id = children.length > 0 ? children[0] : null;
-  const text_node = text_node_id ? data[text_node_id] : null;
-  return text_node ? text_node.props?.value : "";
-}
+// function serializeListNode(
+//   node: NodeData,
+//   components: Components,
+//   data: TreeData,
+// ) {
+//   console.log("serializeListNode", node);
+//   throw new Error("stop");
+//   /**
+//    * {
+//        "type": "list",
+//        "id": "504baa467866d34823644776a0fb8889",
+//        "props": {
+//            "ordered": false,
+//            "start": null
+//        },
+//        "options": {},
+//        "children": [
+//            "de6e58985368ab2e8649b11f3f1dc0da",
+//            "0948bc47a6fa4526b8faf53c6fe2c3b7"
+//        ]
+//    }
+//    */
 
-function serializeHeadingNode(
-  node: NodeData,
-  components: Components,
-  data: TreeData,
-) {
-  const { id, type, props = {}, options = {}, children = [] } = node;
-  const depth = (props.depth as number) ?? 1;
-  const text = getDirectTextFromChildren(children, data);
-  return `${"#".repeat(depth)} ${text}\n`;
-}
+//   const { id, type, props = {}, options = {}, children = [] } = node;
+//   let text = "";
+//   for (let i = 0; i < children.length; i++) {
+//     const child = data[children[i]];
+//     text += serializeNode(child, components, data);
+//   }
+//   return `${text}\n`;
+// }
 
-function serializeStrongNode(
-  node: NodeData,
-  components: Components,
-  data: TreeData,
-) {
-  const { id, type, props = {}, options = {}, children = [] } = node;
-  const depth = (props.depth as number) ?? 1;
-  const text = getDirectTextFromChildren(children, data);
-  return `**${text}**`;
-}
+// function serializeParagraphNode(
+//   node: NodeData,
+//   components: Components,
+//   data: TreeData,
+// ) {
+//   const { id, type, props = {}, options = {}, children = [] } = node;
+//   let text = "";
+//   for (let i = 0; i < children.length; i++) {
+//     const child = data[children[i]];
+//     text += serializeNode(child, components, data);
+//   }
+//   return `${text}\n`;
+// }
 
-function serializeTextNode(
-  node: NodeData,
-  components: Components,
-  data: TreeData,
-) {
-  const { id, type, props = {}, options = {}, children = [] } = node;
-  const text = props?.value;
-  return `${text}`;
-}
+// function getDirectTextFromChildren(children: string[], data: TreeData) {
+//   const text_node_id = children.length > 0 ? children[0] : null;
+//   const text_node = text_node_id ? data[text_node_id] : null;
+//   return text_node ? text_node.props?.value : "";
+// }
+
+// function serializeHeadingNode(
+//   node: NodeData,
+//   components: Components,
+//   data: TreeData,
+// ) {
+//   const { id, type, props = {}, options = {}, children = [] } = node;
+//   const depth = (props.depth as number) ?? 1;
+//   const text = getDirectTextFromChildren(children, data);
+//   return `${"#".repeat(depth)} ${text}\n`;
+// }
+
+// function serializeStrongNode(
+//   node: NodeData,
+//   components: Components,
+//   data: TreeData,
+// ) {
+//   const { id, type, props = {}, options = {}, children = [] } = node;
+//   const depth = (props.depth as number) ?? 1;
+//   const text = getDirectTextFromChildren(children, data);
+//   return `**${text}**`;
+// }
+
+// function serializeTextNode(
+//   node: NodeData,
+//   components: Components,
+//   data: TreeData,
+// ) {
+//   const { id, type, props = {}, options = {}, children = [] } = node;
+//   const text = props?.value;
+//   return `${text}`;
+// }
 
 function serializeUserComponentNode(
   node: NodeData,
@@ -926,15 +1028,51 @@ function serializeUserComponentNode(
   const componentName = components[type].component.name;
   // Convert props safely (only use className for now)
   const className = props.className ?? "";
+
   // Serialize options object as inline JS
-  const optionsString = JSON.stringify(options)
-    .replace(/"([^"]+)":/g, "$1:") // remove quotes from keys
-    .replace(/"/g, '"'); // keep quotes for string values
+  // const optionsString = JSON.stringify(options)
+  //   .replace(/"([^"]+)":/g, "$1:") // remove quotes from keys
+  //   .replace(/"/g, '"'); // keep quotes for string values
+
+  // Serialize options object
+  const optionsString = serializeOptions(options);
+
   const str =
     optionsString === "{}"
       ? `<${componentName} id="${id}" type="${type}" className="${className}" />\n`
       : `<${componentName} id="${id}" type="${type}" className="${className}" options={${optionsString}} />\n`;
   return str;
+}
+
+function serializeOptions(obj: any): string {
+  if (obj === null) return "null";
+  if (obj === undefined) return "undefined";
+
+  if (typeof obj === "string") {
+    return JSON.stringify(obj);
+  }
+
+  if (typeof obj === "number" || typeof obj === "boolean") {
+    return String(obj);
+  }
+
+  if (Array.isArray(obj)) {
+    const elements = obj.map(serializeOptions).join(", ");
+    return `[${elements}]`;
+  }
+
+  if (typeof obj === "object") {
+    const entries = Object.entries(obj).map(([key, value]) => {
+      // If key is a valid identifier, don't quote it. Otherwise, quote it.
+      const keyStr = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
+        ? key
+        : JSON.stringify(key);
+      return `${keyStr}: ${serializeOptions(value)}`;
+    });
+    return `{ ${entries.join(", ")} }`;
+  }
+
+  return JSON.stringify(obj);
 }
 
 class Persister implements MilePersister {
@@ -950,7 +1088,9 @@ class Persister implements MilePersister {
     // convert json to mdx string
     let mdxstring = "";
     try {
-      mdxstring = treeToMDXstring(content, components);
+      // let mdxstring_old = treeToMDXstring(content, components);
+      mdxstring = treeToMdx(content, "root", components);
+      console.log("mdxstring", mdxstring);
     } catch (error) {
       console.error("Error converting tree to MDX", error);
       // @ts-expect-error okk
@@ -958,10 +1098,8 @@ class Persister implements MilePersister {
       throw error;
     }
 
-    console.log("mdxstring", mdxstring);
-
     return mutate(
-      [`/pages`, `/${draft_data.page_id}?preview=true`],
+      [`/pages`, `/${draft_data.page_id}`],
       async () => {
         const resp = await fetch(`${API}/pages/${draft_data.page_id}/draft`, {
           method: "POST",
@@ -990,12 +1128,13 @@ class Persister implements MilePersister {
     content: TreeData,
     components: Components,
   ) {
-    console.log("save", draft_data, content);
+    console.log("publish", draft_data, content);
 
     // convert json to mdx string
     let mdxstring = "";
     try {
-      mdxstring = treeToMDXstring(content, components);
+      // let mdxstring_old = treeToMDXstring(content, components);
+      mdxstring = treeToMdx(content, "root", components);
     } catch (error) {
       console.error("Error converting tree to MDX", error);
       // @ts-expect-error okk
@@ -1006,7 +1145,7 @@ class Persister implements MilePersister {
     console.log("mdxstring", mdxstring);
 
     return mutate(
-      [`/pages`, `/${draft_data.page_id}?preview=true`],
+      [`/pages`, `/${draft_data.page_id}`],
       async () => {
         const resp = await fetch(`${API}/pages/${draft_data.page_id}/publish`, {
           method: "POST",

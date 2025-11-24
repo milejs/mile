@@ -1,4 +1,4 @@
-import { Block, MileComponentProps } from "@milejs/types";
+import { Block } from "@milejs/types";
 // import { Quote } from "lucide-react";
 import React from "react";
 

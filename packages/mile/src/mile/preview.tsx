@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader, PlusIcon } from "lucide-react";
 import { useMileProvider } from "./client";
 import { createChannel } from "bidc";
+import React from "react";
 
 type ChannelPayload =
   | {
@@ -188,8 +189,22 @@ function RenderItem({
   }
 
   if (item.type === "text") {
-    // text
-    return item.props?.value as string;
+    const text = item.props?.value;
+    if (typeof text !== "string") {
+      return null;
+    }
+
+    const lines = text.split("\n");
+    return (
+      <>
+        {lines.map((line, index) => (
+          <React.Fragment key={index}>
+            {line}
+            {index < lines.length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </>
+    );
   }
 
   return (
