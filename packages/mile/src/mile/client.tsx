@@ -60,21 +60,31 @@ function initializeSchema(userSchema?: Schema): Schema {
   return [...internalSchema, ...userSchema];
 }
 
-function initializeComponentSchema(userSchema?: Schema): Schema {
-  if (!userSchema) return internalComponentSchema;
-  return [...internalComponentSchema, ...userSchema];
+function initializeComponentLibrarySchema(userSchema?: Schema): Schema {
+  const internal = builtinComponentLibrarySchema.map((e) => {
+    if (!e.type) throw new Error("Name is required in component schema");
+    if (!e.getInitialNodes || !e.thumbnail) {
+      const found = internalSchema.find((s) => s.type === e.type);
+      if (!found)
+        throw new Error(`Component ${e.type} not found in internal schema`);
+      return found;
+    }
+    return e;
+  });
+  if (!userSchema) return internal;
+  return [...internal, ...userSchema];
 }
 
 class MileSchema implements MileSchemaType {
   user_schema: Schema;
-  component_schema: Schema;
+  component_library_schema: Schema;
   schema: Schema;
   schemaMap: Map<string, SchemaTypeDefinition | FieldDefinition>;
   constructor(schema: Schema) {
     this.user_schema = schema; // from config.schema
-    // component_schema is used in "add" component picker. it combines built-in component schema and user schema
+    // component_library_schema is used in "add" component picker. it combines built-in component schema and user schema
     // it needs to have 'type', 'getInitialNodes', 'thumbnail' and 'title'
-    this.component_schema = initializeComponentSchema(schema);
+    this.component_library_schema = initializeComponentLibrarySchema(schema);
     this.schema = initializeSchema(schema); // combine user and internal schema
     this.schemaMap = this.buildSchemaMap();
   }
@@ -102,14 +112,13 @@ class MileSchema implements MileSchemaType {
   }
 }
 
-const internalComponentSchema = [
+// 'type', 'getInitialNodes', 'thumbnail' and 'title'
+const builtinComponentLibrarySchema = [
   {
-    // component schema for markdown (we use paragraph as a default type)
+    // component library schema for markdown (we use paragraph as a default type)
     type: "paragraph",
-    name: "paragraph",
     title: "Markdown",
     thumbnail: "/mile-thumbnails/markdown.png",
-    fields: [],
     getInitialNodes: (node_id: string, generateId: () => string) => {
       const child_id = generateId();
       return {
@@ -132,23 +141,6 @@ const internalComponentSchema = [
   },
   {
     type: "image_container",
-    name: "image_container",
-    title: "Images",
-    thumbnail: "/mile-thumbnails/image_container.png",
-    fields: [],
-    getInitialNodes: (node_id: string) => {
-      return {
-        [node_id]: {
-          id: node_id,
-          type: "image_container",
-          props: {
-            className: "",
-          },
-          options: undefined,
-          children: [],
-        },
-      };
-    },
   },
 ];
 
@@ -240,6 +232,7 @@ const internalSchema = [
             className: "",
           },
           options: undefined,
+          children: [],
         },
       };
     },

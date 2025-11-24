@@ -139,7 +139,7 @@ export interface MileEditor {
 export interface MileSchema {
   schema: Schema;
   user_schema: Schema;
-  component_schema: Schema;
+  component_library_schema: Schema;
   schemaMap: Map<string, SchemaTypeDefinition | FieldDefinition>;
   buildSchemaMap(): Map<string, SchemaTypeDefinition | FieldDefinition>;
   get(name: string): SchemaTypeDefinition | FieldDefinition;
