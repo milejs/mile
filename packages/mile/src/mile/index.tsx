@@ -127,6 +127,12 @@ import {
 } from "./uploads";
 import { Textarea } from "@/components/ui/textarea";
 import { deepEqual } from "fast-equals";
+import {
+  DialogContent,
+  DialogRoot,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 export { BlockNoteView, useCreateBlockNote };
 
@@ -523,7 +529,7 @@ function MileFrame({
         state={state}
         dispatch={dispatch}
       />
-      <Dialog.Root
+      <DialogRoot
         open={state.isMarkdownEditorOpen}
         onOpenChange={(v) => {
           if (v) {
@@ -534,63 +540,60 @@ function MileFrame({
         }}
         dismissible={false}
       >
-        <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
-            <div className="mb-4 flex flex-row justify-between items-center">
-              <Dialog.Title className="text-lg font-medium">Edit</Dialog.Title>
-              <div className="flex flex-row items-center gap-x-2">
-                <Button
-                  onClick={() => dispatch({ type: AppActionType.DeselectNode })}
-                  className="px-3 py-1 rounded text-sm"
-                  variant="secondary"
-                  size="sm"
-                >
-                  Discard
-                </Button>
-                <Button
-                  onClick={() => {
-                    const md = markdownEditorRef.current?.getMarkdown();
-                    const doc = markdownEditorRef.current?.getDocument();
-                    console.log("md", md);
-                    console.log("doc", doc);
+        <DialogContent className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+          <div className="mb-4 flex flex-row justify-between items-center">
+            <Dialog.Title className="text-lg font-medium">Edit</Dialog.Title>
+            <div className="flex flex-row items-center gap-x-2">
+              <Button
+                onClick={() => dispatch({ type: AppActionType.DeselectNode })}
+                className="px-3 py-1 rounded text-sm"
+                variant="secondary"
+                size="sm"
+              >
+                Discard
+              </Button>
+              <Button
+                onClick={() => {
+                  const md = markdownEditorRef.current?.getMarkdown();
+                  const doc = markdownEditorRef.current?.getDocument();
+                  console.log("md", md);
+                  console.log("doc", doc);
 
-                    if (state.activeNodeId && doc) {
-                      const tree = convertBlocksToNodeData(doc);
-                      editor.mergeTreeData(state.activeNodeId, tree);
-                    }
-                    // if (state.activeNodeId && md) {
-                    //   editor.mergeMarkdownData(state.activeNodeId, md);
-                    // }
-                    dispatch({ type: AppActionType.DeselectNode });
-                  }}
-                  className="px-3 py-1 rounded text-sm"
-                  size="sm"
-                >
-                  Done
-                </Button>
-              </div>
+                  if (state.activeNodeId && doc) {
+                    const tree = convertBlocksToNodeData(doc);
+                    editor.mergeTreeData(state.activeNodeId, tree);
+                  }
+                  // if (state.activeNodeId && md) {
+                  //   editor.mergeMarkdownData(state.activeNodeId, md);
+                  // }
+                  dispatch({ type: AppActionType.DeselectNode });
+                }}
+                className="px-3 py-1 rounded text-sm"
+                size="sm"
+              >
+                Done
+              </Button>
             </div>
-            <div className="overflow-y-auto h-full pb-20 z-10">
-              {Boolean(state.activeNodeId) && state.isMarkdownEditorOpen && (
-                <OverlayTextEditor
-                  key={state.activeNodeId}
-                  ref={markdownEditorRef}
-                  activeNodeId={state.activeNodeId}
-                  initialContent={buildInitialContentForActiveNode(
-                    state.activeNodeId,
-                    data,
-                    mile.schema,
-                  )}
-                  close={() => {
-                    dispatch({ type: AppActionType.CloseMarkdownEditor });
-                  }}
-                />
-              )}
-            </div>
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
+          </div>
+          <div className="overflow-y-auto h-full pb-20 z-10">
+            {Boolean(state.activeNodeId) && state.isMarkdownEditorOpen && (
+              <OverlayTextEditor
+                key={state.activeNodeId}
+                ref={markdownEditorRef}
+                activeNodeId={state.activeNodeId}
+                initialContent={buildInitialContentForActiveNode(
+                  state.activeNodeId,
+                  data,
+                  mile.schema,
+                )}
+                close={() => {
+                  dispatch({ type: AppActionType.CloseMarkdownEditor });
+                }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </DialogRoot>
     </div>
   );
 }
@@ -1353,17 +1356,17 @@ function EditArrayComponent({
   field,
 }: EditComponentProps) {
   const mile = useMileProvider();
-  const [selectedFileId, setSelectedFileId] = useState("");
   const [open, setOpen] = useState(false);
   const [add_path, setAddPath] = useState<string[] | null>(null);
 
   const value = getFieldValue(state, path);
   console.log("(node)", node, path, state, field, value);
 
+  const schema = mile.schema;
   // support only one type of item type
   // @ts-expect-error okk
   const item_field = field.of[0];
-  const item_schema = mile.schema.get(item_field.type);
+  const item_schema = schema.get(item_field.type);
 
   function handleAddClick() {
     console.log("--- click add", path, state);
@@ -1372,7 +1375,7 @@ function EditArrayComponent({
     const [item_key, ...ignore] = path; // e.g. ["images"]
     const thisstate = state[item_key]; // pick array from node state
 
-    const initializeState = createInitialValue(null, item_schema, mile.schema);
+    const initializeState = createInitialValue(null, item_schema, schema);
     console.log("initializeState", initializeState);
 
     const new_item_path = path.concat([thisstate.length]);
@@ -1394,7 +1397,7 @@ function EditArrayComponent({
   }
 
   function isItemEmptyState(item: any) {
-    const initializeState = createInitialValue(null, item_schema, mile.schema);
+    const initializeState = createInitialValue(null, item_schema, schema);
     return deepEqual(item, initializeState);
   }
 
@@ -1425,48 +1428,45 @@ function EditArrayComponent({
         />
       )}
       <Button onClick={handleAddClick}>Add</Button>
-      <Dialog.Root open={open} onOpenChange={close} dismissible={false}>
-        <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
-            <div className="mb-4 flex flex-row justify-between items-center">
-              <Dialog.Title className="text-lg font-medium">Add</Dialog.Title>
-              <div className="flex flex-row items-center gap-x-2">
-                <Button
-                  // onClick={() => dispatch({ type: AppActionType.DeselectNode })}
-                  onClick={() => {
-                    close(false);
-                  }}
-                  className="px-3 py-1 rounded text-sm"
-                  variant="secondary"
-                  size="sm"
-                >
-                  Discard
-                </Button>
-                <Button
-                  onClick={() => {
-                    close(false);
-                  }}
-                  className="px-3 py-1 rounded text-sm"
-                  size="sm"
-                >
-                  Done
-                </Button>
-              </div>
+      <DialogRoot open={open} onOpenChange={close} dismissible={false}>
+        <DialogContent className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+          <div className="mb-4 flex flex-row justify-between items-center">
+            <Dialog.Title className="text-lg font-medium">Add</Dialog.Title>
+            <div className="flex flex-row items-center gap-x-2">
+              <Button
+                // onClick={() => dispatch({ type: AppActionType.DeselectNode })}
+                onClick={() => {
+                  close(false);
+                }}
+                className="px-3 py-1 rounded text-sm"
+                variant="secondary"
+                size="sm"
+              >
+                Discard
+              </Button>
+              <Button
+                onClick={() => {
+                  close(false);
+                }}
+                className="px-3 py-1 rounded text-sm"
+                size="sm"
+              >
+                Done
+              </Button>
             </div>
-            <div className="overflow-y-auto h-full pb-20 z-10 space-y-3">
-              <EditField
-                node={node}
-                path={add_path ?? []}
-                state={state}
-                handleChange={handleChange}
-                parent={field}
-                field={item_field}
-              />
-            </div>
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
+          </div>
+          <div className="overflow-y-auto h-full pb-20 z-10 space-y-3">
+            <EditField
+              node={node}
+              path={add_path ?? []}
+              state={state}
+              handleChange={handleChange}
+              parent={field}
+              field={item_field}
+            />
+          </div>
+        </DialogContent>
+      </DialogRoot>
     </div>
   );
 }
@@ -1527,7 +1527,7 @@ function ArrayItemsList({
         }
 
         const indexOfTarget = items.findIndex(
-          (item) => item.id === (target.data.item as any).id,
+          (item) => item.image_url === (target.data.item as any).image_url,
         );
         if (indexOfTarget < 0) {
           return;
@@ -1547,6 +1547,7 @@ function ArrayItemsList({
           closestEdgeOfTarget,
           startIndex,
           finishIndex,
+          indexOfTarget,
         });
         if (finishIndex === startIndex) {
           // If there would be no change, we skip the update
@@ -3084,8 +3085,8 @@ function MileHeaderPageSettings() {
   return (
     <div className="mile-headCenter">
       <div className="text-sm">{editor.draft_data.title ?? "Untitled"}</div>
-      <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
-        <Dialog.Trigger
+      <DialogRoot open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger
           render={() => (
             <button
               onClick={() => {
@@ -3097,18 +3098,15 @@ function MileHeaderPageSettings() {
             </button>
           )}
         />
-        <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-          <Dialog.Popup className="fixed top-[40px] bottom-0 /top-1/2 /left-1/2 w-lg max-w-[calc(100vw-3rem)] /-translate-x-1/2 /-translate-y-1/2 /rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 /data-[ending-style]:scale-90 data-[ending-style]:-translate-x-6 data-[ending-style]:opacity-0 /data-[starting-style]:scale-90 data-[starting-style]:-translate-x-6 data-[starting-style]:opacity-0">
-            <Dialog.Title className="-mt-1.5 mb-1 text-lg font-medium">
-              Edit Page Data
-            </Dialog.Title>
-            <div className="overflow-y-auto h-full">
-              <PageSettings close={() => setIsOpen(false)} />
-            </div>
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
+        <DialogContent className="fixed top-[40px] left-0 bottom-0 /top-1/2 /left-1/2 w-lg max-w-[calc(100vw-3rem)] /-translate-x-1/2 /-translate-y-1/2 /rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 /data-[ending-style]:scale-90 data-[ending-style]:-translate-x-6 data-[ending-style]:opacity-0 /data-[starting-style]:scale-90 data-[starting-style]:-translate-x-6 data-[starting-style]:opacity-0">
+          <DialogTitle className="-mt-1.5 mb-1 text-lg font-medium">
+            Edit Page Data
+          </DialogTitle>
+          <div className="overflow-y-auto h-full">
+            <PageSettings close={() => setIsOpen(false)} />
+          </div>
+        </DialogContent>
+      </DialogRoot>
     </div>
   );
 }
@@ -3484,40 +3482,35 @@ function ImageGalleryDialog({
   is_disabled: boolean;
 }) {
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger
+    <DialogRoot open={open} onOpenChange={setOpen}>
+      <DialogTrigger
         render={
           <Button disabled={is_disabled} className="cursor-pointer">
             <ImagesIcon /> Gallery
           </Button>
         }
       />
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-        <Dialog.Popup className="flex flex-col fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-[calc(100vh*6/7)] -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl bg-gray-50 outline-1 outline-gray-400 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
-          <div className="py-2 px-3 flex items-center justify-between">
-            <div className="flex items-center gap-x-4">
-              <Dialog.Title className="text-lg font-medium">
-                Gallery
-              </Dialog.Title>
-              <Uploaders
-                onSuccess={handleUploadsSuccess}
-                label={"Upload files"}
-              />
-            </div>
-            <div className="flex gap-4">
-              <Dialog.Close className="flex h-9 text-xs items-center justify-center rounded-md border border-gray-200 bg-gray-50 px-3 font-medium text-gray-900 select-none hover:bg-gray-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-gray-100">
-                Close
-              </Dialog.Close>
-            </div>
+      <DialogContent className="flex flex-col fixed top-[calc(50%+20px)] left-1/2 w-full max-w-[calc(100vw-3rem)] h-[calc(100vh*6/7)] -translate-x-1/2 -translate-y-1/2 rounded-lg shadow-xl bg-gray-50 outline-1 outline-gray-400 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+        <div className="py-2 px-3 flex items-center justify-between">
+          <div className="flex items-center gap-x-4">
+            <DialogTitle className="text-lg font-medium">Gallery</DialogTitle>
+            <Uploaders
+              onSuccess={handleUploadsSuccess}
+              label={"Upload files"}
+            />
           </div>
-          <ImageGallery
-            initialSelectedFileId={initialSelectedFileId}
-            handleConfirmFile={handleConfirmFile}
-          />
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+          <div className="flex gap-4">
+            <Dialog.Close className="flex h-9 text-xs items-center justify-center rounded-md border border-gray-200 bg-gray-50 px-3 font-medium text-gray-900 select-none hover:bg-gray-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-gray-100">
+              Close
+            </Dialog.Close>
+          </div>
+        </div>
+        <ImageGallery
+          initialSelectedFileId={initialSelectedFileId}
+          handleConfirmFile={handleConfirmFile}
+        />
+      </DialogContent>
+    </DialogRoot>
   );
 }
 

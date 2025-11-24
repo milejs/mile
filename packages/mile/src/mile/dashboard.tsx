@@ -41,6 +41,11 @@ import { Kbd } from "@/components/ui/kbd";
 import Fuse from "fuse.js";
 import { tinykeys } from "@/lib/tinykeys";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DialogContent,
+  DialogRoot,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
@@ -943,14 +948,11 @@ function FuzzySearchButton({ data }: { data: any }) {
           <Kbd className="border-0 text-[10px]">K</Kbd>
         </div>
       </Button>
-      <Dialog.Root open={open} onOpenChange={setOpen}>
-        <Dialog.Portal>
-          <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-          <Dialog.Popup className="fixed /top-1/2 top-[100px] left-1/2 w-4xl max-w-[calc(100vw-3rem)] -translate-x-1/2 /-translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
-            <FuzzySearchResult data={data} />
-          </Dialog.Popup>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <DialogRoot open={open} onOpenChange={setOpen}>
+        <DialogContent className="fixed /top-1/2 top-[100px] left-1/2 w-4xl max-w-[calc(100vw-3rem)] -translate-x-1/2 /-translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+          <FuzzySearchResult data={data} />
+        </DialogContent>
+      </DialogRoot>
     </div>
   );
 }
@@ -1347,24 +1349,21 @@ function CreatePageModal() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={setIsOpen}>
-      <Dialog.Trigger className="h-9 flex items-center justify-center gap-x-1 rounded-md border border-zinc-300 bg-zinc-50 px-3.5 text-sm font-medium text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-zinc-100">
+    <DialogRoot open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger className="h-9 flex items-center justify-center gap-x-1 rounded-md border border-zinc-300 bg-zinc-50 px-3.5 text-sm font-medium text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-zinc-100">
         New <PlusIcon size={16} />
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-        <Dialog.Popup className="fixed top-1/2 left-1/2 w-lg max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
-          <Dialog.Title className="-mt-1.5 mb-1 text-lg font-medium">
-            Create New Page
-          </Dialog.Title>
-          <NewPageSettings
-            close={() => {
-              setIsOpen(false);
-            }}
-          />
-        </Dialog.Popup>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </DialogTrigger>
+      <DialogContent className="fixed top-1/2 left-1/2 w-lg max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+        <Dialog.Title className="-mt-1.5 mb-1 text-lg font-medium">
+          Create New Page
+        </Dialog.Title>
+        <NewPageSettings
+          close={() => {
+            setIsOpen(false);
+          }}
+        />
+      </DialogContent>
+    </DialogRoot>
   );
 }
 
