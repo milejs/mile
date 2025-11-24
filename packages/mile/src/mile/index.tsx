@@ -126,6 +126,7 @@ import {
   ImageGallery,
 } from "./uploads";
 import { Textarea } from "@/components/ui/textarea";
+import { deepEqual } from "fast-equals";
 
 export { BlockNoteView, useCreateBlockNote };
 
@@ -1364,8 +1365,6 @@ function EditArrayComponent({
   const item_field = field.of[0];
   const item_schema = mile.schema.get(item_field.type);
 
-  // TODO: if click add but exit, we got field value as empty state
-  // figure out how to handle empty state
   function handleAddClick() {
     console.log("--- click add", path, state);
     // console.log("schema", item_schema);
@@ -1388,26 +1387,30 @@ function EditArrayComponent({
 
   function handleReorderItems(new_items: any) {
     console.log("--- handleReorderItems", path, state, new_items);
-    // console.log("schema", item_schema);
-    // console.log("node", node, path, state, field, value);
-    const [item_key, ...ignore] = path; // e.g. ["images"]
-    const thisstate = state[item_key]; // pick array from node state
-    console.log("thisstate", thisstate);
-
-    // const initializeState = createInitialValue(null, item_schema, mile.schema);
-    // console.log("initializeState", initializeState);
-
-    // const new_item_path = path.concat([thisstate.length]);
     handleChange({
       value: new_items,
       path: path,
     });
   }
 
-  function handleOpenChange(v: boolean) {
-    console.log("------ handleOpenChange----", v);
+  function isItemEmptyState(item: any) {
+    const initializeState = createInitialValue(null, item_schema, mile.schema);
+    return deepEqual(item, initializeState);
+  }
 
+  function close(v: boolean) {
     setOpen(v);
+    // handle dangling initial state item in array
+    const containsEmptyState = value.some((item: any) =>
+      isItemEmptyState(item),
+    );
+    if (containsEmptyState) {
+      // undo the "add" that exits prematurely and cause dangling initial state item in array
+      handleChange({
+        value: value.filter((e: any) => !isItemEmptyState(e)),
+        path: path,
+      });
+    }
   }
 
   return (
@@ -1422,21 +1425,17 @@ function EditArrayComponent({
         />
       )}
       <Button onClick={handleAddClick}>Add</Button>
-      <Dialog.Root
-        open={open}
-        onOpenChange={handleOpenChange}
-        dismissible={false}
-      >
+      <Dialog.Root open={open} onOpenChange={close} dismissible={false}>
         <Dialog.Portal>
           <Dialog.Backdrop className="fixed inset-0 min-h-dvh bg-black opacity-20 transition-all duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0 supports-[-webkit-touch-callout:none]:absolute" />
-          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+          <Dialog.Popup className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
             <div className="mb-4 flex flex-row justify-between items-center">
               <Dialog.Title className="text-lg font-medium">Add</Dialog.Title>
               <div className="flex flex-row items-center gap-x-2">
                 <Button
                   // onClick={() => dispatch({ type: AppActionType.DeselectNode })}
                   onClick={() => {
-                    setOpen(false);
+                    close(false);
                   }}
                   className="px-3 py-1 rounded text-sm"
                   variant="secondary"
@@ -1446,7 +1445,7 @@ function EditArrayComponent({
                 </Button>
                 <Button
                   onClick={() => {
-                    setOpen(false);
+                    close(false);
                   }}
                   className="px-3 py-1 rounded text-sm"
                   size="sm"
@@ -1455,7 +1454,7 @@ function EditArrayComponent({
                 </Button>
               </div>
             </div>
-            <div className="overflow-y-auto h-full pb-20 z-10">
+            <div className="overflow-y-auto h-full pb-20 z-10 space-y-3">
               <EditField
                 node={node}
                 path={add_path ?? []}
