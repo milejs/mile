@@ -66,6 +66,8 @@ export const components = {
       </li>
     );
   },
+  ImageContainer,
+  // custom
   Hero,
   Lead,
   BannerBlue,
@@ -138,4 +140,36 @@ function MarkdownBlockContainer(props: any) {
       {props.children}
     </div>
   );
+}
+
+function ImageContainer(props: any) {
+  console.log("--- ImageContainer props", props);
+  const { options } = props;
+  if (!options) return null;
+
+  const { images, mode } = options;
+  if (!images) return null;
+
+  if (!mode || mode === "list") {
+    return (
+      <div className="max-w-5xl mx-auto flex flex-col gap-y-4">
+        {images.map((image: any, index: number) => {
+          if (image.image_url) {
+            return (
+              <div key={index} className="">
+                <img
+                  src={image.image_url}
+                  alt={image.alt_text}
+                  className="h-full w-full"
+                />
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    );
+  }
+
+  return null;
 }
