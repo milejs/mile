@@ -87,6 +87,34 @@ export default async function Page({ params, searchParams }: Props) {
   //   </Providers>
   // );
   return (
-    <App params={params} searchParams={searchParams} components={components} />
+    <>
+      <Topbar />
+      <App
+        params={params}
+        searchParams={searchParams}
+        components={components}
+      />
+      <Footer />
+    </>
+  );
+}
+
+function Topbar() {
+  return (
+    <div className="bg-gray-100 p-4">
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-2xl font-bold">Topbar</h1>
+      </div>
+    </div>
+  );
+}
+
+function Footer() {
+  return (
+    <div className="bg-gray-100 p-4">
+      <div className="max-w-5xl mx-auto">
+        <h1 className="text-2xl font-bold">Footer</h1>
+      </div>
+    </div>
   );
 }
