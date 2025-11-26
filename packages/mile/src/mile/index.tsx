@@ -138,6 +138,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { authClient } from "./auth-client";
 
 export { BlockNoteView, useCreateBlockNote };
 
@@ -176,6 +177,39 @@ export function Mile({
   }
 
   return (
+    <MileAuthGuard
+      isEdit={isEdit}
+      isIframeContent={isIframeContent}
+      path={path}
+      search={search}
+    />
+  );
+}
+
+function MileAuthGuard({
+  isEdit,
+  isIframeContent,
+  path,
+  search,
+}: {
+  isEdit: boolean;
+  isIframeContent: boolean;
+  path: string;
+  search: { [key: string]: string | string[] | undefined };
+}) {
+  const {
+    data: session,
+    isPending: isSessionPending, //loading state
+    error, //error object
+    refetch, //refetch the session
+  } = authClient.useSession();
+  if (isSessionPending) return <div>Loading...</div>;
+  if (!session) {
+    window.location.assign("/mile/login");
+    return null;
+  }
+
+  return (
     <MileInner
       isEdit={isEdit}
       isIframeContent={isIframeContent}
@@ -204,7 +238,7 @@ function MileInner({
   // console.log("path", path, isEdit, isIframeContent);
 
   if (pageError) return <div>failed to load</div>;
-  if (pageIsLoading) return <div>loading...</div>;
+  if (pageIsLoading) return <div>Loading...</div>;
   if (isEdit && !page_data) {
     return <div>no data</div>;
   }

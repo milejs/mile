@@ -46,6 +46,9 @@ import {
   DialogRoot,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { authClient } from "./auth-client";
+import { LoginForm, SignUpForm } from "./auth-ui";
+import { Toaster } from "sonner";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
@@ -60,7 +63,21 @@ export function Dashboard({
   path: string;
   search: { [key: string]: string | string[] | undefined };
 }) {
-  // console.log("path", path);
+  console.log("path", path);
+  if (path === "/signup") {
+    return (
+      <GuestShell path={path}>
+        <SignupPage />
+      </GuestShell>
+    );
+  }
+  if (path === "/login") {
+    return (
+      <GuestShell path={path}>
+        <LoginPage />
+      </GuestShell>
+    );
+  }
   if (path === "/") {
     return (
       <AppShell path={path}>
@@ -1762,12 +1779,27 @@ function NewPageSettings({ close }: any) {
 // );
 
 function AppShell({ path, children }: { path: string; children: ReactNode }) {
+  const {
+    data: session,
+    isPending: isSessionPending, //loading state
+    error, //error object
+    refetch, //refetch the session
+  } = authClient.useSession();
+  if (isSessionPending) return <div>Loading...</div>;
+  if (!session) {
+    window.location.assign("/mile/login");
+    return null;
+  }
+
   return (
-    <div>
-      <Header path={path} />
-      <DocsLayout path={path}>{children}</DocsLayout>
-      <Footer />
-    </div>
+    <>
+      <div>
+        <Header path={path} session={session} />
+        <DocsLayout path={path}>{children}</DocsLayout>
+        <Footer />
+      </div>
+      <Toaster />
+    </>
   );
 }
 
@@ -1885,17 +1917,33 @@ const Footer = () => (
   </footer>
 );
 
-function Header({ path }: { path: string }) {
+function Header({ path, session }: { path: string; session: any }) {
   return (
     <header className="bg-background supports-[backdrop-filter]:bg-background/80 sticky top-0 z-50 mx-auto w-full border-b border backdrop-blur">
       <div className="/container mx-auto px-4 xl:px-0 flex h-14 items-center">
         <MainNav path={path} />
         <MobileNav path={path} />
         <div className="flex-1" />
-        <div className="flex items-center gap-1">
+        <div className="sm:mr-4 flex items-center gap-x-3">
           <div className="hidden md:block">{/* <SearchDialog /> */}</div>
-          <Button variant="link" asChild>
-            <a href="/help">Help</a>
+          <div className="text-xs text-zinc-700">
+            <span className="">{session.user.email}</span>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-xs"
+            onClick={() => {
+              authClient.signOut({
+                fetchOptions: {
+                  onSuccess: () => {
+                    window.location.assign("/mile/login"); // redirect to login page
+                  },
+                },
+              });
+            }}
+          >
+            Log out
           </Button>
           {/* <AuthedUserMenu /> */}
         </div>
@@ -1908,7 +1956,7 @@ function MobileNav({ path }: { path: string }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-2 md:hidden">
+    <div className="flex items-center gap-x-1 md:hidden">
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerTrigger asChild>
           <Button className="[&>svg]:size-6" variant="ghost" size="icon">
@@ -1950,7 +1998,7 @@ function MobileNav({ path }: { path: string }) {
           </DrawerContent>
         </DrawerPortal>
       </Drawer>
-      <div className="mx-2 my-auto h-6 w-[1px] bg-zinc-200" />
+      {/*<div className="mx-2 my-auto h-6 w-[1px] bg-zinc-200" />*/}
       <a href="/" className="ml-2 flex items-center">
         {/* <Circle className="size-3" /> */}
         <span className="ml-0.5 font-mono text-lg font-black">Mile</span>
@@ -2128,3 +2176,52 @@ const navConfig = {
     },
   ],
 };
+
+function GuestShell({ path, children }: { path: string; children: ReactNode }) {
+  const {
+    data: session,
+    isPending: isSessionPending, //loading state
+    error, //error object
+    refetch, //refetch the session
+  } = authClient.useSession();
+  if (isSessionPending) return <div>Loading...</div>;
+  if (session) {
+    window.location.assign("/mile");
+    return null;
+  }
+
+  return (
+    <>
+      <div>
+        {/*<Header path={path} />*/}
+        <div>{children}</div>
+        <Footer />
+      </div>
+      <Toaster />
+    </>
+  );
+}
+
+function SignupPage() {
+  return (
+    <div className="pt-14 px-4 sm:px-0">
+      <MainContainer>
+        <div className="space-y-8">
+          <SignUpForm />
+        </div>
+      </MainContainer>
+    </div>
+  );
+}
+
+function LoginPage() {
+  return (
+    <div className="pt-14 px-4 sm:px-0">
+      <MainContainer>
+        <div className="space-y-8">
+          <LoginForm />
+        </div>
+      </MainContainer>
+    </div>
+  );
+}

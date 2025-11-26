@@ -30,6 +30,7 @@ import {
   searchDraftPagesByTitle,
   publishPage,
 } from "./dao";
+import { auth } from "./auth";
 
 type MileAPIOptions = {
   s3?: {
@@ -101,6 +102,9 @@ export function MileAPI(options: MileAPIOptions) {
     }
     return c.json({ error: true, message: err.message ?? "Error" }, 400);
   });
+
+  // auth
+  app.on(["POST", "GET"], "/auth/*", (c) => auth.handler(c.req.raw));
 
   app.route("/medias", medias);
   app.route("/pages", pages);
