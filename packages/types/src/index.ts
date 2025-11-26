@@ -388,6 +388,38 @@ export interface MileTree {
     };
   };
 
+  mergeTreeData(
+    node_id: string,
+    content: any,
+  ): {
+    data: TreeData;
+    reverseAction: {
+      type: string;
+      name: string;
+      payload: {
+        nodeId: string;
+        treeData: TreeData;
+        content: any;
+      };
+    };
+  };
+
+  replaceTreeData(
+    node_id: string,
+    treeData: TreeData,
+    content: any,
+  ): {
+    data: TreeData;
+    reverseAction: {
+      type: string;
+      name: string;
+      payload: {
+        nodeId: string;
+        content: any;
+      };
+    };
+  };
+
   find(id: string, data?: TreeData): NodeData | null;
   get(id: string): NodeData;
   // helpers
@@ -466,9 +498,12 @@ type Outcome =
   | { type: "insert-new-element"; targetId: string }
   | { type: "delete-new-element"; targetId: string }
   | { type: "section-reorder"; targetId: string }
+  | { type: "node-reorder"; targetId: string }
   | { type: "move-node"; targetId: string }
   | { type: "move-row"; targetId: string }
-  | { type: "update-node-option"; targetId: string };
+  | { type: "update-node-option"; targetId: string }
+  | { type: "merge-tree-data"; targetId: string }
+  | { type: "replace-tree-data"; targetId: string };
 
 export type Operation = {
   trigger: Trigger;

@@ -140,7 +140,7 @@ const actions: Actions = {
     const result = editor.tree.reorderNode(dragId, dropId, closestEdgeOfDrop);
     editor.updateData(result.data, {
       trigger,
-      outcome: { type: "section-reorder", targetId: dragId },
+      outcome: { type: "node-reorder", targetId: dragId },
     });
     return result.reverseAction;
   },
@@ -308,6 +308,32 @@ const actions: Actions = {
     });
     return result.reverseAction;
   },
+
+  mergeTreeData(
+    editor,
+    payload: { node_id: string; content: TreeData },
+  ): Action | undefined {
+    const { node_id, content } = payload;
+    const result = editor.tree.mergeTreeData(node_id, content);
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "merge-tree-data", targetId: node_id },
+    });
+    return result.reverseAction;
+  },
+
+  replaceTreeData(
+    editor,
+    payload: { node_id: string; treeData: TreeData; content: TreeData },
+  ): Action | undefined {
+    const { node_id, treeData, content } = payload;
+    const result = editor.tree.replaceTreeData(node_id, treeData, content);
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "replace-tree-data", targetId: node_id },
+    });
+    return result.reverseAction;
+  },
 };
 
 function initializeActions(actions: Actions, userActions?: Actions): Actions {
@@ -387,143 +413,6 @@ export class Editor implements MileEditor {
     // force re-render
     const newData = { ...this.tree.data };
     this.setData(newData, shouldSend);
-  }
-
-  // mergeMarkdownData(node_id: string, md: string) {
-  //   console.log("------ mergeData", node_id, md);
-  //   const current_node = this.getNode(node_id);
-  //   const markdown = mdxToTree(md);
-  //   const content = markdown.result.content;
-  //   const markdown_root = content.root;
-  //   if (markdown_root && markdown_root.children.length === 0) {
-  //     // mardown has no data to update
-  //     return;
-  //   }
-
-  //   // process markdown
-  //   // - get start_node and ensure it exists
-  //   // - get index of the current_node in the root's children array
-  //   // - change current_node to be start_node but preserve the current_node's id
-  //   // - update tree root's children to add all node ids from markdown except start_node's id
-  //   // - delete old current_node's children nodes
-  //   // - add everything else in markdown nodes except the start_node and the root
-  //   let tree = this.tree.data;
-  //   invariant(tree.root.children);
-  //   const index = tree.root.children.indexOf(current_node.id);
-  //   invariant(index !== undefined && index !== -1, "current_node not found");
-  //   const __id = markdown_root.children[0];
-  //   const start_node = content[__id];
-  //   invariant(start_node, "start_node not found");
-
-  //   tree = {
-  //     ...tree,
-  //     // change current_node to be start_node but preserve the current_node's id
-  //     [node_id]: {
-  //       ...start_node,
-  //       id: node_id,
-  //     },
-
-  //     // update root children
-  //     // markdown root children: [s,x,y] // s is start_node
-  //     // current root children: [a,b,c,d] // c is the node_id at `index`
-  //     // new root children: [a,b,c,x,y,d] // preserve c, add x and y
-  //     root: {
-  //       ...tree.root,
-  //       children: [
-  //         ...tree.root.children!.slice(0, index),
-  //         current_node.id, // keep current_node's id
-  //         ...markdown_root.children.slice(1), // first child is the start_node, so we skip it
-  //         ...tree.root.children!.slice(index + 1),
-  //       ],
-  //     },
-  //   };
-
-  //   // delete the old current_node's children nodes because current_node is now start_node (except the id)
-  //   if (current_node.children) {
-  //     for (const child_id of current_node.children) {
-  //       // TODO: is this safe to delete mutably? should we do spread and set child_id to undefined?
-  //       delete tree[child_id];
-  //     }
-  //   }
-
-  //   // add all nodes from markdown's content to the tree except the start_node and the root
-  //   const { [__id]: _, root, ...rest } = content;
-  //   // add them to the tree
-  //   const new_tree = {
-  //     ...tree,
-  //     ...rest,
-  //   };
-
-  //   this.tree.updateTreeData(new_tree);
-  //   this.updateData(new_tree);
-  // }
-
-  mergeTreeData(node_id: string, content: TreeData) {
-    console.log("------ mergeTreeData", node_id, content, this.tree.data);
-    const current_node = this.getNode(node_id);
-    const markdown_root = content.root;
-    invariant(markdown_root.children);
-    if (markdown_root && markdown_root.children.length === 0) {
-      // mardown has no data to update
-      return;
-    }
-
-    // process markdown
-    // - get start_node and ensure it exists
-    // - get index of the current_node in the root's children array
-    // - change current_node to be start_node but preserve the current_node's id
-    // - update tree root's children to add all node ids from markdown except start_node's id
-    // - delete old current_node's children nodes
-    // - add everything else in markdown nodes except the start_node and the root
-    let tree = this.tree.data;
-    invariant(tree.root.children);
-    const index = tree.root.children.indexOf(current_node.id);
-    invariant(index !== undefined && index !== -1, "current_node not found");
-    const __id = markdown_root.children[0];
-    const start_node = content[__id];
-    invariant(start_node, "start_node not found");
-
-    tree = {
-      ...tree,
-      // change current_node to be start_node but preserve the current_node's id
-      [node_id]: {
-        ...start_node,
-        id: node_id,
-      },
-
-      // update root children
-      // markdown root children: [s,x,y] // s is start_node
-      // current root children: [a,b,c,d] // c is the node_id at `index`
-      // new root children: [a,b,c,x,y,d] // preserve c, add x and y
-      root: {
-        ...tree.root,
-        children: [
-          ...tree.root.children!.slice(0, index),
-          current_node.id, // keep current_node's id
-          ...markdown_root.children.slice(1), // first child is the start_node, so we skip it
-          ...tree.root.children!.slice(index + 1),
-        ],
-      },
-    };
-
-    // delete the old current_node's children nodes because current_node is now start_node (except the id)
-    if (current_node.children) {
-      for (const child_id of current_node.children) {
-        // TODO: is this safe to delete mutably? should we do spread and set child_id to undefined?
-        delete tree[child_id];
-      }
-    }
-
-    // add all nodes from markdown's content to the tree except the start_node and the root
-    const { [__id]: _, root, ...rest } = content;
-    // add them to the tree
-    const new_tree = {
-      ...tree,
-      ...rest,
-    };
-
-    this.tree.updateTreeData(new_tree);
-    this.updateData(new_tree);
   }
 
   async save() {

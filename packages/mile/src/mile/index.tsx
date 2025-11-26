@@ -593,18 +593,17 @@ function MileFrame({
               </Button>
               <Button
                 onClick={() => {
-                  const md = markdownEditorRef.current?.getMarkdown();
+                  // const md = markdownEditorRef.current?.getMarkdown();
                   const doc = markdownEditorRef.current?.getDocument();
-                  console.log("md", md);
                   console.log("doc", doc);
-
                   if (state.activeNodeId && doc) {
                     const tree = convertBlocksToNodeData(doc);
-                    editor.mergeTreeData(state.activeNodeId, tree);
+                    editor.perform({
+                      type: "mergeTreeData",
+                      name: `Merge tree data`,
+                      payload: { node_id: state.activeNodeId, content: tree },
+                    });
                   }
-                  // if (state.activeNodeId && md) {
-                  //   editor.mergeMarkdownData(state.activeNodeId, md);
-                  // }
                   dispatch({ type: AppActionType.DeselectNode });
                 }}
                 className="px-3 py-1 rounded text-sm"

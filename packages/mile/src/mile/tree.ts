@@ -240,13 +240,13 @@ export class Tree implements MileTree {
     const dropNode = this.find(dropId);
     invariant(
       dragNode && dropNode,
-      "reorder section fail: drag and drop node are not found",
+      "reorder node fail: drag and drop node are not found",
     );
     const parentId = this.getParentId(dragNode.id);
     const parentId2 = this.getParentId(dropNode.id);
     invariant(
       parentId === parentId2,
-      "reorder section fail: drag and drop node have different parent",
+      "reorder node fail: drag and drop node have different parent",
     );
     const commonParent = this.get(parentId);
     const prevDragIndex = commonParent.children?.indexOf(dragNode.id);
@@ -277,8 +277,8 @@ export class Tree implements MileTree {
     return {
       data: result,
       reverseAction: {
-        type: "reorderSection",
-        name: "Reorder section",
+        type: "reorderNode",
+        name: "Reorder node",
         payload: {
           dragId: newDragNodeId,
           dropId: newDropNodeId,
@@ -537,6 +537,108 @@ export class Tree implements MileTree {
         payload: {
           nodeId,
           value: initialValue,
+        },
+      },
+    };
+  }
+
+  mergeTreeData(node_id: string, content: any) {
+    console.log("------ mergeTreeData", node_id, content, this.data);
+    const current_node = this.get(node_id);
+    const markdown_root = content.root;
+    invariant(
+      markdown_root &&
+        markdown_root.children &&
+        markdown_root.children.length > 0,
+    );
+
+    // process markdown
+    // - get start_node and ensure it exists
+    // - get index of the current_node in the root's children array
+    // - change current_node to be start_node but preserve the current_node's id
+    // - update tree root's children to add all node ids from markdown except start_node's id
+    // - delete old current_node's children nodes
+    // - add everything else in markdown nodes except the start_node and the root
+    let tree = this._data;
+    const prev_tree = structuredClone(tree);
+    invariant(tree.root.children);
+    const index = tree.root.children.indexOf(current_node.id);
+    invariant(index !== undefined && index !== -1, "current_node not found");
+    const __id = markdown_root.children[0];
+    const start_node = content[__id];
+    invariant(start_node, "start_node not found");
+
+    tree = {
+      ...tree,
+      // change current_node to be start_node but preserve the current_node's id
+      [node_id]: {
+        ...start_node,
+        id: node_id,
+      },
+
+      // update root children
+      // markdown root children: [s,x,y] // s is start_node
+      // current root children: [a,b,c,d] // c is the node_id at `index`
+      // new root children: [a,b,c,x,y,d] // preserve c, add x and y
+      root: {
+        ...tree.root,
+        children: [
+          ...tree.root.children!.slice(0, index),
+          current_node.id, // keep current_node's id
+          ...markdown_root.children.slice(1), // first child is the start_node, so we skip it
+          ...tree.root.children!.slice(index + 1),
+        ],
+      },
+    };
+
+    // delete the old current_node's children nodes because current_node is now start_node (except the id)
+    if (current_node.children) {
+      for (const child_id of current_node.children) {
+        // TODO: is this safe to delete mutably? should we do spread and set child_id to undefined?
+        delete tree[child_id];
+      }
+    }
+
+    // add all nodes from markdown's content to the tree except the start_node and the root
+    const { [__id]: _, root, ...rest } = content;
+    // add them to the tree
+    const new_tree = {
+      ...tree,
+      ...rest,
+    };
+
+    // refresh the world
+    this.updateTreeData(new_tree);
+
+    // compute reverse action ------------------------------------------
+    return {
+      data: new_tree,
+      reverseAction: {
+        type: "replaceTreeData",
+        name: `Replace tree data`,
+        payload: {
+          nodeId: node_id,
+          treeData: prev_tree,
+          content: content,
+        },
+      },
+    };
+  }
+
+  replaceTreeData(node_id: string, treeData: TreeData, content: any) {
+    console.log("------ replaceTreeData", node_id, treeData, content);
+    // refresh the world
+    this.updateTreeData(treeData);
+
+    // compute reverse action ------------------------------------------
+    return {
+      data: treeData,
+      reverseAction: {
+        type: "mergeTreeData",
+        name: `Merge tree data`,
+        payload: {
+          nodeId: node_id,
+          content: content,
         },
       },
     };
