@@ -237,19 +237,19 @@ drafts.get("/:token", async (c) => {
       og_images,
     },
     meta: {
-      token,
-      expires_at: preview_token.expires_at,
+      preview_token,
     },
   });
 });
 
-drafts.post("/:id/preview-token", async (c) => {
-  const id = c.req.param("id");
-  const single = await loadDraftById(id);
-  if (!single) {
+drafts.post("/:draft_id/preview-token", async (c) => {
+  const draft_id = c.req.param("draft_id");
+  const body = await c.req.json();
+  const single = await loadDraftById(draft_id);
+  if (!single || !body?.page_id) {
     return c.json({ message: "Page not found" }, 404);
   }
-  const preview_token = await generatePreviewToken(id);
+  const preview_token = await generatePreviewToken(draft_id, body.page_id);
   return c.json({
     token: preview_token.token,
     draft_id: preview_token.draft_id,

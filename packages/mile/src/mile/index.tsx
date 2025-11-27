@@ -3083,7 +3083,10 @@ function MileHeader({
         >
           Print
         </button>
-        <PagePreviewButton id={editor.draft_data.id} />
+        <PagePreviewButton
+          draft_id={editor.draft_data.id}
+          page_id={editor.draft_data.page_id}
+        />
         <button
           type="button"
           className="px-3 py-1.5 rounded-[4px] cursor-pointer text-xs bg-black hover:bg-zinc-800 text-white"
@@ -3103,14 +3106,22 @@ function MileHeader({
   );
 }
 
-function PagePreviewButton({ id }: { id: string }) {
+function PagePreviewButton({
+  draft_id,
+  page_id,
+}: {
+  draft_id: string;
+  page_id: string;
+}) {
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
+
   async function handlePreviewPageClick() {
     setIsLoading(true);
-    const resp = await fetch(`${API}/drafts/${id}/preview-token`, {
+    const resp = await fetch(`${API}/drafts/${draft_id}/preview-token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ page_id }),
     });
     if (!resp.ok) {
       setIsLoading(false);

@@ -94,6 +94,7 @@ export const preview_tokens = pgTable("preview_tokens", {
   id: uuid("id").defaultRandom().primaryKey(),
   token: text("token").notNull().unique(),
   draft_id: char("draft_id", { length: 32 }).notNull(),
+  page_id: char("page_id", { length: 32 }).notNull(),
   expires_at: timestamp("expires_at").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });

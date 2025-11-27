@@ -98,6 +98,7 @@ CREATE TABLE "preview_tokens" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"token" text NOT NULL,
 	"draft_id" char(32) NOT NULL,
+	"page_id" char(32) NOT NULL,
 	"expires_at" timestamp NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "preview_tokens_token_unique" UNIQUE("token")

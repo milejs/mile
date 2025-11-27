@@ -80,7 +80,18 @@ export async function MilePreview({
   return (
     <>
       <div className="z-50 fixed bottom-0 w-full bg-violet-900 text-white text-xs py-1.5 px-4 text-center font-medium select-none">
-        Preview Mode (expired at {formatExpiry(meta.expires_at)})
+        <div className="flex items-center gap-x-5 justify-center">
+          <div>
+            Preview Mode (expired at{" "}
+            {formatExpiry(meta.preview_token.expires_at)})
+          </div>
+          <a
+            href={`/mile/${meta.preview_token.page_id}/__edit__`}
+            className="bg-violet-400 text-black px-2 py-0.5 rounded"
+          >
+            Edit page
+          </a>
+        </div>
       </div>
       <Suspense fallback={<LoadingComponent />}>
         <MDXRemote

@@ -490,7 +490,7 @@ export async function loadDraftById(draft_id: string) {
   return draft[0];
 }
 
-export async function generatePreviewToken(draft_id: string) {
+export async function generatePreviewToken(draft_id: string, page_id: string) {
   // Generate secure random token
   const token = generateId();
   // Token expires in 24 hours
@@ -500,6 +500,7 @@ export async function generatePreviewToken(draft_id: string) {
     .values({
       token,
       draft_id,
+      page_id,
       expires_at,
     })
     .returning();

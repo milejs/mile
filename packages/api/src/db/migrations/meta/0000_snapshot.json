@@ -1,5 +1,5 @@
 {
-  "id": "ec602ffc-b64e-458c-9340-401eb340ee31",
+  "id": "199e7999-4186-486b-a105-7557c2511a27",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -725,6 +725,12 @@
         },
         "draft_id": {
           "name": "draft_id",
+          "type": "char(32)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_id": {
+          "name": "page_id",
           "type": "char(32)",
           "primaryKey": false,
           "notNull": true
