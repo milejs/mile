@@ -3077,7 +3077,7 @@ function MileHeader({
       <div className="mile-headRight">
         <button
           type="button"
-          className="px-2 py-1.5 flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+          className="px-2 py-1.5 rounded-[4px] cursor-pointer flex items-center gap-1 text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
           onClick={() => console.log("print------", editor.tree.data)}
         >
           Print
@@ -3085,20 +3085,20 @@ function MileHeader({
         <a
           type="button"
           href="#"
-          className="px-2 py-1.5 flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+          className="px-3 py-1.5 rounded-[4px] cursor-pointer flex items-center gap-1 text-xs bg-white hover:bg-zinc-50 text-zinc-700 inset-ring inset-ring-zinc-400 hover:text-black hover:inset-ring-zinc-500"
         >
-          View <SquareArrowOutUpRight size={10} color="rgba(255,255,255,0.6)" />
+          Preview <SquareArrowOutUpRight size={10} className="text-black" />
         </a>
         <button
           type="button"
-          className="px-2 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+          className="px-3 py-1.5 rounded-[4px] cursor-pointer text-xs bg-black hover:bg-zinc-800 text-white"
           onClick={handleHeaderSavePage}
         >
           Save
         </button>
         <button
           type="button"
-          className="px-2 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+          className="px-3 py-1.5 rounded-[4px] cursor-pointer text-xs bg-blue-600 hover:bg-blue-700 text-white"
           onClick={handleHeaderPublishPage}
         >
           Publish
@@ -3123,7 +3123,7 @@ function MileHeaderPageSettings() {
               onClick={() => {
                 setIsOpen(true);
               }}
-              className="px-1.5 py-1 select-none flex items-center gap-x-1 text-[10px] font-medium rounded-sm text-white bg-zinc-500 hover:bg-zinc-600 border border-zinc-600"
+              className="px-1.5 py-1 select-none flex items-center gap-x-1 text-[10px] font-medium rounded-[4px] text-zinc-700 bg-zinc-100 hover:bg-zinc-100 border border-zinc-300 hover:border-zinc-500"
             >
               <PencilIcon size={8} /> Edit
             </button>
