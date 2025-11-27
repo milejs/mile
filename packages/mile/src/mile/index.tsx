@@ -3027,7 +3027,7 @@ function MileHeader({
               editor.setBreakpoint("desktop");
             }}
           >
-            <LaptopIcon width="20" height="20" />
+            <LaptopIcon className="w-[20px] h-[20px]" />
           </button>
           <button
             type="button"
@@ -3047,7 +3047,7 @@ function MileHeader({
               // });
             }}
           >
-            <TabletIcon width="20" height="20" />
+            <TabletIcon className="w-[17px] h-[17px]" />
           </button>
           <button
             type="button"
@@ -3070,7 +3070,7 @@ function MileHeader({
               editor.setBreakpoint("mobile");
             }}
           >
-            <SmartphoneIcon width="20" height="20" />
+            <SmartphoneIcon className="w-[16px] h-[16px]" />
           </button>
         </div>
       </div>
