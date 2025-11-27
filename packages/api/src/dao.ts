@@ -4,8 +4,9 @@ import {
   drafts as draftsTable,
   medias as mediasTable,
   InsertDraft,
+  preview_tokens,
 } from "./db/schema";
-import { desc, eq, or, and, ilike, inArray, count, sql } from "drizzle-orm";
+import { desc, eq, or, and, ilike, inArray, count, sql, gt } from "drizzle-orm";
 import { generateId } from "./lib/generate-id";
 
 // Aliases for joins
@@ -474,6 +475,51 @@ export async function getPublishedPageByFullSlug(full_slug: string) {
     .innerJoin(draftsTable, eq(pagesTable.published_version_id, draftsTable.id))
     .where(eq(pagesTable.full_slug, full_slug))
     .limit(1);
+}
+
+// Load draft for preview
+export async function loadDraftById(draft_id: string) {
+  const draft = await db
+    .select()
+    .from(draftsTable)
+    .where(eq(draftsTable.id, draft_id))
+    .limit(1);
+  if (draft.length === 0) {
+    return undefined;
+  }
+  return draft[0];
+}
+
+export async function generatePreviewToken(draft_id: string) {
+  // Generate secure random token
+  const token = generateId();
+  // Token expires in 24 hours
+  const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const [single] = await db
+    .insert(preview_tokens)
+    .values({
+      token,
+      draft_id,
+      expires_at,
+    })
+    .returning();
+  return single;
+}
+
+export async function getPreviewToken(token: string) {
+  const tokens = await db
+    .select()
+    .from(preview_tokens)
+    .where(
+      and(
+        eq(preview_tokens.token, token),
+        gt(preview_tokens.expires_at, new Date()),
+      ),
+    );
+  if (tokens.length === 0) {
+    return undefined;
+  }
+  return tokens[0];
 }
 
 // async function getPageWithParent(page_id: string) {

@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 export const medias = pgTable("medias", {
@@ -88,6 +89,14 @@ export type InsertPage = typeof pages.$inferInsert;
 export type SelectDraft = typeof drafts.$inferSelect;
 export type InsertDraft = typeof drafts.$inferInsert;
 export type SelectMedia = typeof medias.$inferSelect;
+
+export const preview_tokens = pgTable("preview_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  token: text("token").notNull().unique(),
+  draft_id: char("draft_id", { length: 32 }).notNull(),
+  expires_at: timestamp("expires_at").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
 
 // // Aliases for joins
 // import { alias } from 'drizzle-orm/pg-core';

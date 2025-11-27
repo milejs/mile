@@ -10,7 +10,7 @@ import {
   SelectMedia,
   InsertDraft,
 } from "./db/schema";
-import { desc, eq, or, and, ilike, inArray, count, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { invariant } from "./invariant";
 import { handleRequest, route, type Router } from "@better-upload/server";
@@ -29,6 +29,9 @@ import {
   searchPages,
   searchDraftPagesByTitle,
   publishPage,
+  loadDraftById,
+  generatePreviewToken,
+  getPreviewToken,
 } from "./dao";
 import { auth } from "./auth";
 
@@ -108,6 +111,7 @@ export function MileAPI(options: MileAPIOptions) {
 
   app.route("/medias", medias);
   app.route("/pages", pages);
+  app.route("/drafts", drafts);
   app.route("/page", frontend);
   /**
    * Search draft pages by title
@@ -162,6 +166,7 @@ export function MileAPI(options: MileAPIOptions) {
 const medias = new Hono();
 const pages = new Hono();
 const frontend = new Hono();
+const drafts = new Hono();
 
 /****************************************************************
  * Page by slug
@@ -202,6 +207,53 @@ frontend.get("/:slug{.+}", async (c) => {
   return c.json({
     ...single,
     og_images,
+  });
+});
+
+/****************************************************************
+ * Drafts
+ */
+
+/**
+ * Load draft by token (for preview)
+ */
+drafts.get("/:token", async (c) => {
+  const token = c.req.param("token");
+  const preview_token = await getPreviewToken(token);
+  if (!preview_token) {
+    return c.json({ error: "Invalid or expired preview token" }, 401);
+  }
+  const single = await loadDraftById(preview_token.draft_id);
+  if (!single) {
+    return c.json({ message: "Page not found" }, 404);
+  }
+  let og_images: SelectMedia[] = [];
+  if (single.og_image_ids && single.og_image_ids.length > 0) {
+    og_images = await getMediasByIds(single.og_image_ids);
+  }
+  return c.json({
+    data: {
+      ...single,
+      og_images,
+    },
+    meta: {
+      token,
+      expires_at: preview_token.expires_at,
+    },
+  });
+});
+
+drafts.post("/:id/preview-token", async (c) => {
+  const id = c.req.param("id");
+  const single = await loadDraftById(id);
+  if (!single) {
+    return c.json({ message: "Page not found" }, 404);
+  }
+  const preview_token = await generatePreviewToken(id);
+  return c.json({
+    token: preview_token.token,
+    draft_id: preview_token.draft_id,
+    expires_at: preview_token.expires_at,
   });
 });
 

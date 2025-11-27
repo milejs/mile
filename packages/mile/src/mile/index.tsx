@@ -37,6 +37,7 @@ import {
   GripVerticalIcon,
   ImagesIcon,
   LaptopIcon,
+  Loader2,
   PencilIcon,
   PlusIcon,
   SmartphoneIcon,
@@ -3082,13 +3083,7 @@ function MileHeader({
         >
           Print
         </button>
-        <a
-          type="button"
-          href="#"
-          className="px-3 py-1.5 rounded-[4px] cursor-pointer flex items-center gap-1 text-xs bg-white hover:bg-zinc-50 text-zinc-700 inset-ring inset-ring-zinc-400 hover:text-black hover:inset-ring-zinc-500"
-        >
-          Preview <SquareArrowOutUpRight size={10} className="text-black" />
-        </a>
+        <PagePreviewButton id={editor.draft_data.id} />
         <button
           type="button"
           className="px-3 py-1.5 rounded-[4px] cursor-pointer text-xs bg-black hover:bg-zinc-800 text-white"
@@ -3105,6 +3100,47 @@ function MileHeader({
         </button>
       </div>
     </div>
+  );
+}
+
+function PagePreviewButton({ id }: { id: string }) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
+  async function handlePreviewPageClick() {
+    setIsLoading(true);
+    const resp = await fetch(`${API}/drafts/${id}/preview-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!resp.ok) {
+      setIsLoading(false);
+      const error = new Error(
+        "An error occurred while generating the preview token.",
+      );
+      const info = await resp.json();
+      console.error("Error generating the preview token", info);
+      // @ts-expect-error okk
+      error.info = info;
+      // @ts-expect-error okk
+      error.status = resp.status;
+      throw error;
+    }
+    setIsLoading(false);
+    const result = await resp.json();
+    if (result) {
+      window.location.assign(`/preview/${result.token}`);
+    }
+  }
+  return (
+    <button
+      type="button"
+      className="px-3 py-1.5 rounded-[4px] cursor-pointer flex items-center gap-1 text-xs bg-white hover:bg-zinc-50 text-zinc-700 inset-ring inset-ring-zinc-400 hover:text-black hover:inset-ring-zinc-500 disabled:bg-zinc-300"
+      onClick={handlePreviewPageClick}
+      disabled={isLoading}
+    >
+      {isLoading ? <Loader2 size={14} className="animate-spin" /> : null}{" "}
+      Preview <SquareArrowOutUpRight size={10} className="text-black" />
+    </button>
   );
 }
 
