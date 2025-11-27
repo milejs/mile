@@ -122,7 +122,6 @@ export interface MileEditor {
   setZoom(level: number): void;
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile"): void;
   // mergeMarkdownData(node_id: string, md: string): void;
-  mergeTreeData(node_id: string, content: TreeData): void;
   save(): void;
   publish(): void;
   updateData(data: TreeData, lastOperation?: Operation): void;
