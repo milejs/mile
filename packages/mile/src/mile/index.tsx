@@ -3161,8 +3161,10 @@ function MileHeaderPageSettings() {
   // console.log("editor.draft_data", editor.draft_data);
 
   return (
-    <div className="mile-headCenter">
-      <div className="text-sm">{editor.draft_data.title ?? "Untitled"}</div>
+    <div className="mile-headCenter w-[500px] justify-center">
+      <div className="text-sm font-semibold text-ellipsis">
+        {editor.draft_data.title ?? "Untitled"}
+      </div>
       <DialogRoot open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger
           render={() => (
