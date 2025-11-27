@@ -2987,7 +2987,7 @@ function MileHeader({
       <div className="mile-headLeft">
         <a
           href="/mile/pages"
-          className="text-sm flex items-center gap-x-1 [&_svg]:text-zinc-400 hover:[&_svg]:text-zinc-900"
+          className="text-xs flex items-center gap-x-0.5 [&_svg]:text-zinc-400 hover:[&_svg]:text-zinc-900"
         >
           <ChevronLeft size={16} /> Pages
         </a>
