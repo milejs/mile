@@ -2994,13 +2994,13 @@ function MileHeader({
         <Divider />
         <button
           onClick={() => editor.undo()}
-          className="px-2 py-1.5 flex gap-1 text-xs bg-blue-100 text-blue-800 active:bg-blue-200"
+          className="px-2 py-1 flex gap-1 text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 rounded cursor-pointer"
         >
           Undo
         </button>
         <button
           onClick={() => editor.redo()}
-          className="px-2 py-1.5 flex gap-1 text-xs bg-blue-100 text-blue-800 active:bg-blue-200"
+          className="px-2 py-1 flex gap-1 text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 rounded cursor-pointer"
         >
           Redo
         </button>
@@ -3047,7 +3047,7 @@ function MileHeader({
               // });
             }}
           >
-            <TabletIcon />
+            <TabletIcon width="20" height="20" />
           </button>
           <button
             type="button"
@@ -3070,7 +3070,7 @@ function MileHeader({
               editor.setBreakpoint("mobile");
             }}
           >
-            <SmartphoneIcon />
+            <SmartphoneIcon width="20" height="20" />
           </button>
         </div>
       </div>
