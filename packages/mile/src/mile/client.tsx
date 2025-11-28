@@ -520,7 +520,6 @@ function ListBullet({ className }: { className?: string }) {
 }
 
 function ImageContainer(props: any) {
-  console.log("--- ImageContainer props", props);
   const { options } = props;
   if (!options) return null;
 

@@ -354,14 +354,17 @@ pages.get("/:id", async (c) => {
 pages.post("/:id/draft", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
-  if (body && body.created_at) {
-    delete body.created_at;
+  if (!body) {
+    return c.json({ error: "Invalid request body" }, 400);
   }
-  body.id = generateId();
-  body.reason = "manual-save";
-
-  // Here you might want to add validation similar to the POST route
-  const updatedPage = await saveDraft(id, body);
+  const { updates, url_changes } = body;
+  if (updates && updates.created_at) {
+    delete updates.created_at;
+  }
+  updates.id = generateId();
+  updates.reason = "manual-save";
+  // add validation similar to the POST route
+  const updatedPage = await saveDraft(id, updates, url_changes);
   return c.json({ data: updatedPage });
 });
 
@@ -378,14 +381,17 @@ pages.post("/:id/draft", async (c) => {
 pages.post("/:id/publish", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json();
-  if (body && body.created_at) {
-    delete body.created_at;
+  if (!body) {
+    return c.json({ error: "Invalid request body" }, 400);
   }
-  body.id = generateId();
-  body.reason = "publish";
-
-  // Here you might want to add validation similar to the POST route
-  const updatedPage = await publishPage(id, body);
+  const { updates, url_changes } = body;
+  if (updates && updates.created_at) {
+    delete updates.created_at;
+  }
+  updates.id = generateId();
+  updates.reason = "publish";
+  // add validation similar to the POST route
+  const updatedPage = await publishPage(id, updates, url_changes);
   return c.json({ data: updatedPage });
 });
 

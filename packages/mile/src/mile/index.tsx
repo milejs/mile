@@ -12,6 +12,9 @@ import {
   startTransition,
   useId,
   useImperativeHandle,
+  createContext,
+  useContext,
+  ActionDispatch,
 } from "react";
 import {
   DraftData,
@@ -262,6 +265,19 @@ const initial_empty_tree = {
   },
 };
 
+type DraftDataContextValue = {
+  draft_data: DraftData;
+  updateDraftData: ActionDispatch<[action: DraftDataAction]>;
+};
+
+const DraftDataContext = createContext<DraftDataContextValue | null>(null);
+
+export function useDraftData() {
+  const c = useContext(DraftDataContext);
+  invariant(c);
+  return c;
+}
+
 function MileReady({
   path,
   page_data,
@@ -283,6 +299,10 @@ function MileReady({
   const [data, setData] = useState<TreeData | undefined>(() => tree_data.data);
   const [draft_data, updateDraftData] = useReducer(draftDataReducer, page_data);
   const [lastOperation, setLastOperation] = useState<Operation | null>(null);
+  const initialSlugDataRef = useRef<{
+    slug: string;
+    parent_id?: string | undefined | null;
+  } | null>({ slug: page_data.slug, parent_id: page_data.parent_id });
   //
   const frameRef = useRef<IFrame | null>(null);
   const channelRef = useRef<ReturnType<typeof createChannel> | null>(null);
@@ -318,6 +338,18 @@ function MileReady({
     [setData],
   );
 
+  const draft_context = useMemo(() => {
+    return {
+      draft_data,
+      updateDraftData,
+    };
+  }, [draft_data, updateDraftData]);
+
+  const url_changes = {
+    slug: draft_data.slug !== initialSlugDataRef.current?.slug,
+    parent_id: draft_data.parent_id !== initialSlugDataRef.current?.parent_id,
+  };
+
   // console.log('page_data ----', page_data);
   // console.log("MileReady render ---- data", data);
   // console.log("tree_data", tree_data);
@@ -325,18 +357,20 @@ function MileReady({
   return (
     <>
       <EditorProvider
-        draft_data={draft_data}
-        updateDraftData={updateDraftData}
         tree={tree_data}
         setData={setDataAndSend}
         setLastOperation={setLastOperation}
       >
-        <MileFrame
-          data={data}
-          frameRef={frameRef}
-          channelRef={channelRef}
-          iframeSrc={`${process.env.NEXT_PUBLIC_HOST_URL}/mile${path}/__iframe_content__`}
-        />
+        <DraftDataContext value={draft_context}>
+          <MileFrame
+            data={data}
+            draft_data={draft_data}
+            frameRef={frameRef}
+            channelRef={channelRef}
+            url_changes={url_changes}
+            iframeSrc={`${process.env.NEXT_PUBLIC_HOST_URL}/mile${path}/__iframe_content__`}
+          />
+        </DraftDataContext>
       </EditorProvider>
       <Toaster />
     </>
@@ -476,13 +510,17 @@ function draftDataReducer(
 
 function MileFrame({
   data,
+  draft_data,
   iframeSrc,
   frameRef,
   channelRef,
+  url_changes,
 }: {
   frameRef: React.RefObject<IFrame | null>;
   channelRef: React.RefObject<any | null>;
+  url_changes: { slug: boolean; parent_id: boolean };
   data: TreeData | undefined;
+  draft_data: DraftData;
   iframeSrc: string;
 }) {
   const editor = useEditor();
@@ -535,7 +573,7 @@ function MileFrame({
     const unsubscribe = tinykeys(window, {
       "$mod+S": (e: Event) => {
         e.preventDefault();
-        editor.save();
+        editor.save(draft_data, url_changes);
       },
       "$mod+Z": (e: Event) => {
         e.preventDefault();
@@ -549,13 +587,15 @@ function MileFrame({
     return () => {
       unsubscribe();
     };
-  }, [editor]);
+  }, [editor, draft_data, url_changes]);
 
   // console.log("data", data);
 
   return (
     <div className="flex flex-col h-screen">
       <MileHeader
+        draft_data={draft_data}
+        url_changes={url_changes}
         frameRef={frameRef}
         iframe_state={iframe_state}
         dispatch_iframe={dispatch_iframe}
@@ -2966,20 +3006,25 @@ function getViewportWidthString() {
 }
 
 function MileHeader({
+  draft_data,
+  url_changes,
   frameRef,
   iframe_state,
   dispatch_iframe,
 }: {
+  draft_data: DraftData;
+  url_changes: { slug: boolean; parent_id: boolean };
   frameRef: React.RefObject<IFrame | null>;
   iframe_state: IframeState;
   dispatch_iframe: React.ActionDispatch<[action: IframeAction]>;
 }) {
+  const draft_context = useDraftData();
   const editor = useEditor();
   function handleHeaderSavePage() {
-    editor.save();
+    editor.save(draft_data, url_changes);
   }
   function handleHeaderPublishPage() {
-    editor.publish();
+    editor.publish(draft_data, url_changes);
   }
 
   return (
@@ -3084,8 +3129,8 @@ function MileHeader({
           Print
         </button>
         <PagePreviewButton
-          draft_id={editor.draft_data.id}
-          page_id={editor.draft_data.page_id}
+          draft_id={draft_context.draft_data.id}
+          page_id={draft_context.draft_data.page_id}
         />
         <button
           type="button"
@@ -3156,14 +3201,13 @@ function PagePreviewButton({
 }
 
 function MileHeaderPageSettings() {
-  const editor = useEditor();
+  const draft_context = useDraftData();
   const [isOpen, setIsOpen] = useState(false);
-  // console.log("editor.draft_data", editor.draft_data);
 
   return (
     <div className="mile-headCenter w-[500px] justify-center">
       <div className="text-sm font-semibold text-ellipsis">
-        {editor.draft_data.title ?? "Untitled"}
+        {draft_context.draft_data.title ?? "Untitled"}
       </div>
       <DialogRoot open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger
@@ -3192,11 +3236,11 @@ function MileHeaderPageSettings() {
 }
 
 function PageSettings({ close }: { close: () => void }) {
-  const editor = useEditor();
+  const draft_context = useDraftData();
   // TODO: move this inside SlugInput?
   const parent = useSWR(
-    editor.draft_data.parent_id
-      ? [`/pages/`, editor.draft_data.parent_id]
+    draft_context.draft_data.parent_id
+      ? [`/pages/`, draft_context.draft_data.parent_id]
       : null,
     fetcher,
   );
@@ -3206,7 +3250,7 @@ function PageSettings({ close }: { close: () => void }) {
 }
 
 function PageSettingsReady({ parent, close }: any) {
-  const editor = useEditor();
+  const draft_context = useDraftData();
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -3219,10 +3263,10 @@ function PageSettingsReady({ parent, close }: any) {
             </label>
             <Input
               id="title"
-              value={editor.draft_data.title}
+              value={draft_context.draft_data.title}
               onChange={(e) => {
                 const value = e.target.value;
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "title", value: value },
                 });
@@ -3240,10 +3284,10 @@ function PageSettingsReady({ parent, close }: any) {
             </label>
             <Input
               id="type"
-              value={editor.draft_data.type}
+              value={draft_context.draft_data.type}
               onChange={(e) => {
                 const value = e.target.value;
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "type", value },
                 });
@@ -3257,18 +3301,18 @@ function PageSettingsReady({ parent, close }: any) {
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full relative">
             <SlugInput
-              value={editor.draft_data.slug}
+              value={draft_context.draft_data.slug}
               onChange={(v) => {
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "slug", value: v },
                 });
               }}
-              title={editor.draft_data.title}
-              parentId={editor.draft_data.parent_id}
+              title={draft_context.draft_data.title}
+              parentId={draft_context.draft_data.parent_id}
               parentTitle={parent?.data?.title}
               onParentChange={(parent_id: string | null) => {
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "parent_id", value: parent_id },
                 });
@@ -3285,12 +3329,12 @@ function PageSettingsReady({ parent, close }: any) {
             <Field.Control
               id="metadescription"
               value={
-                editor.draft_data.description == null
+                draft_context.draft_data.description == null
                   ? ""
-                  : editor.draft_data.description
+                  : draft_context.draft_data.description
               }
               onValueChange={(value) => {
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "description", value },
                 });
@@ -3305,12 +3349,12 @@ function PageSettingsReady({ parent, close }: any) {
             <label className="font-semibold text-sm">Open graph Image</label>
             <PageOpenGraphImage
               image_id={
-                editor.draft_data.og_image_ids.length > 0
-                  ? editor.draft_data.og_image_ids[0]
+                draft_context.draft_data.og_image_ids.length > 0
+                  ? draft_context.draft_data.og_image_ids[0]
                   : undefined
               }
               onImageIdChange={(v) => {
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "og_image_ids", value: [v] },
                 });
@@ -3330,12 +3374,12 @@ function PageSettingsReady({ parent, close }: any) {
             <Field.Control
               id="canonical_url"
               value={
-                editor.draft_data.canonical_url == null
+                draft_context.draft_data.canonical_url == null
                   ? ""
-                  : editor.draft_data.canonical_url
+                  : draft_context.draft_data.canonical_url
               }
               onValueChange={(value) => {
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "canonical_url", value },
                 });
@@ -3353,12 +3397,12 @@ function PageSettingsReady({ parent, close }: any) {
             <Field.Control
               id="keywords"
               value={
-                editor.draft_data.keywords == null
+                draft_context.draft_data.keywords == null
                   ? ""
-                  : editor.draft_data.keywords
+                  : draft_context.draft_data.keywords
               }
               onValueChange={(value) => {
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "keywords", value },
                 });
@@ -3378,9 +3422,9 @@ function PageSettingsReady({ parent, close }: any) {
             </label>
             <Field.Control
               id="content"
-              value={editor.draft_data.content as string}
+              value={draft_context.draft_data.content as string}
               onValueChange={(value) => {
-                editor.updateDraftData({
+                draft_context.updateDraftData({
                   type: "UpdateField",
                   payload: { key: "content", value },
                 });
@@ -3395,9 +3439,9 @@ function PageSettingsReady({ parent, close }: any) {
             <label className="font-semibold text-sm flex flex-row items-center gap-x-2">
               Do not index page
               <Switch.Root
-                checked={Boolean(editor.draft_data.no_index)}
+                checked={Boolean(draft_context.draft_data.no_index)}
                 onCheckedChange={(v) => {
-                  editor.updateDraftData({
+                  draft_context.updateDraftData({
                     type: "UpdateField",
                     payload: { key: "no_index", value: v === true ? 1 : 0 },
                   });
@@ -3408,7 +3452,7 @@ function PageSettingsReady({ parent, close }: any) {
               </Switch.Root>
             </label>
             <div className="mt-1 text-xs text-zinc-600">
-              {Boolean(editor.draft_data.no_index) ? (
+              {Boolean(draft_context.draft_data.no_index) ? (
                 <div className="text-red-700 flex flex-row items-center gap-x-1">
                   <CircleXIcon size={12} />
                   This page will not be indexed by search engines.

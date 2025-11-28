@@ -178,7 +178,7 @@ function MediaGallery() {
             <Drawer open={open} onOpenChange={setOpen}>
               <DrawerPortal>
                 <DrawerContent className="mx-auto max-h-[85svh] px-6 pb-8">
-                  <DrawerTitle>Test</DrawerTitle>
+                  <DrawerTitle>Media details</DrawerTitle>
                   <MediaMetadata
                     selectedFileId={selectedFileId}
                     setIsPending={setIsPending}
@@ -310,7 +310,6 @@ function MediaMetadata({
   if (data.type == null) {
     return (
       <div className="">
-        <h2 className="mb-4">Media details</h2>
         <div className="mb-4 text-xs">
           <h3 className="mb-1 font-medium">Unknown media file type.</h3>
         </div>
@@ -340,9 +339,7 @@ function ImageDetails({
   setIsPending: (v: boolean) => void;
 }) {
   return (
-    <div className="">
-      <h2 className="mb-4 font-semibold">Media details</h2>
-
+    <div className="mt-5">
       <div className="mb-4 grid grid-cols-[112px_1fr] gap-x-3">
         <div className="mb-2">
           <img src={getImageUrl(data.filepath)} alt="" />

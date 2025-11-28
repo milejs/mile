@@ -47,29 +47,18 @@ type EditorProviderProps = {
   tree: Tree;
   setData: SetData;
   setLastOperation: SetOperation;
-  draft_data: DraftData;
-  updateDraftData: UpdateDraftData;
 };
 export function EditorProvider({
-  draft_data,
   children,
   tree,
   setData,
   setLastOperation,
-  updateDraftData,
 }: EditorProviderProps) {
   const mile = useMileProvider();
   invariant(mile);
   const editor = useMemo(() => {
-    return new Editor(
-      mile,
-      tree,
-      setData,
-      setLastOperation,
-      draft_data,
-      updateDraftData,
-    );
-  }, [mile, draft_data, tree, setData, setLastOperation, updateDraftData]);
+    return new Editor(mile, tree, setData, setLastOperation);
+  }, [mile, tree, setData, setLastOperation]);
   return <EditorContext value={editor}>{children}</EditorContext>;
 }
 
@@ -345,9 +334,6 @@ export class Editor implements MileEditor {
   mile: MileClient;
   config: Config;
   tree: Tree;
-  // stores draft_data that has page metadata (page content is in here but we manage it through editor's tree instead)
-  draft_data: DraftData;
-  updateDraftData: UpdateDraftData;
   setData: SetData;
   setLastOperation: SetOperation;
   history: HistoryManager = new HistoryManager();
@@ -364,8 +350,6 @@ export class Editor implements MileEditor {
     tree: Tree,
     setData: SetData,
     setLastOperation: SetOperation,
-    draft_data: DraftData,
-    updateDraftData: UpdateDraftData,
   ) {
     this.activeNodeId = null;
     this.is_disabled = false;
@@ -373,8 +357,6 @@ export class Editor implements MileEditor {
     this.config = mile.config;
     this.tree = tree;
     this.setData = setData;
-    this.draft_data = draft_data;
-    this.updateDraftData = updateDraftData;
     this.setLastOperation = setLastOperation;
     this.actions = initializeActions(actions, mile.config.actions);
     // this.schema = new EditorSchema(initializeSchema(schema, mile.config.schema));
@@ -415,17 +397,16 @@ export class Editor implements MileEditor {
     this.setData(newData, shouldSend);
   }
 
-  async save() {
+  async save(
+    draft_data: DraftData,
+    url_changes: { slug: boolean; parent_id: boolean },
+  ) {
     this.is_disabled = true;
     this.forceReRender();
     try {
       console.log("this", this);
 
-      const result = await this.persister.save(
-        this.draft_data,
-        this.tree.data,
-        this.mile.registry.components,
-      );
+      const result = await this.persister.save(this, draft_data, url_changes);
       this.is_disabled = false;
       this.forceReRender();
       toast.success("Saved successfully");
@@ -469,14 +450,17 @@ export class Editor implements MileEditor {
     }
   }
 
-  async publish() {
+  async publish(
+    draft_data: DraftData,
+    url_changes: { slug: boolean; parent_id: boolean },
+  ) {
     this.is_disabled = true;
     this.forceReRender();
     try {
       const result = await this.persister.publish(
-        this.draft_data,
-        this.tree.data,
-        this.mile.registry.components,
+        this,
+        draft_data,
+        url_changes,
       );
       this.is_disabled = false;
       this.forceReRender();
@@ -971,8 +955,14 @@ class Persister implements MilePersister {
     this.editor = editor;
   }
 
-  async save(draft_data: DraftData, content: TreeData, components: Components) {
-    console.log("save", draft_data, content);
+  async save(
+    editor: Editor,
+    draft_data: DraftData,
+    url_changes: { slug: boolean; parent_id: boolean },
+  ) {
+    const content = editor.tree.data;
+    const components = editor.mile.registry.components;
+    console.log("save", draft_data, content, url_changes);
 
     // convert json to mdx string
     let mdxstring = "";
@@ -993,7 +983,10 @@ class Persister implements MilePersister {
         const resp = await fetch(`${API}/pages/${draft_data.page_id}/draft`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...draft_data, content: mdxstring }),
+          body: JSON.stringify({
+            updates: { ...draft_data, content: mdxstring },
+            url_changes,
+          }),
         });
         if (!resp.ok) {
           const error = new Error("An error occurred while saving the page.");
@@ -1013,11 +1006,13 @@ class Persister implements MilePersister {
   }
 
   async publish(
+    editor: Editor,
     draft_data: DraftData,
-    content: TreeData,
-    components: Components,
+    url_changes: { slug: boolean; parent_id: boolean },
   ) {
-    console.log("publish", draft_data, content);
+    const content = editor.tree.data;
+    const components = editor.mile.registry.components;
+    console.log("publish", draft_data, content, url_changes);
 
     // convert json to mdx string
     let mdxstring = "";
@@ -1039,7 +1034,10 @@ class Persister implements MilePersister {
         const resp = await fetch(`${API}/pages/${draft_data.page_id}/publish`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...draft_data, content: mdxstring }),
+          body: JSON.stringify({
+            updates: { ...draft_data, content: mdxstring },
+            url_changes,
+          }),
         });
         if (!resp.ok) {
           const error = new Error("An error occurred while saving the page.");

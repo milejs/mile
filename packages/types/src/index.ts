@@ -106,8 +106,6 @@ export interface MileEditor {
   mile: MileClient;
   config: Config;
   tree: MileTree;
-  draft_data: DraftData;
-  updateDraftData: UpdateDraftData;
   setData: SetData;
   setLastOperation: SetOperation;
   history: MileHistoryManager;
@@ -122,8 +120,14 @@ export interface MileEditor {
   setZoom(level: number): void;
   setBreakpoint(breakpoint: "desktop" | "tablet" | "mobile"): void;
   // mergeMarkdownData(node_id: string, md: string): void;
-  save(): void;
-  publish(): void;
+  save(
+    draft_data: DraftData,
+    url_changes: { slug: boolean; parent_id: boolean },
+  ): void;
+  publish(
+    draft_data: DraftData,
+    url_changes: { slug: boolean; parent_id: boolean },
+  ): void;
   updateData(data: TreeData, lastOperation?: Operation): void;
   findNode(id: string): NodeData | null;
   getNode(id: string): NodeData;
@@ -467,9 +471,9 @@ export type HistoryEntry = {
 export interface MilePersister {
   editor: MileEditor;
   save(
-    pageData: PageData,
-    content: TreeData,
-    components: Components,
+    editor: MileEditor,
+    draft_data: DraftData,
+    url_changes: { slug: boolean; parent_id: boolean },
   ): Promise<
     | {
         message: any;
@@ -477,9 +481,9 @@ export interface MilePersister {
     | undefined
   >;
   publish(
-    pageData: PageData,
-    content: TreeData,
-    components: Components,
+    editor: MileEditor,
+    draft_data: DraftData,
+    url_changes: { slug: boolean; parent_id: boolean },
   ): Promise<
     | {
         message: any;

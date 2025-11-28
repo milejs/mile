@@ -258,7 +258,11 @@ export async function getDraftFullSlug(
         If this returns a row, block the save.
         "This slug is already used by the other page. Please choose another."
  */
-export async function saveDraft(page_id: string, updates: InsertDraft) {
+export async function saveDraft(
+  page_id: string,
+  updates: InsertDraft,
+  url_changes: { slug: boolean; parent_id: boolean },
+) {
   // check circular reference with parent_id
   if (updates.parent_id) {
     const is_circular = await checkDraftCircularReference(
@@ -303,10 +307,14 @@ export async function saveDraft(page_id: string, updates: InsertDraft) {
  If editor makes a new change, they'll get a new draft_version_id,
  but the published one will remain, pointing to the last published version.
  */
-export async function publishPage(page_id: string, updates: InsertDraft) {
+export async function publishPage(
+  page_id: string,
+  updates: InsertDraft,
+  url_changes: { slug: boolean; parent_id: boolean },
+) {
   // create new draft
   // at the end of this function, this draft.id will be the published_version_id too.
-  const draft = await saveDraft(page_id, updates);
+  const draft = await saveDraft(page_id, updates, url_changes);
   // walk up the tree to calculate draft full_slug to be used for publish full_slug
   let draft_full_slug = await getDraftFullSlug(page_id);
   // update pointer and other status
@@ -473,6 +481,7 @@ export async function getPublishedPageByFullSlug(full_slug: string) {
     .select()
     .from(pagesTable)
     .innerJoin(draftsTable, eq(pagesTable.published_version_id, draftsTable.id))
+    // TODO: should we add 'published' status?
     .where(eq(pagesTable.full_slug, full_slug))
     .limit(1);
 }
