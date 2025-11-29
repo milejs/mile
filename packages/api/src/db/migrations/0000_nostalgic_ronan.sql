@@ -1,3 +1,5 @@
+CREATE TYPE "public"."redirect_source" AS ENUM('auto', 'manual', 'import');--> statement-breakpoint
+CREATE TYPE "public"."redirect_type" AS ENUM('permanent', 'temporary', 'gone');--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,
@@ -104,6 +106,36 @@ CREATE TABLE "preview_tokens" (
 	CONSTRAINT "preview_tokens_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
+CREATE TABLE "redirect_history" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"redirect_id" uuid,
+	"previous_destination" varchar(2048),
+	"new_destination" varchar(2048) NOT NULL,
+	"change_reason" text,
+	"changed_by" char(32),
+	"changed_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "redirects" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"source_path" varchar(2048) NOT NULL,
+	"destination_path" varchar(2048) NOT NULL,
+	"redirect_type" "redirect_type" DEFAULT 'permanent' NOT NULL,
+	"status_code" integer DEFAULT 308 NOT NULL,
+	"source" "redirect_source" DEFAULT 'auto' NOT NULL,
+	"is_active" boolean DEFAULT true NOT NULL,
+	"content_id" uuid,
+	"content_type" varchar(100),
+	"hit_count" integer DEFAULT 0 NOT NULL,
+	"last_hit_at" timestamp,
+	"notes" text,
+	"created_by" char(32),
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp NOT NULL,
+	"expires_at" timestamp,
+	CONSTRAINT "redirects_source_path_unique" UNIQUE("source_path")
+);
+--> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
@@ -112,4 +144,11 @@ CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("ident
 CREATE INDEX "drafts_id_version__idx" ON "drafts" USING btree ("page_id","version_number");--> statement-breakpoint
 CREATE INDEX "drafts_page_id__idx" ON "drafts" USING btree ("page_id");--> statement-breakpoint
 CREATE INDEX "pages_full_slug__idx" ON "pages" USING btree ("full_slug");--> statement-breakpoint
-CREATE INDEX "pages_status__idx" ON "pages" USING btree ("status");
+CREATE INDEX "pages_status__idx" ON "pages" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "redirect_id_idx" ON "redirect_history" USING btree ("redirect_id");--> statement-breakpoint
+CREATE INDEX "changed_at_idx" ON "redirect_history" USING btree ("changed_at");--> statement-breakpoint
+CREATE INDEX "source_path_idx" ON "redirects" USING btree ("source_path");--> statement-breakpoint
+CREATE INDEX "destination_path_idx" ON "redirects" USING btree ("destination_path");--> statement-breakpoint
+CREATE INDEX "content_idx" ON "redirects" USING btree ("content_id","content_type");--> statement-breakpoint
+CREATE INDEX "active_idx" ON "redirects" USING btree ("is_active");--> statement-breakpoint
+CREATE INDEX "created_at_idx" ON "redirects" USING btree ("created_at");

@@ -5,8 +5,24 @@ import {
   medias as mediasTable,
   InsertDraft,
   preview_tokens,
+  redirects,
+  SelectRedirect,
+  redirect_history,
 } from "./db/schema";
-import { desc, eq, or, and, ilike, inArray, count, sql, gt } from "drizzle-orm";
+import {
+  desc,
+  eq,
+  or,
+  and,
+  ilike,
+  inArray,
+  count,
+  sql,
+  gt,
+  isNull,
+  isNotNull,
+  lt,
+} from "drizzle-orm";
 import { generateId } from "./lib/generate-id";
 
 // Aliases for joins
@@ -315,8 +331,33 @@ export async function publishPage(
   // create new draft
   // at the end of this function, this draft.id will be the published_version_id too.
   const draft = await saveDraft(page_id, updates, url_changes);
+
   // walk up the tree to calculate draft full_slug to be used for publish full_slug
   let draft_full_slug = await getDraftFullSlug(page_id);
+
+  // create redirects if url changes (for now, we don't use url_changes yet)
+  // TODO: check if we can optimize by skip creating redirect if url_changes are both false
+
+  // first, get current page full_slug - this will be old path
+  const pages_res = await db
+    .select({ full_slug: pagesTable.full_slug })
+    .from(pagesTable)
+    .where(eq(pagesTable.id, page_id))
+    .limit(1);
+
+  const page = pages_res[0];
+  if (page.full_slug && draft_full_slug) {
+    const redirect_result = await autoCreateRedirect(
+      page.full_slug, // old path
+      draft_full_slug, // new path
+      page_id,
+      "page",
+    );
+    if (!redirect_result.success) {
+      throw new Error(redirect_result.error);
+    }
+  }
+
   // update pointer and other status
   await db
     .update(pagesTable)
@@ -827,4 +868,407 @@ export async function getMediasByIds(media_ids: string[]) {
     .select()
     .from(mediasTable)
     .where(inArray(mediasTable.id, media_ids));
+}
+
+/***********************************************************************
+ * Sitemap
+ */
+
+export async function listAllPublishedPagesSitemap() {
+  const pages = await db
+    .select()
+    .from(pagesTable)
+    .innerJoin(draftsTable, eq(pagesTable.published_version_id, draftsTable.id))
+    .where(eq(pagesTable.status, "published"))
+    .orderBy(desc(draftsTable.created_at));
+
+  return pages;
+}
+
+/***********************************************************************
+ * Redirects
+ */
+
+// ============================================================================
+// REDIRECT CHAIN DETECTION
+// ============================================================================
+
+interface RedirectChain {
+  isChain: boolean;
+  chain: string[];
+  finalDestination: string | null;
+  hasLoop: boolean;
+}
+
+/**
+ * Detects redirect chains and loops
+ * @param sourcePath - The starting path
+ * @param maxDepth - Maximum chain depth to check (default: 10)
+ *
+ * For Example 2:
+ * chain.chain = ['/product-launch', '/products/widget', '/blog/announcement', '/product-launch']
+ * chain.hasLoop = true
+ */
+async function detectRedirectChain(
+  sourcePath: string,
+  maxDepth: number = 10,
+): Promise<RedirectChain> {
+  const visited = new Set<string>();
+  const chain: string[] = [sourcePath];
+  let currentPath = sourcePath;
+  let hasLoop = false;
+
+  for (let depth = 0; depth < maxDepth; depth++) {
+    if (visited.has(currentPath)) {
+      hasLoop = true;
+      break;
+    }
+
+    visited.add(currentPath);
+
+    const redirect_res = await db
+      .select()
+      .from(redirects)
+      .where(
+        and(
+          eq(redirects.source_path, currentPath),
+          eq(redirects.is_active, true),
+        ),
+      );
+
+    if (!redirect_res || redirect_res.length === 0) {
+      // No more redirects in chain
+      break;
+    }
+
+    chain.push(redirect_res[0].destination_path);
+    currentPath = redirect_res[0].destination_path;
+  }
+
+  return {
+    isChain: chain.length > 2,
+    chain,
+    finalDestination: chain.length > 1 ? chain[chain.length - 1] : null,
+    hasLoop,
+  };
+}
+
+/**
+ * Validates that creating a redirect won't cause a loop
+ */
+async function validateRedirect(
+  source_path: string,
+  destination_path: string,
+): Promise<{ valid: boolean; error?: string }> {
+  // Check if destination would redirect back to source
+  const chainCheck = await detectRedirectChain(destination_path);
+
+  if (chainCheck.hasLoop) {
+    return {
+      valid: false,
+      error: "Destination path is part of an existing redirect loop",
+    };
+  }
+
+  if (chainCheck.chain.includes(source_path)) {
+    return {
+      valid: false,
+      error: "This redirect would create a loop",
+    };
+  }
+
+  // Check for excessive chain depth
+  if (chainCheck.chain.length > 5) {
+    return {
+      valid: false,
+      error: `This would create a redirect chain of ${chainCheck.chain.length} redirects (max 5 recommended)`,
+    };
+  }
+
+  return { valid: true };
+}
+
+// ============================================================================
+// REDIRECT MIDDLEWARE (Express/Fastify compatible)
+// ============================================================================
+
+interface RedirectMiddlewareOptions {
+  trackHits?: boolean;
+  followChains?: boolean;
+  maxChainDepth?: number;
+}
+
+/**
+ * Handle redirects
+ */
+export async function handleRedirect(
+  requestPath: string,
+  options: RedirectMiddlewareOptions = {},
+): Promise<{
+  status: "continue" | "redirect" | "gone";
+  status_code?: number;
+  destination_path?: string;
+}> {
+  const { trackHits = true, followChains = true, maxChainDepth = 5 } = options;
+
+  let currentPath = requestPath;
+  const visited = new Set<string>();
+  let depth = 0;
+
+  while (depth < maxChainDepth) {
+    if (visited.has(currentPath)) {
+      // Loop detected, break and continue to 404
+      console.error(`Redirect loop detected for path: ${requestPath}`);
+      return {
+        status: "continue",
+      };
+    }
+
+    visited.add(currentPath);
+
+    // Find active redirect
+    const redirect_res = await db
+      .select()
+      .from(redirects)
+      .where(
+        and(
+          eq(redirects.source_path, currentPath),
+          eq(redirects.is_active, true),
+          or(
+            isNull(redirects.expires_at),
+            gt(redirects.expires_at, new Date()),
+          ),
+        ),
+      );
+
+    if (!redirect_res || redirect_res.length === 0) {
+      // No redirect found, continue to next middleware
+      return {
+        status: "continue",
+      };
+    }
+
+    const redirect = redirect_res[0];
+
+    // Track hit if enabled
+    if (trackHits) {
+      // Fire and forget - don't await to avoid slowing down redirect
+      db.update(redirects)
+        .set({
+          hit_count: sql`${redirects.hit_count} + 1`,
+          last_hit_at: new Date(),
+        })
+        .where(eq(redirects.id, redirect.id))
+        .catch((err) => console.error("Failed to track redirect hit:", err));
+    }
+
+    // Handle 410 Gone
+    if (redirect.redirect_type === "gone") {
+      return {
+        status: "gone",
+        status_code: 410,
+      };
+    }
+
+    // If not following chains, redirect immediately
+    if (!followChains) {
+      return {
+        status: "redirect",
+        status_code: redirect.status_code,
+        destination_path: redirect.destination_path,
+      };
+    }
+
+    // Check if destination is also a redirect
+    currentPath = redirect.destination_path;
+    depth++;
+
+    // If this is the last iteration or destination isn't a redirect, redirect now
+    const next_redirect_res = await db
+      .select()
+      .from(redirects)
+      .where(
+        and(
+          eq(redirects.source_path, currentPath),
+          eq(redirects.is_active, true),
+        ),
+      );
+
+    if (
+      !next_redirect_res ||
+      next_redirect_res.length === 0 ||
+      depth >= maxChainDepth
+    ) {
+      return {
+        status: "redirect",
+        status_code: redirect.status_code,
+        destination_path: currentPath,
+      };
+    }
+  }
+
+  // No redirect found, continue
+  return {
+    status: "continue",
+  };
+}
+
+// ============================================================================
+// REDIRECT MANAGEMENT FUNCTIONS
+// ============================================================================
+
+/**
+ * Create a new redirect with validation
+ */
+async function createRedirect(
+  data: Partial<SelectRedirect>,
+  userId?: string,
+): Promise<{ success: boolean; redirect?: SelectRedirect; error?: string }> {
+  try {
+    // Normalize paths
+    const source_path = normalizePath(data.source_path!);
+    const destination_path = normalizePath(data.destination_path!);
+
+    // Validate paths are different
+    if (source_path === destination_path) {
+      return {
+        success: false,
+        error: "Source and destination paths cannot be the same",
+      };
+    }
+
+    // Validate no loops
+    const validation = await validateRedirect(source_path, destination_path);
+    if (!validation.valid) {
+      return {
+        success: false,
+        error: validation.error,
+      };
+    }
+
+    // Check for existing redirect
+    const existing_res = await db
+      .select()
+      .from(redirects)
+      .where(eq(redirects.source_path, source_path));
+    const existing = existing_res[0];
+
+    if (existing) {
+      // Update existing redirect
+      const [updated] = await db
+        .update(redirects)
+        .set({
+          destination_path,
+          redirect_type: data.redirect_type || existing.redirect_type,
+          status_code: data.status_code || existing.status_code,
+          is_active: data.is_active ?? existing.is_active,
+          notes: data.notes || existing.notes,
+          updated_at: new Date(),
+        })
+        .where(eq(redirects.id, existing.id))
+        .returning();
+
+      // Log to history
+      await db.insert(redirect_history).values({
+        redirect_id: existing.id,
+        previous_destination: existing.destination_path,
+        new_destination: destination_path,
+        change_reason: "Updated existing redirect",
+        changed_by: userId,
+      });
+
+      return { success: true, redirect: updated };
+    }
+
+    // Create new redirect
+    const [newRedirect] = await db
+      .insert(redirects)
+      .values({
+        ...data,
+        source_path,
+        destination_path,
+        created_by: userId,
+      })
+      .returning();
+
+    return { success: true, redirect: newRedirect };
+  } catch (error) {
+    console.error("Failed to create redirect:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Auto-create redirect when content URL changes
+ */
+export async function autoCreateRedirect(
+  oldPath: string,
+  newPath: string,
+  content_id: string,
+  content_type: string,
+) {
+  const result = await createRedirect({
+    source_path: oldPath,
+    destination_path: newPath,
+    redirect_type: "permanent",
+    status_code: 308,
+    source: "auto",
+    content_id,
+    content_type,
+    notes: `Auto-created when ${content_type} URL changed`,
+  });
+
+  if (!result.success) {
+    console.error("Failed to auto-create redirect:", result.error);
+  }
+  return result;
+}
+
+/**
+ * Normalize path for consistency
+ */
+function normalizePath(path: string): string {
+  // Remove trailing slash (except for root)
+  let normalized = path.replace(/\/+$/, "") || "/";
+
+  // Ensure leading slash
+  if (!normalized.startsWith("/")) {
+    normalized = "/" + normalized;
+  }
+
+  // Remove duplicate slashes
+  normalized = normalized.replace(/\/+/g, "/");
+
+  return normalized;
+}
+
+/**
+ * Clean up expired redirects
+ */
+export async function cleanupExpiredRedirects(): Promise<number> {
+  const result = await db
+    .delete(redirects)
+    .where(
+      and(
+        isNotNull(redirects.expires_at),
+        lt(redirects.expires_at, new Date()),
+      ),
+    );
+
+  return result.rowCount || 0;
+}
+
+/**
+ * Get redirect analytics
+ */
+export async function getRedirectStats(limit: number = 10) {
+  return await db
+    .select()
+    .from(redirects)
+    .where(eq(redirects.is_active, true))
+    .orderBy(desc(redirects.hit_count))
+    .limit(limit);
 }

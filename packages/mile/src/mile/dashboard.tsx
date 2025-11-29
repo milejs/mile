@@ -50,7 +50,8 @@ import { authClient } from "./auth-client";
 import { LoginForm, SignUpForm } from "./auth-ui";
 import { Toaster } from "sonner";
 
-const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
+const SITE_URL = process.env.NEXT_PUBLIC_HOST_URL;
+const API = `${SITE_URL}/api/mile`;
 const NEXT_PUBLIC_IMAGE_URL = process.env.NEXT_PUBLIC_IMAGE_URL;
 
 const fetcher = (key: string[]) =>
@@ -103,6 +104,13 @@ export function Dashboard({
     return (
       <AppShell path={path}>
         <MediaGallery />
+      </AppShell>
+    );
+  }
+  if (path === "/sitemap") {
+    return (
+      <AppShell path={path}>
+        <SitemapPage />
       </AppShell>
     );
   }
@@ -1567,6 +1575,94 @@ function NewPageSettings({ close }: any) {
         </Button>
       </div>
     </>
+  );
+}
+
+function SitemapPage() {
+  // const [mode, setMode] = useState("allpages");
+  const {
+    data: pages,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR([`/pages/all-pages-sitemap`], fetcher);
+  if (pagesError) return <MainContainer>Failed to load</MainContainer>;
+  if (pagesIsLoading) return <MainContainer>loading...</MainContainer>;
+  if (pages && pages.error === true) {
+    console.error("error", pages.message);
+    return <MainContainer>Failed to load</MainContainer>;
+  }
+
+  const { data } = pages;
+
+  return (
+    <div className="py-5 space-y-6">
+      <div className="max-w-5xl mx-auto flex justify-between items-center">
+        <div className="flex w-full items-center justify-between">
+          <div className="flex gap-x-2 items-center">
+            <h1 className="font-bold text-3xl">Sitemap</h1>
+          </div>
+        </div>
+      </div>
+
+      <MainContainer>
+        <div className="">
+          <div className="space-y-2">
+            <TableRow>
+              <TableCol1>
+                <span className="text-xs text-zinc-600 font-semibold">
+                  Item
+                </span>
+              </TableCol1>
+              <TableCol2>
+                <span className="text-xs text-zinc-600 font-semibold">
+                  Last modified
+                </span>
+              </TableCol2>
+            </TableRow>
+            <div className="space-y-10">
+              <div className="divide-y divide-zinc-200">
+                {data.map((e: any) => {
+                  return <SitemapItem key={e.pages.id} data={e} />;
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </MainContainer>
+    </div>
+  );
+}
+
+function SitemapItem({ data }: { data: any }) {
+  const href = hrefEditorPage(data.pages.id);
+
+  return (
+    <TableRow>
+      <TableCol1>
+        <div className="">
+          <a href={href}>
+            <div className="font-semibold text-sm">
+              {data.drafts.title || "Untitled"}
+            </div>
+            <div className="flex items-center gap-x-1 text-xs text-zinc-500">
+              <code className="">
+                {SITE_URL}
+                {data.pages.full_slug}
+              </code>
+            </div>
+          </a>
+        </div>
+      </TableCol1>
+      <TableCol2>
+        <div className="text-xs text-zinc-700">
+          {new Date(data.drafts.created_at).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })}
+        </div>
+      </TableCol2>
+    </TableRow>
   );
 }
 

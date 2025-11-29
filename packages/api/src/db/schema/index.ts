@@ -1,12 +1,15 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   char,
   index,
   integer,
+  pgEnum,
   pgTable,
   text,
   timestamp,
   uuid,
+  varchar,
 } from "drizzle-orm/pg-core";
 
 export const medias = pgTable("medias", {
@@ -98,6 +101,71 @@ export const preview_tokens = pgTable("preview_tokens", {
   expires_at: timestamp("expires_at").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const redirect_type_enum = pgEnum("redirect_type", [
+  "permanent", // 308 (301) - Permanent redirect
+  "temporary", // 307 (302) - Temporary redirect
+  "gone", // 410 - Content permanently removed
+]);
+
+export const redirect_source_enum = pgEnum("redirect_source", [
+  "auto", // Automatically created by system
+  "manual", // Manually created by admin
+  "import", // Imported from external source
+]);
+
+export const redirects = pgTable(
+  "redirects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    source_path: varchar("source_path", { length: 2048 }).notNull().unique(),
+    destination_path: varchar("destination_path", { length: 2048 }).notNull(),
+    redirect_type: redirect_type_enum("redirect_type")
+      .default("permanent")
+      .notNull(),
+    status_code: integer("status_code").default(308).notNull(),
+    source: redirect_source_enum("source").default("auto").notNull(),
+    is_active: boolean("is_active").default(true).notNull(),
+    content_id: uuid("content_id"), // page_id
+    content_type: varchar("content_type", { length: 100 }), // page / post
+    hit_count: integer("hit_count").default(0).notNull(),
+    last_hit_at: timestamp("last_hit_at", { mode: "date" }),
+    notes: text("notes"),
+    created_by: char("created_by", { length: 32 }),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at")
+      .notNull()
+      .$onUpdate(() => new Date()),
+    expires_at: timestamp("expires_at"),
+  },
+  (table) => [
+    index("source_path_idx").on(table.source_path),
+    index("destination_path_idx").on(table.destination_path),
+    index("content_idx").on(table.content_id, table.content_type),
+    index("active_idx").on(table.is_active),
+    index("created_at_idx").on(table.created_at),
+  ],
+);
+
+export type SelectRedirect = typeof redirects.$inferSelect;
+export type InsertRedirect = typeof redirects.$inferInsert;
+
+export const redirect_history = pgTable(
+  "redirect_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    redirect_id: uuid("redirect_id"),
+    previous_destination: varchar("previous_destination", { length: 2048 }),
+    new_destination: varchar("new_destination", { length: 2048 }).notNull(),
+    change_reason: text("change_reason"),
+    changed_by: char("changed_by", { length: 32 }),
+    changed_at: timestamp("changed_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("redirect_id_idx").on(table.redirect_id),
+    index("changed_at_idx").on(table.changed_at),
+  ],
+);
 
 // // Aliases for joins
 // import { alias } from 'drizzle-orm/pg-core';

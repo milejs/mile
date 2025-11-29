@@ -115,3 +115,27 @@ function LoadingComponent() {
     </div>
   );
 }
+
+/**
+ * Sitemap
+ */
+export async function generateMileSitemap() {
+  const res = await fetch(`${API}/pages/all-pages-sitemap`);
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("error fetching page", text);
+    return { ok: false };
+  }
+  const result = await res.json();
+  // console.log("result", result);
+  const SITE_URL = process.env.NEXT_PUBLIC_HOST_URL;
+
+  return result.data.map((e: any) => {
+    return {
+      url: `${SITE_URL}${e.pages.full_slug}`,
+      lastModified: e.drafts.created_at,
+      changeFrequency: "weekly",
+      priority: e.pages.full_slug === "/" ? 1 : 0.7,
+    };
+  });
+}

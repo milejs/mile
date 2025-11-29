@@ -32,6 +32,8 @@ import {
   loadDraftById,
   generatePreviewToken,
   getPreviewToken,
+  listAllPublishedPagesSitemap,
+  handleRedirect,
 } from "./dao";
 import { auth } from "./auth";
 
@@ -113,6 +115,18 @@ export function MileAPI(options: MileAPIOptions) {
   app.route("/pages", pages);
   app.route("/drafts", drafts);
   app.route("/page", frontend);
+
+  app.get("/handle-redirect", async (c) => {
+    const { pathname } = c.req.query();
+    if (!pathname) {
+      return c.json({ message: "Bad request" }, 400);
+    }
+    const result = await handleRedirect(pathname);
+    return c.json({
+      data: result,
+    });
+  });
+
   /**
    * Search draft pages by title
    *  - used in SlugInput combobox when selecting parent page
@@ -293,6 +307,17 @@ pages.get("/all-pages", async (c) => {
   const result = await listAllPages();
   return c.json({
     data: result,
+  });
+});
+
+/**
+ * List all pages for sitemap
+ *  - listing all pages in CMS for snappy interaction/ management
+ */
+pages.get("/all-pages-sitemap", async (c) => {
+  const sitemap = await listAllPublishedPagesSitemap();
+  return c.json({
+    data: sitemap,
   });
 });
 

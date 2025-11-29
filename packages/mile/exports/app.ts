@@ -1,3 +1,8 @@
-import { App, fetchPageBySlug, RichtextView } from "../src/mile/app.tsx";
+import {
+  App,
+  fetchPageBySlug,
+  generateMileSitemap,
+  RichtextView,
+} from "../src/mile/app.tsx";
 
-export { App, fetchPageBySlug, RichtextView };
+export { App, fetchPageBySlug, generateMileSitemap, RichtextView };
