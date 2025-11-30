@@ -17,8 +17,6 @@ export async function proxy(request: NextRequest) {
     const res = await fetch(api);
     if (res.ok) {
       const redirectResult = await res.json();
-      console.info("redirectResult", redirectResult);
-
       if (redirectResult && redirectResult.data) {
         const redirect_data = redirectResult.data;
         if (redirect_data?.status === "redirect") {

@@ -114,6 +114,13 @@ export function Dashboard({
       </AppShell>
     );
   }
+  if (path === "/redirects") {
+    return (
+      <AppShell path={path}>
+        <RedirectsPage />
+      </AppShell>
+    );
+  }
 
   return <div className="">Not found</div>;
 }
@@ -1295,6 +1302,15 @@ function TableCol2({ children }: { children: React.ReactNode }) {
 function TableCol3({ children }: { children: React.ReactNode }) {
   return <div className="w-32 shrink-0">{children}</div>;
 }
+function TableCol({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={`shrink-0 ${className || ""}`}>{children}</div>;
+}
 
 function PageItem({ data }: { data: any }) {
   const href = hrefEditorPage(data.id);
@@ -1575,6 +1591,126 @@ function NewPageSettings({ close }: any) {
         </Button>
       </div>
     </>
+  );
+}
+
+function RedirectsPage() {
+  // const [mode, setMode] = useState("allpages");
+  const {
+    data: pages,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR([`/redirects`], fetcher);
+  if (pagesError) return <MainContainer>Failed to load</MainContainer>;
+  if (pagesIsLoading) return <MainContainer>loading...</MainContainer>;
+  if (pages && pages.error === true) {
+    console.error("error", pages.message);
+    return <MainContainer>Failed to load</MainContainer>;
+  }
+
+  const { data } = pages;
+
+  return (
+    <div className="py-5 space-y-6">
+      <div className="max-w-5xl mx-auto flex justify-between items-center">
+        <div className="flex w-full items-center justify-between">
+          <div className="flex gap-x-2 items-center">
+            <h1 className="font-bold text-3xl">Redirects</h1>
+          </div>
+        </div>
+      </div>
+
+      <MainContainer>
+        <div className="">
+          <table className="w-full table-auto sm:table-fixed border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="sm:w-20 border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    Code
+                  </span>
+                </th>
+                <th className="border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    From
+                  </span>
+                </th>
+                <th className="border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    To
+                  </span>
+                </th>
+                <th className="border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    Date
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="space-y-10">
+              {data.map((e: any) => {
+                return <RedirectItem key={e.id} data={e} />;
+              })}
+            </tbody>
+          </table>
+        </div>
+      </MainContainer>
+    </div>
+  );
+}
+
+function RedirectItem({ data }: { data: any }) {
+  const href = hrefEditorPage(data.content_id);
+  /**
+   * {
+       "id": "333c254d-3caf-4048-9970-0a5233ad4262",
+       "source_path": "/about-us",
+       "destination_path": "/about-us-2",
+       "redirect_type": "permanent",
+       "status_code": 308,
+       "source": "auto",
+       "is_active": true,
+       "content_id": "894052d3-0538-e3d5-8da2-c2781c973806",
+       "content_type": "page",
+       "hit_count": 0,
+       "last_hit_at": null,
+       "notes": "Auto-created when page URL changed",
+       "created_by": null,
+       "created_at": "2025-11-29T05:23:41.718Z",
+       "updated_at": "2025-11-29T05:23:41.635Z",
+       "expires_at": null
+   }
+   */
+
+  return (
+    <tr>
+      <td className="sm:w-20 border-b border-gray-100 p-4 pl-8 text-gray-500">
+        <code>{data.status_code}</code>
+      </td>
+      <td className="border-b border-gray-100 p-4 pl-8 text-zinc-700">
+        <div className="">
+          <a href={href}>
+            <div className="font-semibold text-xs">{data.source_path}</div>
+          </a>
+        </div>
+      </td>
+      <td className="border-b border-gray-100 p-4 pl-8 text-zinc-700">
+        <div className="">
+          <a href={href}>
+            <div className="font-semibold text-xs">{data.destination_path}</div>
+          </a>
+        </div>
+      </td>
+      <td className="border-b border-gray-100 p-4 pl-8 text-gray-500">
+        <div className="text-xs text-zinc-700">
+          {new Date(data.created_at).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -2237,6 +2373,10 @@ const navConfig = {
         {
           title: "Sitemap",
           href: "/mile/sitemap",
+        },
+        {
+          title: "Redirects",
+          href: "/mile/redirects",
         },
       ],
     },

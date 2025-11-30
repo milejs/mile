@@ -34,6 +34,7 @@ import {
   getPreviewToken,
   listAllPublishedPagesSitemap,
   handleRedirect,
+  getRedirectStats,
 } from "./dao";
 import { auth } from "./auth";
 
@@ -115,6 +116,7 @@ export function MileAPI(options: MileAPIOptions) {
   app.route("/pages", pages);
   app.route("/drafts", drafts);
   app.route("/page", frontend);
+  app.route("/redirects", redirects);
 
   app.get("/handle-redirect", async (c) => {
     const { pathname } = c.req.query();
@@ -181,6 +183,19 @@ const medias = new Hono();
 const pages = new Hono();
 const frontend = new Hono();
 const drafts = new Hono();
+const redirects = new Hono();
+
+/****************************************************************
+ * Redirects
+ */
+
+// Get page by "/" slug
+redirects.get("/", async (c) => {
+  let result = await getRedirectStats();
+  return c.json({
+    data: result,
+  });
+});
 
 /****************************************************************
  * Page by slug

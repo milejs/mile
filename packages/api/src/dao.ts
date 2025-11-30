@@ -1264,11 +1264,13 @@ export async function cleanupExpiredRedirects(): Promise<number> {
 /**
  * Get redirect analytics
  */
-export async function getRedirectStats(limit: number = 10) {
-  return await db
-    .select()
-    .from(redirects)
-    .where(eq(redirects.is_active, true))
-    .orderBy(desc(redirects.hit_count))
-    .limit(limit);
+export async function getRedirectStats(only_active: boolean = false) {
+  if (only_active) {
+    return await db
+      .select()
+      .from(redirects)
+      .where(eq(redirects.is_active, true))
+      .orderBy(desc(redirects.hit_count));
+  }
+  return await db.select().from(redirects).orderBy(desc(redirects.hit_count));
 }
