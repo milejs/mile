@@ -2296,7 +2296,7 @@ function MainNav({ path }: { path: string }) {
         {/* <Circle className="size-3 mr-2" /> */}
         <span className="font-mono text-lg font-black">Mile</span>
       </a>
-      <nav className="flex items-center gap-6 pl-6 text-sm">
+      {/*<nav className="flex items-center gap-6 pl-6 text-sm">
         <a
           href="/docs"
           className={cn(
@@ -2330,25 +2330,25 @@ function MainNav({ path }: { path: string }) {
         >
           Themes
         </a>
-      </nav>
+      </nav>*/}
     </div>
   );
 }
 
 const navConfig = {
   mainNav: [
-    {
-      title: "Docs",
-      href: "/docs/getting-started",
-    },
-    {
-      title: "Components",
-      href: "/docs/components",
-    },
-    {
-      title: "Themes",
-      href: "/themes",
-    },
+    // {
+    //   title: "Docs",
+    //   href: "/docs/getting-started",
+    // },
+    // {
+    //   title: "Components",
+    //   href: "/docs/components",
+    // },
+    // {
+    //   title: "Themes",
+    //   href: "/themes",
+    // },
   ],
   sidebarNav: [
     {
@@ -2380,33 +2380,33 @@ const navConfig = {
         },
       ],
     },
-    {
-      title: "Components",
-      items: [
-        {
-          title: "Accordion",
-          href: "/docs/components/accordion",
-        },
-        {
-          title: "Alert Dialog",
-          href: "/docs/components/alert-dialog",
-        },
-        {
-          title: "Alert",
-          href: "/docs/components/alert",
-        },
-        {
-          title: "Data Table",
-          href: "/docs/components/data-table",
-          disabled: true,
-          label: "Soon",
-        },
-        {
-          title: "Date Picker",
-          href: "/docs/components/date-picker",
-        },
-      ],
-    },
+    // {
+    //   title: "Components",
+    //   items: [
+    //     {
+    //       title: "Accordion",
+    //       href: "/docs/components/accordion",
+    //     },
+    //     {
+    //       title: "Alert Dialog",
+    //       href: "/docs/components/alert-dialog",
+    //     },
+    //     {
+    //       title: "Alert",
+    //       href: "/docs/components/alert",
+    //     },
+    //     {
+    //       title: "Data Table",
+    //       href: "/docs/components/data-table",
+    //       disabled: true,
+    //       label: "Soon",
+    //     },
+    //     {
+    //       title: "Date Picker",
+    //       href: "/docs/components/date-picker",
+    //     },
+    //   ],
+    // },
   ],
 };
 
