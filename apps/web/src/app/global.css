@@ -8,7 +8,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  /*--primary: oklch(0.205 0 0);*/
+  --primary: oklch(0.3452 0.0749 262.97);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -38,6 +39,7 @@
 }
 
 @theme inline {
+  --font-sans: var(--font-montserrat);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -86,7 +88,7 @@
 }
 
 html {
-  font-family:
+  /*font-family:
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -95,7 +97,7 @@ html {
     Roboto,
     Helvetica Neue,
     Arial,
-    sans-serif;
+    sans-serif;*/
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -106,6 +108,11 @@ html {
 
 body {
   margin: 0;
+}
+
+.bn-container .bn-default-styles {
+  font-family: var(--font-sans);
+  font-weight: 500;
 }
 
 /* Richtext */
@@ -171,6 +178,13 @@ body {
   line-height: var(--line-height-h6, 1.37);
 }
 
+.bn-container[data-theming-app]
+  .bn-block-content[data-content-type="paragraph"]
+  p {
+  font-size: var(--font-size-p, 1rem);
+  line-height: var(--line-height-p, 1.37);
+}
+
 /* <Richtext /> for banner_blue */
 .richtext_banner_blue.bn-container .bn-editor {
   color: white;
@@ -188,8 +202,45 @@ body {
   --line-height-h6: 1.37;
 }
 
+/* <Richtext /> for banner_light_blue */
+.richtext_banner_light_blue.bn-container .bn-editor {
+  color: #0e66ae;
+  --font-size-h1: 2rem;
+  --line-height-h1: 1.2;
+  --font-size-h2: 1.675rem;
+  --line-height-h2: 1.3;
+  --font-size-h3: 1.475rem;
+  --line-height-h3: 1.33;
+  --font-size-h4: 1.25rem;
+  --line-height-h4: 1.35;
+  --font-size-h5: 1.1rem;
+  --line-height-h5: 1.36;
+  --font-size-h6: 1rem;
+  --line-height-h6: 1.37;
+}
+
 /* <Richtext /> for banner_blue */
 .richtext_lead.bn-container .bn-editor {
+  --font-size-p: 0.96rem;
+  --line-height-p: 1.3;
+  --font-size-h1: 2rem;
+  --line-height-h1: 1.2;
+  --font-size-h2: 1.675rem;
+  --line-height-h2: 1.3;
+  --font-size-h3: 1.475rem;
+  --line-height-h3: 1.33;
+  --font-size-h4: 1.25rem;
+  --line-height-h4: 1.35;
+  --font-size-h5: 1.1rem;
+  --line-height-h5: 1.36;
+  --font-size-h6: 1rem;
+  --line-height-h6: 1.37;
+}
+
+/* <Richtext /> for media_2_cols in home */
+.richtext_media_2_cols_home.bn-container .bn-editor {
+  --font-size-p: 0.9rem;
+  --line-height-p: 1.3;
   --font-size-h1: 2rem;
   --line-height-h1: 1.2;
   --font-size-h2: 1.675rem;

@@ -1049,6 +1049,7 @@ function useMileUploadFile() {
 const primitiveTypes = [
   "array",
   "string",
+  "textarea",
   "number",
   "boolean",
   "url",
@@ -1068,6 +1069,8 @@ function getPrimitiveComponent(type: string) {
       return EditArrayComponent;
     case "string":
       return EditStringComponent;
+    case "textarea":
+      return EditTextareaComponent;
     case "number":
       return EditNumberComponent;
     case "boolean":
@@ -1184,7 +1187,7 @@ function EditRichtextComponent({
   field,
 }: EditComponentProps) {
   const value = getFieldValue(state, path);
-  console.log("value", value);
+  // console.log("value", value);
 
   const { control, upload } = useMileUploadFile();
 
@@ -1295,9 +1298,7 @@ function EditUrlComponent({
 
   function handleInputChange(e: any) {
     const nextValue = e.target.value;
-    startTransition(() => {
-      handleChange({ path, value: nextValue });
-    });
+    handleChange({ path, value: nextValue });
   }
 
   return (
@@ -1360,6 +1361,8 @@ function EditImageUrlComponent({
   }
 
   function handleUploadSuccess(upload: any) {
+    console.log("upload", upload);
+
     /** upload
      * file: {
         "status": "complete",
@@ -1907,9 +1910,7 @@ function EditBooleanComponent({
 
   function handleInputChange(checked: boolean | "indeterminate") {
     setLocal(checked);
-    startTransition(() => {
-      handleChange({ path, value: checked });
-    });
+    handleChange({ path, value: checked });
   }
 
   return (
@@ -1930,11 +1931,32 @@ function EditBooleanComponent({
   );
 }
 
-function EditNumberComponent({ editor, node, field }: EditComponentProps) {
+function EditNumberComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
+  const value = getFieldValue(state, path);
+  console.log("---string", state, path, value);
+
+  function handleInputChange(e: any) {
+    const nextValue = e.target.value;
+    handleChange({ path, value: nextValue ? parseInt(nextValue) : 0 });
+  }
+
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
-      <Input type="text" />
+      <Input
+        type="text"
+        className="border"
+        value={`${value}`}
+        onChange={handleInputChange}
+        disabled={editor.is_disabled}
+      />
     </div>
   );
 }
@@ -1992,14 +2014,12 @@ function EditStringComponent({
   handleChange,
   field,
 }: EditComponentProps) {
-  const value = getFieldValue(state, path) ?? "";
+  const value = getFieldValue(state, path);
   console.log("---string", state, path, value);
 
   function handleInputChange(e: any) {
     const nextValue = e.target.value;
-    startTransition(() => {
-      handleChange({ path, value: nextValue });
-    });
+    handleChange({ path, value: nextValue });
   }
 
   return (
@@ -2008,6 +2028,36 @@ function EditStringComponent({
       <Input
         type="text"
         className="border"
+        value={value}
+        onChange={handleInputChange}
+        disabled={editor.is_disabled}
+      />
+    </div>
+  );
+}
+
+function EditTextareaComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
+  const value = getFieldValue(state, path) ?? "";
+  // console.log("---textarea", state, path, value);
+
+  function handleInputChange(e: any) {
+    const nextValue = e.target.value;
+    handleChange({ path, value: nextValue });
+  }
+
+  return (
+    <div className="flex flex-col gap-y-1">
+      <label className="text-sm font-semibold">{field.title}</label>
+      <Textarea
+        className="border"
+        rows={4}
         value={value}
         onChange={handleInputChange}
         disabled={editor.is_disabled}
@@ -2029,9 +2079,7 @@ function EditHeadingComponent({
 
   function handleInputChange(e: any) {
     const nextValue = e.target.value;
-    startTransition(() => {
-      handleChange({ path, value: nextValue });
-    });
+    handleChange({ path, value: nextValue });
   }
 
   return (
@@ -2064,6 +2112,8 @@ function getDefaultValueForType(type: string): any {
     case "array":
       return [];
     case "string":
+      return "";
+    case "textarea":
       return "";
     case "number":
       return 0;
@@ -2379,7 +2429,9 @@ function EditField({
   }
 
   const schema = mile.schema.get(type);
-  invariant(path.at(-1) === type);
+  console.log("path", path, type, schema);
+
+  // invariant(path.at(-1) === type);
   invariant(schema.name);
 
   return (
@@ -2387,7 +2439,8 @@ function EditField({
       <h3 className="font-bold">{schema.title}</h3>
       <EditFields
         node={node}
-        path={path.slice(0, -1).concat(schema.name)}
+        // path={path.slice(0, -1).concat(schema.name)}
+        path={path}
         state={state}
         handleChange={handleChange}
         parent={schema}
@@ -2453,21 +2506,19 @@ function EditNode({ node }: { node: NodeData }) {
     console.log("no fields");
     return null;
   }
-  console.log("schema", schema);
-  console.log("node", node);
+  // console.log("schema", schema);
+  // console.log("node", node);
 
   const treenode = editor.getNode(node.id);
-  console.log("treenode", treenode);
 
   const optionValue = treenode.options; // undefined or option value
-
   const [initialValue] = useState(() =>
     createInitialValue(optionValue, schema, mile.schema),
   );
   const [state, setState] = useState(() =>
     createInitialValue(optionValue, schema, mile.schema),
   );
-  // console.log("EditNode", editor, node, schema, optionValue, state);
+  console.log("EditNode", node, schema, state);
 
   const handleChange = (changes: Change[] | Change) => {
     const changeList = Array.isArray(changes) ? changes : [changes];
@@ -2478,9 +2529,9 @@ function EditNode({ node }: { node: NodeData }) {
       state,
     );
 
+    setState(updatedState);
     // use updated state
     startTransition(() => {
-      setState(updatedState);
       editor.perform({
         type: "updateNodeOption",
         name: `Update node option (${schema.name})`,
@@ -3363,6 +3414,29 @@ function PageSettingsReady({ parent, close }: any) {
             <div className="mt-1 text-xs text-zinc-600">
               Used in social media preview
             </div>
+          </div>
+        </div>
+
+        <div className="w-full flex flex-col items-center gap-y-4">
+          <div className="w-full">
+            <label htmlFor="excerpt" className="font-semibold text-sm">
+              Excerpt
+            </label>
+            <Field.Control
+              id="excerpt"
+              value={
+                draft_context.draft_data.excerpt == null
+                  ? ""
+                  : draft_context.draft_data.excerpt
+              }
+              onValueChange={(value) => {
+                draft_context.updateDraftData({
+                  type: "UpdateField",
+                  payload: { key: "excerpt", value },
+                });
+              }}
+              render={<Textarea rows={4} />}
+            />
           </div>
         </div>
 

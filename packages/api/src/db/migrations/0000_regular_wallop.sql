@@ -56,6 +56,7 @@ CREATE TABLE "drafts" (
 	"slug" text NOT NULL,
 	"title" text,
 	"type" text,
+	"excerpt" text,
 	"content" text,
 	"description" text,
 	"keywords" text,

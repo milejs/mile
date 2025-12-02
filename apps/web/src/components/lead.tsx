@@ -1,6 +1,7 @@
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
 import Richtext from "./richtext";
+import { Link } from "./links";
 
 export function Lead(props: MileComponentProps) {
   const { options } = props ?? {};
@@ -25,6 +26,7 @@ export function Lead(props: MileComponentProps) {
           </div>
           <div className="w-full sm:w-1/2 text-left">
             <Richtext text={text} className="richtext_lead" />
+            <Link {...link} variant="secondary" />
           </div>
         </div>
       </div>

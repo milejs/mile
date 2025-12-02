@@ -1,11 +1,14 @@
-import { Hero } from "./hero";
+import { HomeHero } from "./home_hero";
 import { Lead } from "./lead";
 import { BannerBlue } from "./banner_blue";
+import { BannerLightBlue } from "./banner_light_blue";
+import { Media2Cols } from "./media_2_cols";
+import { CarouselPosts } from "./carousel_posts";
 
 const components = {
-  hero: {
-    name: "hero",
-    component: Hero,
+  home_hero: {
+    name: "home_hero",
+    component: HomeHero,
   },
   lead: {
     name: "lead",
@@ -14,6 +17,18 @@ const components = {
   banner_blue: {
     name: "banner_blue",
     component: BannerBlue,
+  },
+  banner_light_blue: {
+    name: "banner_light_blue",
+    component: BannerLightBlue,
+  },
+  media_2_cols: {
+    name: "media_2_cols",
+    component: Media2Cols,
+  },
+  carousel_posts: {
+    name: "carousel_posts",
+    component: CarouselPosts,
   },
   // override built-in markdown component
   heading: {

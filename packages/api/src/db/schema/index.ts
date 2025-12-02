@@ -64,6 +64,7 @@ export const drafts = pgTable(
     // Content fields
     title: text("title"),
     type: text("type"),
+    excerpt: text("excerpt"),
     content: text("content"),
     description: text("description"),
     keywords: text("keywords"),

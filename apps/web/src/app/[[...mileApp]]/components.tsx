@@ -1,6 +1,9 @@
-import { Hero } from "../../components/hero";
+import { HomeHero } from "../../components/home_hero";
 import { Lead } from "../../components/lead_server";
 import { BannerBlue } from "../../components/banner_blue_server";
+import { BannerLightBlue } from "../../components/banner_light_blue_server";
+import { CarouselPosts } from "../../components/carousel_posts_server";
+import { Media2Cols } from "../../components/media_2_cols_server";
 import React from "react";
 
 export const components = {
@@ -68,9 +71,12 @@ export const components = {
   },
   ImageContainer,
   // custom
-  Hero,
+  HomeHero,
   Lead,
   BannerBlue,
+  BannerLightBlue,
+  CarouselPosts,
+  Media2Cols,
 };
 
 function newlineToBr(children: any): any {

@@ -159,6 +159,7 @@ export type PageData = {
   content: string | TreeData;
   title?: string;
   description?: string;
+  excerpt?: string;
   status?: string | null;
   og_image_ids: string[];
   og_images: {

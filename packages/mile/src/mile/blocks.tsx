@@ -288,7 +288,10 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
 
     case "paragraph":
       return (
-        <p style={baseStyle} className={`${CN_BLOCK_MB}`}>
+        <p
+          style={baseStyle}
+          className={`${CN_BLOCK_MB} text-(length:--font-size-p)`}
+        >
           <InlineContentRenderer content={block.content} />
           {block.children && block.children.length > 0 && (
             <BlocksRenderer blocks={block.children} level={level + 1} />
@@ -300,7 +303,7 @@ const BlockRenderer = ({ block, level = 0 }: any) => {
       return (
         <blockquote
           style={baseStyle}
-          className="py-3 font-bold text-2xl text-blue-700! flex items-start gap-x-1"
+          className="py-3 font-bold text-2xl text-blue-700 flex items-start gap-x-1"
         >
           <Quote className="text-blue-700 size-7" />
           <InlineContentRenderer content={block.content} />

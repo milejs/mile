@@ -161,7 +161,8 @@ function RenderItem({
         {item.children?.map((child_id, i) => {
           const node = data[child_id];
           return (
-            <button
+            <div
+              role="button"
               key={`${child_id}_${i}`}
               data-active={activeNodeId === node.id}
               className={`relative w-full data-[active=true]:ring-2 data-[active=true]:ring-blue-500`}
@@ -181,7 +182,7 @@ function RenderItem({
                 activeNodeId={activeNodeId}
                 setActiveNodeId={setActiveNodeId}
               />
-            </button>
+            </div>
           );
         })}
       </div>

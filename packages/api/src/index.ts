@@ -35,6 +35,7 @@ import {
   listAllPublishedPagesSitemap,
   handleRedirect,
   getRedirectStats,
+  getCarouselPosts,
 } from "./dao";
 import { auth } from "./auth";
 
@@ -117,6 +118,7 @@ export function MileAPI(options: MileAPIOptions) {
   app.route("/drafts", drafts);
   app.route("/page", frontend);
   app.route("/redirects", redirects);
+  app.route("/ui", ui);
 
   app.get("/handle-redirect", async (c) => {
     const { pathname } = c.req.query();
@@ -184,6 +186,19 @@ const pages = new Hono();
 const frontend = new Hono();
 const drafts = new Hono();
 const redirects = new Hono();
+const ui = new Hono();
+
+/****************************************************************
+ * UIs
+ */
+
+// Get posts for carousel
+ui.get("/carousel-posts", async (c) => {
+  let result = await getCarouselPosts();
+  return c.json({
+    data: result,
+  });
+});
 
 /****************************************************************
  * Redirects

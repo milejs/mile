@@ -9,13 +9,13 @@ export function BannerBlue(props: MileComponentProps) {
 
   return (
     <div
-      className={cn(`px-4 sm:px-0 py-10 w-full bg-blue-800`, props.className)}
+      className={cn(`px-4 sm:px-0 py-10 w-full bg-[#0C71C3]`, props.className)}
     >
       <div className="max-w-5xl mx-auto flex flex-row">
         <div className="flex flex-col sm:flex-row gap-x-8 gap-y-6 items-center">
           <div className="w-full sm:w-1/2 text-left">
             <RichtextView blocks={text} className="richtext_banner_blue" />
-            {link && <Link {...link} />}
+            {link && <Link {...link} variant="outline_light" />}
           </div>
           <div className="w-full sm:w-1/2">
             <img

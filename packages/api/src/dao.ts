@@ -22,6 +22,7 @@ import {
   isNull,
   isNotNull,
   lt,
+  ne,
 } from "drizzle-orm";
 import { generateId } from "./lib/generate-id";
 
@@ -208,6 +209,68 @@ export interface PageListItem {
 }
 
 // List all pages for CMS
+export async function getCarouselPosts() {
+  // First, get all pages
+  const pagesList = await db
+    .select({
+      id: pagesTable.id,
+      status: pagesTable.status,
+      created_at: pagesTable.created_at,
+      updated_at: pagesTable.updated_at,
+      published_at: pagesTable.published_at,
+      full_slug: pagesTable.full_slug,
+      version_id: pagesTable.published_version_id,
+      slug: publishedVersion.slug,
+      title: publishedVersion.title,
+      parent_id: publishedVersion.parent_id,
+      og_image_ids: publishedVersion.og_image_ids,
+      excerpt: publishedVersion.excerpt,
+    })
+    .from(pagesTable)
+    .leftJoin(
+      publishedVersion,
+      eq(publishedVersion.id, pagesTable.published_version_id),
+    )
+    .where(
+      and(
+        eq(pagesTable.status, "published"),
+        eq(publishedVersion.type, "page"),
+        ne(publishedVersion.slug, ""),
+      ),
+    )
+    .orderBy(desc(pagesTable.updated_at));
+  console.info("pagesList", pagesList);
+
+  // Collect all unique image IDs
+  const allImageIds = pagesList
+    .flatMap((page) => page.og_image_ids || [])
+    .filter((id, index, self) => id && self.indexOf(id) === index);
+
+  // Fetch all images in one query
+  const images =
+    allImageIds.length > 0
+      ? await db
+          .select()
+          .from(mediasTable)
+          .where(inArray(mediasTable.id, allImageIds))
+      : [];
+
+  // Create image lookup map
+  const imageMap = new Map(images.map((img) => [img.id, img]));
+
+  // Attach images to pages
+  const pagesWithImages = pagesList.map((page) => ({
+    ...page,
+    og_images: (page.og_image_ids || [])
+      .map((id) => imageMap.get(id))
+      .filter(Boolean),
+  }));
+
+  // const results = await pageListDto(pagesWithImages);
+  return pagesWithImages;
+}
+
+// List all pages for CMS
 export async function listAllPages(): Promise<PageListItem[]> {
   const pagesList = await db
     .select(page_list_columns)
@@ -346,7 +409,11 @@ export async function publishPage(
     .limit(1);
 
   const page = pages_res[0];
-  if (page.full_slug && draft_full_slug) {
+  if (
+    page.full_slug &&
+    draft_full_slug &&
+    (url_changes.slug || url_changes.parent_id)
+  ) {
     const redirect_result = await autoCreateRedirect(
       page.full_slug, // old path
       draft_full_slug, // new path
