@@ -592,7 +592,7 @@ function MileFrame({
   // console.log("data", data);
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen font-mile">
       <MileHeader
         draft_data={draft_data}
         url_changes={url_changes}

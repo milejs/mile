@@ -474,8 +474,9 @@ export async function createNewPage(
       const draft_parent_full_slug = await getDraftFullSlug(data.parent_id);
       if (draft_parent_full_slug) {
         const full_slug = `${draft_parent_full_slug}/${data.slug}`;
-        const page = await getPublishedPageByFullSlug(`/${full_slug}`);
-        if (page) {
+        const page = await getPublishedPageByFullSlug(`${full_slug}`);
+
+        if (page.length > 0) {
           throw new Error(
             `Published page with slug "${full_slug}" already exists. Try again with a different slug.`,
           );

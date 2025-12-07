@@ -49,6 +49,7 @@ import {
 import { authClient } from "./auth-client";
 import { LoginForm, SignUpForm } from "./auth-ui";
 import { Toaster } from "sonner";
+import { parseNestedShortcodes, transformShortcodes } from "./tmp-shortcode";
 
 const SITE_URL = process.env.NEXT_PUBLIC_HOST_URL;
 const API = `${SITE_URL}/api/mile`;
@@ -118,6 +119,13 @@ export function Dashboard({
     return (
       <AppShell path={path}>
         <RedirectsPage />
+      </AppShell>
+    );
+  }
+  if (path === "/convert-divi") {
+    return (
+      <AppShell path={path}>
+        <ConvertDiviPage />
       </AppShell>
     );
   }
@@ -1474,6 +1482,11 @@ function NewPageSettings({ close }: any) {
       return { ...e, description: v };
     });
   }
+  function handleContentChange(v: string) {
+    setPageData((e) => {
+      return { ...e, content: v };
+    });
+  }
 
   async function handleCreatePage() {
     // validate
@@ -1577,6 +1590,18 @@ function NewPageSettings({ close }: any) {
               render={<Textarea rows={4} />}
             />
           </div>
+          <div className="w-full">
+            <label htmlFor="content" className="font-semibold text-sm">
+              Content
+            </label>
+            <Field.Control
+              id="content"
+              // @ts-expect-error must be string
+              value={pageData.content}
+              onValueChange={handleContentChange}
+              render={<Textarea rows={4} />}
+            />
+          </div>
         </div>
       </div>
       <div className="mt-4 w-full">
@@ -1591,6 +1616,165 @@ function NewPageSettings({ close }: any) {
         </Button>
       </div>
     </>
+  );
+}
+
+function ConvertDiviPage() {
+  const [value, setValue] = useState("");
+  const [output, setOutput] = useState<any>(null);
+  const [candidates, setCandidates] = useState<any>([]);
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setValue(e.target.value);
+  };
+
+  function convert() {
+    const out = parseNestedShortcodes(value);
+    console.log("out", out);
+    transformShortcodes(out).then((e) => setCandidates(e));
+    setOutput(out);
+  }
+
+  return (
+    <div className="py-5 space-y-6">
+      <div className="max-w-5xl mx-auto flex justify-between items-center">
+        <div className="flex w-full items-center justify-between">
+          <div className="flex gap-x-2 items-center">
+            <h1 className="font-bold text-3xl">Convert Divi</h1>
+          </div>
+        </div>
+      </div>
+
+      <MainContainer>
+        <div className="">
+          <textarea
+            rows={25}
+            value={value}
+            onChange={handleChange}
+            className="w-full border border-zinc-500"
+          />
+        </div>
+        <button onClick={convert}>Convert</button>
+        <RenderCandidates candidates={candidates} />
+        <RenderConvertPreview root={output} />
+      </MainContainer>
+    </div>
+  );
+}
+
+function RenderCandidates({ candidates }: { candidates: any[] }) {
+  const flatten = candidates.flatMap((e) => e.content);
+  console.log("flatten", flatten);
+
+  return (
+    <div className="mt-4">
+      <textarea
+        rows={10}
+        value={flatten.map((e) => e.content).join("\n")}
+        className="w-full border border-zinc-300"
+        readOnly
+      />
+    </div>
+  );
+}
+
+function RenderConvertPreview({
+  root,
+}: {
+  root: { type: string; children: any[] } | null;
+}) {
+  return (
+    <div className="mt-4">
+      {root?.children.map((child, index) => (
+        <RenderConvertPreviewItem key={index} item={child} />
+      ))}
+    </div>
+  );
+}
+
+function RenderConvertPreviewItem({
+  item,
+  level,
+}: {
+  item: any;
+  level?: number;
+}) {
+  const [openAttrs, setOpenAttrs] = useState(false);
+  if (item.type !== "shortcode") {
+    if (item.type === "text" && typeof item.content === "string") {
+      return <div dangerouslySetInnerHTML={{ __html: item.content }} />;
+    }
+  }
+  return (
+    <div className="ml-4">
+      <div className="flex items-center gap-x-2">
+        <div className={`${getTagClassName(item.tag)}`}>{item.tag}</div>
+        <button
+          onClick={() => setOpenAttrs(!openAttrs)}
+          className="text-[9px] px-1 py-0.5 bg-blue-50 rounded-sm cursor-pointer"
+        >
+          attr
+        </button>
+      </div>
+      <RenderConvertPreviewItemPreview item={item} />
+      {openAttrs && <AttrsPreview value={item.attrs} />}
+      {item.children.map((child: any, index: number) => (
+        <RenderConvertPreviewItem
+          key={`${level ?? 0}_${index}_${child.tag}`}
+          item={child}
+          level={(level ?? 0) + 1}
+        />
+      ))}
+    </div>
+  );
+}
+
+const item_preview_tags = ["et_pb_image", "et_pb_slide", "et_pb_button"];
+
+function RenderConvertPreviewItemPreview({ item }: { item: any }) {
+  if (!item_preview_tags.includes(item.tag)) return null;
+  if (item.tag === "et_pb_image") {
+    return <img src={item.attrs.named.src} alt={item.attrs.named.alt} />;
+  } else if (item.tag === "et_pb_slide") {
+    return (
+      <div
+        className="p-4 min-h-[100px] bg-[image:var(--bg-image)] bg-contain bg-no-repeat"
+        style={{
+          ["--bg-image" as string]: `url(${item.attrs.named.background_image ?? ""})`,
+        }}
+      >
+        <span className="bg-white">{item.attrs.named.heading}</span>
+      </div>
+    );
+  } else if (item.tag === "et_pb_button") {
+    return (
+      <button className="bg-blue-500 text-white px-4 py-2">
+        {item.attrs.named.button_text}
+      </button>
+    );
+  }
+}
+
+function getTagClassName(tag: string) {
+  switch (tag) {
+    case "et_pb_section":
+    case "et_pb_row":
+    case "et_pb_column":
+      return "text-zinc-500";
+    default:
+      return "font-bold";
+  }
+}
+
+function AttrsPreview({ value }: { value: any }) {
+  return (
+    <div className="text-xs">
+      <textarea
+        rows={10}
+        readOnly
+        value={JSON.stringify(value, null, 2)}
+        className="w-full border border-zinc-300"
+      />
+    </div>
   );
 }
 
@@ -2022,7 +2206,7 @@ function AppShell({ path, children }: { path: string; children: ReactNode }) {
 
   return (
     <>
-      <div>
+      <div className="font-mile">
         <Header path={path} session={session} />
         <DocsLayout path={path}>{children}</DocsLayout>
         <Footer />
@@ -2200,6 +2384,7 @@ function MobileNav({ path }: { path: string }) {
                 {navConfig.mainNav.map((item) => (
                   <MobileNavItem
                     path={path}
+                    // @ts-expect-error okk
                     key={item.title}
                     item={item}
                     onNavItemClick={() => setOpen(false)}
@@ -2380,33 +2565,15 @@ const navConfig = {
         },
       ],
     },
-    // {
-    //   title: "Components",
-    //   items: [
-    //     {
-    //       title: "Accordion",
-    //       href: "/docs/components/accordion",
-    //     },
-    //     {
-    //       title: "Alert Dialog",
-    //       href: "/docs/components/alert-dialog",
-    //     },
-    //     {
-    //       title: "Alert",
-    //       href: "/docs/components/alert",
-    //     },
-    //     {
-    //       title: "Data Table",
-    //       href: "/docs/components/data-table",
-    //       disabled: true,
-    //       label: "Soon",
-    //     },
-    //     {
-    //       title: "Date Picker",
-    //       href: "/docs/components/date-picker",
-    //     },
-    //   ],
-    // },
+    {
+      title: "Tools",
+      items: [
+        {
+          title: "Convert Divi",
+          href: "/mile/convert-divi",
+        },
+      ],
+    },
   ],
 };
 
@@ -2458,3 +2625,7 @@ function LoginPage() {
     </div>
   );
 }
+
+/**
+ * asfasdf
+ */
