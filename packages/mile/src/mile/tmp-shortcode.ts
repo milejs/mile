@@ -1,9 +1,13 @@
 import { generateId } from "@/lib/generate-id";
-import { asyncWalk, walk } from "estree-walker";
+import { asyncWalk } from "estree-walker";
 import rehypeParse from "rehype-parse";
 import rehypeRemark from "rehype-remark";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
+import JSON5 from "json5";
+import { BlockNoteEditor } from "@blocknote/core";
+
+const editor = BlockNoteEditor.create();
 
 /**
  * Memize options object.
@@ -706,110 +710,6 @@ export function parseNestedShortcodes(text: string, tag = "[\\w-]+") {
   return root;
 }
 
-/**
- * Convert parsed tree back to shortcode string.
- *
- * @param {Object} node - The parsed node tree
- * @param {number} [indent=0] - Current indentation level
- * @return {string} Reconstructed shortcode string
- */
-// export function treeToString(node, indent = 0) {
-//   if (node.type === "text") {
-//     return node.content;
-//   }
-
-//   if (node.type === "root") {
-//     return node.children.map((child) => treeToString(child, indent)).join("\n");
-//   }
-
-//   if (node.type === "shortcode") {
-//     const indentation = "  ".repeat(indent);
-//     let result = indentation + `[${node.tag}`;
-
-//     // Add numeric attributes
-//     node.attrs.numeric.forEach((value) => {
-//       if (/\s/.test(value)) {
-//         result += ` "${value}"`;
-//       } else {
-//         result += ` ${value}`;
-//       }
-//     });
-
-//     // Add named attributes
-//     Object.entries(node.attrs.named).forEach(([name, value]) => {
-//       result += ` ${name}="${value}"`;
-//     });
-
-//     if (node.shortcodeType === "self-closing") {
-//       result += " /]";
-//     } else if (node.shortcodeType === "single") {
-//       result += "]";
-//     } else {
-//       result += "]";
-
-//       if (node.children.length > 0) {
-//         result += "\n";
-//         result += node.children
-//           .map((child) => treeToString(child, indent + 1))
-//           .join("\n");
-//         result += "\n" + indentation;
-//       }
-
-//       result += `[/${node.tag}]`;
-//     }
-
-//     return result;
-//   }
-
-//   return "";
-// }
-
-/**
- * Find all shortcodes with a specific tag in the tree.
- *
- * @param {Object} node - The parsed node tree
- * @param {string} tag - The tag to search for
- * @return {Array} Array of matching nodes
- */
-// export function findByTag(node, tag) {
-//   const results = [];
-
-//   if (node.type === "shortcode" && node.tag === tag) {
-//     results.push(node);
-//   }
-
-//   if (node.children) {
-//     node.children.forEach((child) => {
-//       results.push(...findByTag(child, tag));
-//     });
-//   }
-
-//   return results;
-// }
-
-/**
- * Transform shortcodes in the tree using a callback function.
- *
- * @param {Object} node - The parsed node tree
- * @param {Function} callback - Function(node) that returns modified node or null to remove
- * @return {Object|null} Transformed tree
- */
-// export function transformTree(node, callback) {
-//   const transformed = callback(node);
-
-//   if (!transformed) {
-//     return null;
-//   }
-
-//   if (transformed.children) {
-//     transformed.children = transformed.children
-//       .map((child) => transformTree(child, callback))
-//       .filter((child) => child !== null);
-//   }
-
-//   return transformed;
-// }
-
 function patternsMatch(input: any[], pattern: any[]) {
   // if pattern array is a list of string type
   // we check type only
@@ -864,7 +764,7 @@ function patternsMatch(input: any[], pattern: any[]) {
   return true;
 }
 
-function matchPattern(
+async function matchPattern(
   snapshot: any[],
   patternMap: Record<
     string,
@@ -874,7 +774,7 @@ function matchPattern(
 ) {
   for (const [name, entry] of Object.entries(patternMap)) {
     if (patternsMatch(snapshot, entry.pattern)) {
-      return { name, content: entry.content(snapshot, processor) };
+      return { name, content: await entry.content(snapshot, processor) };
     }
   }
   return null; // no match
@@ -898,7 +798,8 @@ const row_pattern_condition_banner = [
   "et_pb_image",
 ];
 
-const row_pattern_condition_content_2_cols = [
+// rename: add text_image
+const row_pattern_condition_content_2_cols_text_image = [
   "et_pb_section",
   { type: "et_pb_row", attrs: { named: { column_structure: "1_2,1_2" } } },
   { type: "et_pb_column", attrs: { named: { type: "1_2" } } },
@@ -925,6 +826,7 @@ const row_pattern_condition_content_grid_3 = [
   "text",
 ];
 
+// add blue color bg
 const row_pattern_condition_content_2_cols_blue_banner = [
   "et_pb_section",
   { type: "et_pb_row", attrs: { named: { column_structure: "1_2,1_2" } } },
@@ -990,10 +892,18 @@ const row_pattern_condition_row_button = [
   "et_pb_button",
 ];
 
+const row_pattern_condition_testimonial = [
+  "et_pb_section",
+  "et_pb_row",
+  { type: "et_pb_column", attrs: { named: { type: "4_4" } } },
+  "et_pb_testimonial",
+  "text",
+];
+
 const row_pattern_map = {
   condition_intro: {
     pattern: row_pattern_condition_intro,
-    content: (snapshot: any, processor: any) => {
+    content: async (snapshot: any, processor: any) => {
       const text_option = getOptionText(snapshot, processor);
       return [
         {
@@ -1023,15 +933,15 @@ const row_pattern_map = {
       ];
     },
   },
-  condition_content_2_cols: {
-    pattern: row_pattern_condition_content_2_cols,
+  condition_content_2_cols_text_image: {
+    pattern: row_pattern_condition_content_2_cols_text_image,
     content: (snapshot: any, processor: any) => {
       const text_option = getOptionText(snapshot, processor);
       const image_option = getOptionImage(snapshot);
       return [
         {
-          type: "condition_content_2_cols",
-          content: `<ConditionContent2Cols id='${generateId()}' type='condition_content_2_cols' options={{${text_option}, ${image_option}}} />`,
+          type: "condition_content_2_cols_text_image",
+          content: `<ConditionContent2ColsTextImage id='${generateId()}' type='condition_content_2_cols_text_image' options={{${text_option}, ${image_option}}} />`,
         },
       ];
     },
@@ -1125,6 +1035,19 @@ const row_pattern_map = {
       ];
     },
   },
+  condition_content_testimonial: {
+    pattern: row_pattern_condition_testimonial,
+    content: (snapshot: any, processor: any) => {
+      const text_option = getOptionText(snapshot, processor);
+      const testimonial_option = getOptionTestimonial(snapshot);
+      return [
+        {
+          type: "condition_content_testimonial",
+          content: `<ConditionContentTestimonial id='${generateId()}' type='condition_content_testimonial' options={{${testimonial_option}, ${text_option}}} />`,
+        },
+      ];
+    },
+  },
 };
 
 function getOptionTexts(snapshot: any, processor: any) {
@@ -1138,10 +1061,12 @@ function getOptionTexts(snapshot: any, processor: any) {
     processor.processSync(e.content),
   );
   const text_contents_option = text_contents
-    .map(
-      (value: any, i: number) =>
-        `text${i}: '${sanitizeMdxString(String(value)).replace(/\\n$/, "") || ""}'`,
-    )
+    .map((txt: any, i: number) => {
+      const mdx = sanitizeMdxString(String(txt)).replace(/\\n$/, "") || "";
+      const blocks = editor.tryParseMarkdownToBlocks(mdx);
+      const value = JSON5.stringify(blocks);
+      return `text${i}: ${value}`;
+    })
     .join(", ");
   return text_contents_option;
 }
@@ -1154,7 +1079,10 @@ function getOptionText(snapshot: any, processor: any) {
     throw new Error(`Text content item not found`);
   }
   const text_content = processor.processSync(text_content_item.content);
-  return `text: '${sanitizeMdxString(String(text_content)).replace(/\\n$/, "") || ""}'`;
+  const mdx = sanitizeMdxString(String(text_content)).replace(/\\n$/, "") || "";
+  const blocks = editor.tryParseMarkdownToBlocks(mdx);
+  const value = JSON5.stringify(blocks);
+  return `text: ${value}`;
 }
 
 function getOptionText2(snapshot: any, processor: any) {
@@ -1169,7 +1097,9 @@ function getOptionText2(snapshot: any, processor: any) {
         sanitizeMdxString(String(value)).replace(/\\n$/, "") || "",
     ) // remove trailing newline
     .join("\\n"); // add newline (string literal escape sequence) for each text content item
-  return `text: '${texts}'`;
+  const blocks = editor.tryParseMarkdownToBlocks(texts);
+  const value = JSON5.stringify(blocks);
+  return `text: ${value}`;
 }
 
 function getOptionSlider(snapshot: any) {
@@ -1188,7 +1118,7 @@ function getOptionSlide(snapshot: any) {
   const options = slides
     .map(
       (e: any, i: number) =>
-        `bg_img${i}: '${e.attrs.named.background_image || ""}', btn_text${i}: '${sanitizeMdxString(e.attrs.named.button_text) || ""}', url${i}: '${sanitizeMdxString(e.attrs.named.button_link) || ""}', heading${i}: '${sanitizeMdxString(e.attrs.named.heading) || ""}'`,
+        `bg_img${i}:{image_url: '${e.attrs.named.background_image || ""}'}, btn_text${i}:{link_text: '${sanitizeMdxString(e.attrs.named.button_text) || ""}', url${i}: '${sanitizeMdxString(e.attrs.named.button_link) || ""}'}, heading${i}: '${sanitizeMdxString(e.attrs.named.heading) || ""}'`,
     )
     .join(", ");
   return options;
@@ -1199,7 +1129,7 @@ function getOptionButton(snapshot: any) {
   if (bt === undefined) {
     throw new Error(`Button content item not found`);
   }
-  return `button_url: '${sanitizeMdxString(bt.attrs.named.button_url) || ""}', button_text: '${sanitizeMdxString(bt.attrs.named.button_text) || ""}'`;
+  return `link: {url: '${sanitizeMdxString(bt.attrs.named.button_url) || ""}', link_text: '${sanitizeMdxString(bt.attrs.named.button_text) || ""}'}`;
 }
 
 function getOptionImages(snapshot: any) {
@@ -1210,7 +1140,7 @@ function getOptionImages(snapshot: any) {
   const image_contents_option = imgs
     .map(
       (e: any, i: number) =>
-        `src${i}: '${sanitizeMdxString(e.attrs.named.src) || ""}', alt${i}: '${sanitizeMdxString(e.attrs.named.alt) || ""}', title${i}: '${sanitizeMdxString(e.attrs.named.title_text) || ""}', url${i}: '${sanitizeMdxString(e.attrs.named.url) || ""}'`,
+        `image${i}:{image_url: '${sanitizeMdxString(e.attrs.named.src) || ""}', alt_text: '${sanitizeMdxString(e.attrs.named.alt) || ""}'}, image_title${i}: '${sanitizeMdxString(e.attrs.named.title_text) || ""}', image_url${i}: '${sanitizeMdxString(e.attrs.named.url) || ""}'`,
     )
     .join(", ");
   return image_contents_option;
@@ -1221,7 +1151,17 @@ function getOptionImage(snapshot: any) {
   if (img === undefined) {
     throw new Error(`Image content item not found`);
   }
-  return `src: '${sanitizeMdxString(img.attrs.named.src) || ""}', alt: '${sanitizeMdxString(img.attrs.named.alt) || ""}', title: '${sanitizeMdxString(img.attrs.named.title_text) || ""}', url: '${sanitizeMdxString(img.attrs.named.url) || ""}'`;
+  return `image:{image_url: '${sanitizeMdxString(img.attrs.named.src) || ""}', alt_text: '${sanitizeMdxString(img.attrs.named.alt) || ""}'}, image_title: '${sanitizeMdxString(img.attrs.named.title_text) || ""}', image_url: '${sanitizeMdxString(img.attrs.named.url) || ""}'`;
+}
+
+function getOptionTestimonial(snapshot: any) {
+  const node = snapshot.find(
+    (child: any) => child.type === "et_pb_testimonial",
+  );
+  if (node === undefined) {
+    throw new Error(`Testimonial content item not found`);
+  }
+  return `image:{image_url: '${sanitizeMdxString(node.attrs.named.portrait_url) || ""}'}, url: '${sanitizeMdxString(node.attrs.named.url) || ""}'`;
 }
 
 function sanitizeMdxString(input: string) {
@@ -1237,15 +1177,15 @@ function sanitizeMdxString(input: string) {
       .replace(/'/g, "\\'")
 
       // 3. Replace literal newlines with the string literal "\n"
-      .replace(/\n/g, "\\n")
+      // .replace(/\n/g, "\\n")
 
       // 4. Remove Carriage Returns (often cause issues in Windows-generated text)
       .replace(/\r/g, "")
   );
 }
 
-function findRowCandidate(snapshot: any[], processor: any) {
-  const pattern = matchPattern(snapshot, row_pattern_map, processor);
+async function findRowCandidate(snapshot: any[], processor: any) {
+  const pattern = await matchPattern(snapshot, row_pattern_map, processor);
   if (pattern) {
     const component = {
       type: pattern.name,
@@ -1270,10 +1210,10 @@ export async function transformShortcodes(input: any) {
   const series: any = [];
   const candidates: any[] = [];
 
-  function buildCandidates(tag: string, snapshot: any[]) {
+  async function buildCandidates(tag: string, snapshot: any[]) {
     console.info("row_snapshot --------", snapshot);
     if (tag === "et_pb_row") {
-      const candidate = findRowCandidate(snapshot, processor);
+      const candidate = await findRowCandidate(snapshot, processor);
       console.info("--------- candidate", candidate);
       if (candidate) {
         candidates.push(candidate);

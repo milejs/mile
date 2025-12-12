@@ -9,13 +9,13 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { Dialog } from "@base-ui-components/react/dialog";
+import { Dialog } from "@base-ui/react/dialog";
 import { generateId } from "@/lib/generate-id";
 import { Input } from "@/components/ui/input";
 // import { getAuth } from "./auth";
 import useSWR, { mutate } from "swr";
-import { Field } from "@base-ui-components/react/field";
-import { Form } from "@base-ui-components/react/form";
+import { Field } from "@base-ui/react/field";
+import { Form } from "@base-ui/react/form";
 import { cn } from "@/lib/utils";
 import {
   Drawer,

@@ -1,8 +1,8 @@
 "use client";
 
 import { MileComponentProps } from "@milejs/types";
+import { RichtextView } from "@milejs/core/app";
 import cn from "../lib/cn";
-import Richtext from "./richtext";
 import { Link } from "./links";
 
 export function BannerLightBlue(props: MileComponentProps) {
@@ -25,8 +25,11 @@ export function BannerLightBlue(props: MileComponentProps) {
               className="w-full"
             />
           </div>
-          <div className="w-full sm:w-1/2 text-left">
-            <Richtext text={text} className="richtext_banner_light_blue" />
+          <div className="w-full sm:w-1/2 text-left space-y-8">
+            <RichtextView
+              blocks={text}
+              className="richtext_banner_light_blue"
+            />
             {link && <Link {...link} variant="outline_dark" />}
           </div>
         </div>

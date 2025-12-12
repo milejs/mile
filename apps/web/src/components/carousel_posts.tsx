@@ -2,8 +2,6 @@
 
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
-import Richtext from "./richtext";
-import { Link } from "./links";
 import { useEffect, useState } from "react";
 import {
   Carousel,

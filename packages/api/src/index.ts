@@ -200,6 +200,26 @@ ui.get("/carousel-posts", async (c) => {
   });
 });
 
+// Get page for ref
+ui.get("/page/:page_id", async (c) => {
+  const page_id = c.req.param("page_id");
+  const single = await loadDraftByPageId(page_id);
+  if (!single) {
+    return c.json({ message: "Page not found" }, 404);
+  }
+  const full_slug = await getDraftFullSlug(page_id);
+  // Fetch related media if og_image_ids exist
+  let og_images: SelectMedia[] = [];
+  if (single.drafts.og_image_ids && single.drafts.og_image_ids.length > 0) {
+    og_images = await getMediasByIds(single.drafts.og_image_ids);
+  }
+  return c.json({
+    ...single.drafts,
+    full_slug,
+    og_images,
+  });
+});
+
 /****************************************************************
  * Redirects
  */

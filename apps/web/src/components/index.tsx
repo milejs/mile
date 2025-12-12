@@ -4,6 +4,18 @@ import { BannerBlue } from "./banner_blue";
 import { BannerLightBlue } from "./banner_light_blue";
 import { Media2Cols } from "./media_2_cols";
 import { CarouselPosts } from "./carousel_posts";
+import { Breadcrumb } from "./breadcrumb";
+import { ConditionTitle } from "./condition_title";
+import { ConditionContentText } from "./condition_content_text";
+import { ConditionBanner } from "./condition_banner";
+import { ConditionContent2ColsTextImage } from "./condition_content_2_cols_text_image";
+import { ConditionContent2ColsBlueBanner } from "./condition_content_2_cols_blue_banner";
+import { ConditionContentGrid3 } from "./condition_content_grid_3";
+import { ConditionContentRowButton } from "./condition_content_row_button";
+import { ConditionContent2Slides } from "./condition_content_2_slides";
+import { ConditionContentCTA } from "./condition_content_cta";
+import { ConditionContentTestimonial } from "./condition_content_testimonial";
+import { ResourceBannerGrid3x2 } from "./resource_banner_grid_3x2";
 
 const components = {
   home_hero: {
@@ -29,6 +41,54 @@ const components = {
   carousel_posts: {
     name: "carousel_posts",
     component: CarouselPosts,
+  },
+  condition_title: {
+    name: "condition_title",
+    component: ConditionTitle,
+  },
+  breadcrumb: {
+    name: "breadcrumb",
+    component: Breadcrumb,
+  },
+  condition_content_text: {
+    name: "condition_content_text",
+    component: ConditionContentText,
+  },
+  condition_banner: {
+    name: "condition_banner",
+    component: ConditionBanner,
+  },
+  condition_content_2_cols_text_image: {
+    name: "condition_content_2_cols_text_image",
+    component: ConditionContent2ColsTextImage,
+  },
+  condition_content_2_cols_blue_banner: {
+    name: "condition_content_2_cols_blue_banner",
+    component: ConditionContent2ColsBlueBanner,
+  },
+  condition_content_grid_3: {
+    name: "condition_content_grid_3",
+    component: ConditionContentGrid3,
+  },
+  condition_content_row_button: {
+    name: "condition_content_row_button",
+    component: ConditionContentRowButton,
+  },
+  condition_content_2_slides: {
+    name: "condition_content_2_slides",
+    component: ConditionContent2Slides,
+  },
+  condition_content_cta: {
+    name: "condition_content_cta",
+    component: ConditionContentCTA,
+  },
+  condition_content_testimonial: {
+    name: "condition_content_testimonial",
+    component: ConditionContentTestimonial,
+  },
+  resource_banner_grid_3x2: {
+    name: "resource_banner_grid_3x2",
+    component: ResourceBannerGrid3x2,
   },
   // override built-in markdown component
   heading: {

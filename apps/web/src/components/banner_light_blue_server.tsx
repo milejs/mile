@@ -23,7 +23,7 @@ export function BannerLightBlue(props: MileComponentProps) {
               className="w-full"
             />
           </div>
-          <div className="w-full sm:w-1/2 text-left">
+          <div className="w-full sm:w-1/2 text-left space-y-8">
             <RichtextView
               blocks={text}
               className="richtext_banner_light_blue"

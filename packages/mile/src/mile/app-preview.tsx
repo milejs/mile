@@ -117,7 +117,7 @@ function ErrorComponent({ error }: { error: Error | string }) {
 
 function LoadingComponent() {
   return (
-    <div id="mdx-loading">
+    <div id="mdx-loading" className="max-w-5xl mx-auto">
       <pre>
         <code>Loading...</code>
       </pre>

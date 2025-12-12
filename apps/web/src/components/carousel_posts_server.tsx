@@ -1,7 +1,5 @@
 import { MileComponentProps } from "@milejs/types";
 import cn from "../lib/cn";
-import Richtext from "./richtext";
-import { Link } from "./links";
 import {
   Carousel,
   CarouselContent,
@@ -54,6 +52,8 @@ export async function CarouselPosts(props: MileComponentProps) {
   const { num_posts } = options ?? {};
   const response = await fetch(`${GET_POSTS_API}?limit=${num_posts}`);
   const result = await response.json();
+  console.log("result", result);
+
   const posts: SinglePost[] = result?.data ?? [];
 
   return (
@@ -62,40 +62,42 @@ export async function CarouselPosts(props: MileComponentProps) {
         {posts.length > 0 && (
           <Carousel className="w-full" opts={slide_options}>
             <CarouselContent>
-              {posts.map((post, index) => {
-                const image = post.og_images[0];
-                return (
-                  <CarouselItem key={index}>
-                    <div className="relative">
-                      <div className="w-full max-h-[560px] overflow-hidden flex justify-center">
-                        {post.og_images.length > 0 && (
-                          <img
-                            src={getImageUrl(image)}
-                            alt={image.alt ?? ""}
-                            className="w-full object-cover object-center"
-                          />
-                        )}
-                      </div>
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/25">
-                        <div className="flex flex-col items-center gap-y-4 p-6 text-white">
-                          <h4 className="font-medium uppercase text-3xl">
-                            {post.title}
-                          </h4>
-                          {post.excerpt && (
-                            <div className="">{post.excerpt}</div>
+              {posts
+                .filter((post) => post.og_images.length > 0)
+                .map((post, index) => {
+                  const image = post.og_images[0];
+                  return (
+                    <CarouselItem key={index}>
+                      <div className="relative">
+                        <div className="w-full max-h-[560px] overflow-hidden flex justify-center">
+                          {post.og_images.length > 0 && (
+                            <img
+                              src={getImageUrl(image)}
+                              alt={image.alt ?? ""}
+                              className="w-full object-cover object-center"
+                            />
                           )}
-                          <a
-                            href={post.full_slug}
-                            className="mt-2 px-4 py-2 hover:bg-black/10 border border-white font-medium"
-                          >
-                            Read Our Blog
-                          </a>
+                        </div>
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+                          <div className="flex flex-col items-center gap-y-4 p-6 text-white">
+                            <h4 className="font-medium uppercase text-3xl">
+                              {post.title}
+                            </h4>
+                            {post.excerpt && (
+                              <div className="">{post.excerpt}</div>
+                            )}
+                            <a
+                              href={post.full_slug}
+                              className="mt-2 px-4 py-2 hover:bg-black/10 border border-white font-medium"
+                            >
+                              Read Our Blog
+                            </a>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </CarouselItem>
-                );
-              })}
+                    </CarouselItem>
+                  );
+                })}
             </CarouselContent>
             <CarouselPrevious />
             <CarouselNext />

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { CheckIcon, Loader2, X } from "lucide-react";
 import { authClient } from "./auth-client";
 import { toast } from "sonner";
-import { Checkbox } from "@base-ui-components/react/checkbox";
+import { Checkbox } from "@base-ui/react/checkbox";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");

@@ -644,6 +644,23 @@ export class Tree implements MileTree {
     };
   }
 
+  setTreeData(treeData: TreeData, oldTreeData: TreeData) {
+    // refresh the world
+    this.updateTreeData(treeData);
+
+    // compute reverse action ------------------------------------------
+    return {
+      data: treeData,
+      reverseAction: {
+        type: "setTreeData",
+        name: `Set tree data`,
+        payload: {
+          new_tree_data: oldTreeData,
+        },
+      },
+    };
+  }
+
   find(id: string, data: TreeData = this._data): NodeData | null {
     if (id === "root") return data.root ?? null;
     if (data[id] != null) {

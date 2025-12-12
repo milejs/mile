@@ -420,7 +420,7 @@ function mdxToMdast(mdx: string) {
     extensions: [mdxjs()],
     mdastExtensions: [mdxFromMarkdown()],
   });
-  console.log("ast", mdast);
+  // console.log("ast", mdast);
   return mdast;
 }
 
@@ -610,7 +610,7 @@ function mdastToTree(mdast: any) {
   }
 
   // console.log("data", data);
-  console.log("nodesMap", nodesMap);
+  // console.log("nodesMap", nodesMap);
   return nodesMap;
 }
 

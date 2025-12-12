@@ -1,4 +1,4 @@
-import { Popover as BasePopover } from "@base-ui-components/react/popover";
+import { Popover as BasePopover } from "@base-ui/react/popover";
 
 const Root = BasePopover.Root;
 const Trigger = BasePopover.Trigger;

@@ -145,6 +145,18 @@ const builtinComponentLibrarySchema = [
 ];
 
 const internalSchema = [
+  // {
+  //   type: "ref",
+  //   name: "ref",
+  //   title: "Ref",
+  //   fields: [
+  //     {
+  //       type: "string",
+  //       name: "id",
+  //       title: "ID",
+  //     },
+  //   ],
+  // },
   {
     type: "link",
     name: "link",

@@ -478,9 +478,10 @@ function defaultValue(value: any, defaultValue: any) {
 
 // Component to render a list of blocks
 export const RichtextView = ({ blocks, level = 0, className }: any) => {
+  if (!blocks || blocks.length === 0) return null;
   return (
-    <div className={`bn-container bn-mantine ${className}`}>
-      <div className="ProseMirror bn-editor bn-default-styles">
+    <div className={`/bn-container /bn-mantine ${className}`}>
+      <div className="/ProseMirror /bn-editor /bn-default-styles">
         <BlocksRenderer blocks={blocks} level={level} />
       </div>
     </div>

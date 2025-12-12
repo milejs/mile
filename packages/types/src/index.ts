@@ -424,6 +424,20 @@ export interface MileTree {
     };
   };
 
+  setTreeData(
+    treeData: TreeData,
+    oldTreeData: TreeData,
+  ): {
+    data: TreeData;
+    reverseAction: {
+      type: string;
+      name: string;
+      payload: {
+        new_tree_data: TreeData;
+      };
+    };
+  };
+
   find(id: string, data?: TreeData): NodeData | null;
   get(id: string): NodeData;
   // helpers
@@ -507,7 +521,8 @@ type Outcome =
   | { type: "move-row"; targetId: string }
   | { type: "update-node-option"; targetId: string }
   | { type: "merge-tree-data"; targetId: string }
-  | { type: "replace-tree-data"; targetId: string };
+  | { type: "replace-tree-data"; targetId: string }
+  | { type: "set-tree-data"; targetId: string };
 
 export type Operation = {
   trigger: Trigger;

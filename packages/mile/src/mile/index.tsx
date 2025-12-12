@@ -47,6 +47,7 @@ import {
   SquareArrowOutUpRight,
   TabletIcon,
   TrashIcon,
+  XIcon,
 } from "lucide-react";
 import { invariant } from "@/lib/invariant";
 import { Preview } from "./preview";
@@ -67,11 +68,11 @@ import { generateId } from "@/lib/generate-id";
 import { toast, Toaster } from "sonner";
 import { Uploader, Uploaders } from "@/components/ui/uploader";
 import { Button } from "@/components/ui/button";
-import { Dialog } from "@base-ui-components/react/dialog";
-import { Field } from "@base-ui-components/react/field";
-import { Checkbox } from "@base-ui-components/react/checkbox";
-import { SlugInput } from "./shared";
-import { Switch } from "@base-ui-components/react/switch";
+import { Dialog } from "@base-ui/react/dialog";
+import { Field } from "@base-ui/react/field";
+import { Checkbox } from "@base-ui/react/checkbox";
+import { ReferenceInput, SlugInput } from "./shared";
+import { Switch } from "@base-ui/react/switch";
 // upload
 import { useUploadFile } from "@better-upload/client";
 // editor
@@ -96,12 +97,11 @@ import {
 import { BlockNoteView } from "@blocknote/mantine"; // Or, you can use ariakit, shadcn, etc.
 import "@blocknote/mantine/style.css"; // Default styles for the mantine editor
 import "@blocknote/core/fonts/inter.css"; // Include the included Inter font
+import { BlockNoteSchema, defaultBlockSpecs } from "@blocknote/core";
 import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
   filterSuggestionItems,
-  insertOrUpdateBlock,
-} from "@blocknote/core";
+  insertOrUpdateBlockForSlashMenu,
+} from "@blocknote/core/extensions";
 // dnd
 // import { triggerPostMoveFlash } from "@atlaskit/pragmatic-drag-and-drop-flourish/trigger-post-move-flash";
 import {
@@ -351,7 +351,7 @@ function MileReady({
   };
 
   // console.log('page_data ----', page_data);
-  // console.log("MileReady render ---- data", data);
+  console.log("MileReady render ---- data", data);
   // console.log("tree_data", tree_data);
 
   return (
@@ -618,7 +618,7 @@ function MileFrame({
             dispatch({ type: AppActionType.CloseMarkdownEditor });
           }
         }}
-        dismissible={false}
+        disablePointerDismissal={false}
       >
         <DialogContent className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
           <div className="mb-4 flex flex-row justify-between items-center">
@@ -1000,7 +1000,7 @@ function MileContent({
             maxSize={65}
             className="bg-slate-100 h-full"
           >
-            <div className="h-full overflow-y-auto">
+            <div className="mt-2 h-full overflow-y-auto">
               <Layers data={data} state={state} dispatch={dispatch} />
               {/*<NodeInspector data={data} />*/}
             </div>
@@ -1047,6 +1047,7 @@ function useMileUploadFile() {
 }
 
 const primitiveTypes = [
+  "ref",
   "array",
   "string",
   "textarea",
@@ -1065,6 +1066,8 @@ function isPrimitiveType(type: string) {
 
 function getPrimitiveComponent(type: string) {
   switch (type) {
+    case "ref":
+      return EditRefComponent;
     case "array":
       return EditArrayComponent;
     case "string":
@@ -1093,11 +1096,11 @@ function getPrimitiveComponent(type: string) {
 const insertHelloWorldItem = (editor: typeof bn_schema.BlockNoteEditor) => ({
   title: "Insert Hello World",
   onItemClick: () =>
-    // If the block containing the text caret is empty, `insertOrUpdateBlock`
+    // If the block containing the text caret is empty, `insertOrUpdateBlockForSlashMenu`
     // changes its type to the provided block. Otherwise, it inserts the new
     // block below and moves the text caret to it. We use this function with
     // a block containing 'Hello World' in bold.
-    insertOrUpdateBlock(editor, {
+    insertOrUpdateBlockForSlashMenu(editor, {
       type: "paragraph",
       content: [{ type: "text", text: "Hello World", styles: { bold: true } }],
     }),
@@ -1130,7 +1133,7 @@ const getCustomSlashMenuItems = (
   return [...defaults, insertHelloWorldItem(editor)];
 };
 
-const bn_schema = BlockNoteSchema.create({
+export const bn_schema = BlockNoteSchema.create({
   blockSpecs: {
     ...defaultBlockSpecs,
     image: {
@@ -1187,13 +1190,13 @@ function EditRichtextComponent({
   field,
 }: EditComponentProps) {
   const value = getFieldValue(state, path);
-  // console.log("value", value);
+  // console.log("--------- value", value, state, path);
 
   const { control, upload } = useMileUploadFile();
 
   const bn_editor = useCreateBlockNote({
     initialContent:
-      value.length === 0
+      !value || value.length === 0
         ? [
             {
               type: "paragraph",
@@ -1402,12 +1405,26 @@ function EditImageUrlComponent({
     });
   }
 
+  function handleCloseClick() {
+    const path_alt_text = getAltTextPath(path);
+    handleChange([
+      { path, value: "" },
+      { path: path_alt_text, value: "" }, // empty alt for newly upload file
+    ]);
+  }
+
   return (
     <div className="flex flex-col gap-y-1">
       <label className="text-sm font-semibold">{field.title}</label>
       {value ? (
-        <div className="max-w-[150px]">
+        <div className="relative max-w-[150px]">
           <img src={value} alt="" />
+          <button
+            onClick={handleCloseClick}
+            className="absolute -top-3 -right-3 bg-white shadow cursor-pointer rounded-full p-1 text-gray-500 hover:bg-gray-100"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
         </div>
       ) : null}
       <div className="flex items-center gap-x-2">
@@ -1510,7 +1527,11 @@ function EditArrayComponent({
         />
       )}
       <Button onClick={handleAddClick}>Add</Button>
-      <DialogRoot open={open} onOpenChange={close} dismissible={false}>
+      <DialogRoot
+        open={open}
+        onOpenChange={close}
+        disablePointerDismissal={false}
+      >
         <DialogContent className="px-6 py-4 fixed bottom-0 top-1/2 left-1/2 h-[calc(100vh-180px)] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
           <div className="mb-4 flex flex-row justify-between items-center">
             <Dialog.Title className="text-lg font-medium">Add</Dialog.Title>
@@ -2015,7 +2036,7 @@ function EditStringComponent({
   field,
 }: EditComponentProps) {
   const value = getFieldValue(state, path);
-  console.log("---string", state, path, value);
+  // console.log("---string", state, path, value, node);
 
   function handleInputChange(e: any) {
     const nextValue = e.target.value;
@@ -2028,10 +2049,39 @@ function EditStringComponent({
       <Input
         type="text"
         className="border"
-        value={value}
+        value={value ?? ""}
         onChange={handleInputChange}
         disabled={editor.is_disabled}
       />
+      {field.description && (
+        <p className="mt-0.5 text-xs text-gray-500">{field.description}</p>
+      )}
+    </div>
+  );
+}
+
+function EditRefComponent({
+  editor,
+  node,
+  path,
+  state,
+  handleChange,
+  field,
+}: EditComponentProps) {
+  const value = getFieldValue(state, path);
+  console.log("---string", state, path, value, node, field);
+
+  function handleInputChange(page_info: any) {
+    handleChange({ path, value: page_info.page_id });
+  }
+
+  return (
+    <div className="flex flex-col gap-y-1">
+      <label className="text-sm font-semibold">{field.title}</label>
+      <ReferenceInput value={value ?? ""} onChange={handleInputChange} />
+      {field.description && (
+        <p className="mt-0.5 text-xs text-gray-500">{field.description}</p>
+      )}
     </div>
   );
 }
@@ -2099,16 +2149,54 @@ function EditHeadingComponent({
 /*************************************************************
  * Start: Edit Component Update State
  */
+function hasAllFields(current: unknown, field: any) {
+  return Object.values(field.fields).every(
+    (field) => (current as Record<string, any>)[(field as any).name],
+  );
+}
+
+function createFullInitialValue(
+  current: unknown,
+  field: any,
+  schema: MileSchema,
+) {
+  console.log("createFullInitialValue field", field);
+  console.log("createFullInitialValue current", current);
+
+  const initial = createInitialEmptyValue(field, schema);
+  console.log("initial", initial);
+
+  const missingFields = Object.values(field.fields).filter(
+    (field) => (current as Record<string, any>)[(field as any).name] == null,
+  );
+  console.log("missingFields", missingFields);
+
+  const missings: any = missingFields.reduce((e: any, field) => {
+    e[(field as any).name] = initial[(field as any).name];
+    return e;
+  }, {});
+
+  return { ...missings, ...(current as any) };
+}
+
 function createInitialValue(current: unknown, field: any, schema: MileSchema) {
-  if (current) {
+  // if current options is undefined/ null, create initial empty value from all fields
+  if (!current) {
+    return createInitialEmptyValue(field, schema);
+  }
+  // if current options has all fields, return current options
+  if (hasAllFields(current, field)) {
     return current;
   }
-  return createInitialEmptyValue(field, schema);
+  // current options has some fields missing, create initial state with missing fields
+  return createFullInitialValue(current, field, schema);
 }
 
 function getDefaultValueForType(type: string): any {
   // "string", "number", "boolean", "url", "date", "richtext"
   switch (type) {
+    case "ref":
+      return "";
     case "array":
       return [];
     case "string":
@@ -2355,7 +2443,13 @@ function EditPrimitiveField({
   useEffect(() => {
     forceUpdate();
   }, [is_disabled]);
-  const EditComponent = getPrimitiveComponent(field.type);
+  // const EditComponent = getPrimitiveComponent(field.type);
+  const EditComponent = useMemo(
+    () => getPrimitiveComponent(field.type),
+    [field.type],
+  );
+  // console.log("node -----", node);
+
   return (
     <EditComponent
       editor={editor}
@@ -2402,8 +2496,8 @@ function EditField({
 
   // handle parent array type
   if (parent.type === "array") {
-    console.log("path.at(-1)", path.at(-1));
-    console.log("path.at(-2)", path.at(-2));
+    // console.log("path.at(-1)", path.at(-1));
+    // console.log("path.at(-2)", path.at(-2));
 
     if (path.at(-1) !== type && path.at(-2) === parent.name) {
       // render specific item of the array
@@ -2429,14 +2523,14 @@ function EditField({
   }
 
   const schema = mile.schema.get(type);
-  console.log("path", path, type, schema);
+  // console.log("path", path, type, schema, field);
 
   // invariant(path.at(-1) === type);
   invariant(schema.name);
 
   return (
     <div className="space-y-3">
-      <h3 className="font-bold">{schema.title}</h3>
+      <h3 className="font-bold">{field.title}</h3>
       <EditFields
         node={node}
         // path={path.slice(0, -1).concat(schema.name)}
@@ -2564,8 +2658,19 @@ function Layers({
   state: AppState;
   dispatch: React.ActionDispatch<[action: AppAction]>;
 }) {
+  const editor = useEditor();
   function handleBackClick() {
     dispatch({ type: AppActionType.DeselectNode });
+  }
+
+  function handleDeleteNode() {
+    dispatch({ type: AppActionType.DeselectNode });
+    const action = {
+      type: "deleteNode",
+      name: "Delete node",
+      payload: { id: state.activeNodeId },
+    };
+    editor.perform(action);
   }
 
   if (!data) return null;
@@ -2579,6 +2684,7 @@ function Layers({
       <EditNodeSettings
         key={state.activeNodeId}
         onBackClick={handleBackClick}
+        onDeleteClick={handleDeleteNode}
         node={data[state.activeNodeId]}
       />
     );
@@ -2644,11 +2750,12 @@ function LayersInner({
 
   return (
     <div className="py-4">
-      <div className="mb-2 flex items-center">
-        <h3 className="px-4 text-[10px] uppercase tracking-wider select-none">
+      <div className="mb-2 flex items-center gap-x-2">
+        <h3 className="pl-4 text-[10px] uppercase tracking-wider select-none">
           Layers
         </h3>
         <PopoverComponentPicker schema={mile.schema} dispatch={dispatch} />
+        <DialogMdxEditor />
       </div>
       <div className="divide-y-1 divide-slate-300 border-y border-slate-300">
         {(nodes ?? []).map((e, i) => {
@@ -2664,6 +2771,62 @@ function LayersInner({
         })}
       </div>
     </div>
+  );
+}
+
+function DialogMdxEditor() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const editor = useEditor();
+
+  function handleEditClick() {
+    setIsOpen(true);
+    const mdx = editor.getMdxString();
+    setValue(mdx);
+  }
+
+  return (
+    <DialogRoot open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger
+        render={() => (
+          <Button
+            size="xs"
+            variant="outline"
+            className="text-xs border border-zinc-400"
+            onClick={handleEditClick}
+          >
+            Edit
+          </Button>
+        )}
+      />
+      <DialogContent className="fixed top-1/2 left-1/2 space-y-4 w-full max-w-[calc(100vw-3rem)] h-[calc(100vh-180px)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+        <div className="flex items-center justify-between">
+          <DialogTitle className="-mt-1.5 mb-1 text-lg font-medium">
+            Edit MDX string
+          </DialogTitle>
+          <Button
+            onClick={() => {
+              const { result: result_tree, error } = mdxToTree(value);
+              editor.perform({
+                type: "setTreeData",
+                name: `Set tree data`,
+                payload: { new_tree_data: result_tree.content },
+              });
+              setIsOpen(false);
+            }}
+          >
+            Done
+          </Button>
+        </div>
+        <div className="overflow-y-auto /h-full h-[calc(100vh-280px)]">
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="font-mile w-full h-full resize-none border border-zinc-400 rounded-md p-2"
+          />
+        </div>
+      </DialogContent>
+    </DialogRoot>
   );
 }
 
@@ -2892,7 +3055,7 @@ function Layer({
           }
         }}
       >
-        <div className="text-sm flex items-center gap-x-1">
+        <div className="text-xs font-medium flex items-center gap-x-1">
           {schema.isMarkdown ? (
             <span className="text-[8px] uppercase px-1 py-0.5 bg-zinc-400/80 rounded-sm text-white font-bold">
               MD
@@ -3012,20 +3175,31 @@ function ComponentPicker({
 
 function EditNodeSettings({
   onBackClick,
+  onDeleteClick,
   node,
 }: {
   onBackClick: () => void;
+  onDeleteClick: () => void;
   node: NodeData;
 }) {
   return (
     <div className="py-4">
-      <button
-        onClick={onBackClick}
-        className="ml-4 pl-2 pr-3 py-1 flex items-center gap-x-1 bg-slate-600 hover:bg-slate-700 transition-colors rounded-full text-white text-[10px] uppercase tracking-wider"
-      >
-        <ChevronLeft size={12} />
-        Back
-      </button>
+      <div className="flex items-center justify-between gap-x-3">
+        <button
+          onClick={onBackClick}
+          className="ml-4 pl-2 pr-3 py-1 flex items-center gap-x-1 bg-slate-600 hover:bg-slate-700 transition-colors rounded-full text-white text-[10px] uppercase tracking-wider"
+        >
+          <ChevronLeft size={12} />
+          Back
+        </button>
+        <button
+          onClick={onDeleteClick}
+          className="mr-4 pl-2 pr-3 py-1 flex items-center gap-x-1 bg-slate-50 border border-slate-300 hover:bg-white transition-colors rounded-full text-black text-[10px] uppercase tracking-wider"
+        >
+          <TrashIcon size={12} />
+          Delete
+        </button>
+      </div>
       <div className="mt-4 px-4">
         <EditNode node={node} />
       </div>

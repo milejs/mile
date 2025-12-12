@@ -307,3 +307,172 @@ export function SlugInput({
     </div>
   );
 }
+
+export function ReferenceInput({
+  value = "",
+  onChange,
+}: {
+  value: string;
+  onChange: (value: any) => void;
+}) {
+  const [showPagePicker, setShowPagePicker] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<
+    { id: string; title: string }[]
+  >([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingPageInfo, setIsLoadingPageInfo] = useState(false);
+
+  // Cache pages to avoid repeated API calls
+  const [pageCache, setPageCache] = useState<Record<string, any>>({});
+  const pageInfo = pageCache[value];
+
+  useEffect(() => {
+    const loadParentPath = async () => {
+      if (!value) {
+        return;
+      }
+      // Check cache first
+      if (pageCache[value]) {
+        return;
+      }
+      setIsLoadingPageInfo(true);
+      try {
+        const res = await fetch(`${API}/pages/${value}`);
+        const result = await res.json();
+        // Cache the result
+        setPageCache((prev) => ({ ...prev, [value]: result }));
+      } catch (error) {
+        console.error("Failed to load parent path:", error);
+      } finally {
+        setIsLoadingPageInfo(false);
+      }
+    };
+
+    loadParentPath();
+  }, [value, pageCache]);
+
+  const debouncedRequest = useDebounce(async () => {
+    setIsSearching(true);
+    try {
+      const res = await fetch(`${API}/search-parent?q=${searchQuery}`);
+      const result = await res.json();
+      if (result?.data) {
+        setSearchResults(result.data);
+      }
+    } catch (error) {
+      console.error("Search failed:", error);
+    } finally {
+      setIsSearching(false);
+    }
+  });
+
+  function handleSearchQueryChange(v: string) {
+    setSearchQuery(v);
+    debouncedRequest();
+  }
+
+  const handlePageSelect = async (page: { id: string; title: string }) => {
+    setIsLoadingPageInfo(true);
+
+    try {
+      // Fetch the full path for selected parent
+      const res = await fetch(`${API}/pages/${page.id}`);
+      const result = await res.json();
+      const page_info_result = result;
+      onChange(page_info_result);
+      // Cache it
+      setPageCache((prev) => ({ ...prev, [page.id]: page_info_result }));
+      setShowPagePicker(false);
+      setSearchQuery("");
+    } catch (error) {
+      console.error("Failed to select parent:", error);
+    } finally {
+      setIsLoadingPageInfo(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-y-3">
+      {/* Page Selector */}
+      <div>
+        <label className="font-semibold text-sm">Ref</label>
+        <div className="flex gap-2 items-start">
+          <div className="flex-1 px-3 py-2 border border-gray-200 rounded-md bg-gray-50 flex items-start">
+            {isLoadingPageInfo ? (
+              <>
+                <Loader2 className="w-4 h-4 text-blue-500 mr-2 animate-spin" />
+                <span className="text-sm text-gray-500">Loading page...</span>
+              </>
+            ) : pageInfo ? (
+              <>
+                <FolderOpen className="w-4 h-4 text-gray-400 mr-2" />
+                <div className="-mt-0.5 flex flex-col flex-1 gap-y-0.5">
+                  <span className="text-sm text-gray-700 font-medium leading-[1.2]">
+                    {pageInfo.title}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <>
+                <Home className="w-4 h-4 text-gray-400 mr-2" />
+                <span className="text-sm text-gray-500">No page selected</span>
+              </>
+            )}
+          </div>
+          <button
+            onClick={() => setShowPagePicker(!showPagePicker)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+          >
+            {showPagePicker ? "Cancel" : "Change"}
+          </button>
+        </div>
+
+        {/* Page Picker with Search */}
+        {showPagePicker && (
+          <div className="mt-2 border border-gray-200 rounded-md bg-white shadow-lg">
+            {/* Search Input */}
+            <div className="p-3 border-b border-gray-200">
+              <div className="relative">
+                <SearchIcon className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => handleSearchQueryChange(e.target.value)}
+                  placeholder="Search pages..."
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Results */}
+            <div className="max-h-64 overflow-y-auto">
+              {/* Search Results */}
+              {isSearching ? (
+                <div className="px-4 py-8 text-center">
+                  <Loader2 className="w-6 h-6 text-blue-500 animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Searching pages...</p>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="px-4 py-8 text-center">
+                  <p className="text-sm text-gray-500">No pages found</p>
+                </div>
+              ) : (
+                searchResults.map((page) => (
+                  <button
+                    key={page.id}
+                    onClick={() => handlePageSelect(page)}
+                    className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0 flex items-center"
+                  >
+                    <FolderOpen className="w-4 h-4 text-gray-400 mr-3" />
+                    <span className="text-sm text-gray-700">{page.title}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

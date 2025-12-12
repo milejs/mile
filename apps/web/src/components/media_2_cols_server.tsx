@@ -1,6 +1,6 @@
 import { MileComponentProps } from "@milejs/types";
-import cn from "../lib/cn";
 import { RichtextView } from "@milejs/core/app";
+import cn from "../lib/cn";
 import { Link } from "./links";
 
 export function Media2Cols(props: MileComponentProps) {

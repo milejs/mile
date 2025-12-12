@@ -1,8 +1,8 @@
 "use client";
 
 import { MileComponentProps } from "@milejs/types";
+import { RichtextView } from "@milejs/core/app";
 import cn from "../lib/cn";
-import Richtext from "./richtext";
 import { Link } from "./links";
 
 export function Media2Cols(props: MileComponentProps) {
@@ -25,7 +25,7 @@ function Media({ title, image, text, link }: any) {
     <div className="flex flex-col sm:flex-row gap-x-8 gap-y-6 items-start">
       <div className="w-full order-2 sm:order-1 sm:w-1/2 text-left">
         <h2 className="mb-3 font-bold text-xl/6">{title}</h2>
-        <Richtext text={text} className="richtext_media_2_cols_home" />
+        <RichtextView blocks={text} className="richtext_media_2_cols_home" />
         {link && <Link {...link} variant="secondary" size="xs" />}
       </div>
       <div className="w-full order-1 sm:orde-2 sm:w-1/2">

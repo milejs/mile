@@ -29,7 +29,7 @@ import { Tree } from "./tree";
 import { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/dist/types/types";
 import { mutate } from "swr";
 import { toast } from "sonner";
-import { convertNodeDataToBlocks, treeToMdx } from "./data";
+import { convertNodeDataToBlocks, mdxToTree, treeToMdx } from "./data";
 import { BlockNoteEditor } from "@blocknote/core";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
@@ -323,6 +323,22 @@ const actions: Actions = {
     });
     return result.reverseAction;
   },
+
+  setTreeData(
+    editor,
+    payload: { new_tree_data: TreeData },
+  ): Action | undefined {
+    const { new_tree_data } = payload;
+    // const { result: result_tree, error } = mdxToTree(mdx);
+    const old_tree_data = editor.tree.data;
+    // this.updateData(result.content);
+    const result = editor.tree.setTreeData(new_tree_data, old_tree_data);
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "set-tree-data", targetId: "_root_" },
+    });
+    return result.reverseAction;
+  },
 };
 
 function initializeActions(actions: Actions, userActions?: Actions): Actions {
@@ -395,6 +411,25 @@ export class Editor implements MileEditor {
     // force re-render
     const newData = { ...this.tree.data };
     this.setData(newData, shouldSend);
+  }
+
+  getMdxString(): string {
+    const content = this.tree.data;
+    const components = this.mile.registry.components;
+
+    // convert json to mdx string
+    let mdxstring = "";
+    try {
+      // let mdxstring_old = treeToMDXstring(content, components);
+      mdxstring = treeToMdx(content, "root", components);
+      console.log("mdxstring", mdxstring);
+    } catch (error) {
+      console.error("Error converting tree to MDX", error);
+      // @ts-expect-error okk
+      error.cause = { message: "tree_to_mdx_failed" };
+      throw error;
+    }
+    return mdxstring;
   }
 
   async save(
@@ -960,22 +995,23 @@ class Persister implements MilePersister {
     draft_data: DraftData,
     url_changes: { slug: boolean; parent_id: boolean },
   ) {
-    const content = editor.tree.data;
-    const components = editor.mile.registry.components;
-    console.log("save", draft_data, content, url_changes);
+    // const content = editor.tree.data;
+    // const components = editor.mile.registry.components;
+    // console.log("save", draft_data, content, url_changes);
 
-    // convert json to mdx string
-    let mdxstring = "";
-    try {
-      // let mdxstring_old = treeToMDXstring(content, components);
-      mdxstring = treeToMdx(content, "root", components);
-      console.log("mdxstring", mdxstring);
-    } catch (error) {
-      console.error("Error converting tree to MDX", error);
-      // @ts-expect-error okk
-      error.cause = { message: "tree_to_mdx_failed" };
-      throw error;
-    }
+    // // convert json to mdx string
+    // let mdxstring = "";
+    // try {
+    //   // let mdxstring_old = treeToMDXstring(content, components);
+    //   mdxstring = treeToMdx(content, "root", components);
+    //   console.log("mdxstring", mdxstring);
+    // } catch (error) {
+    //   console.error("Error converting tree to MDX", error);
+    //   // @ts-expect-error okk
+    //   error.cause = { message: "tree_to_mdx_failed" };
+    //   throw error;
+    // }
+    const mdxstring = editor.getMdxString();
 
     return mutate(
       [`/pages`, `/${draft_data.page_id}`],
@@ -1010,22 +1046,22 @@ class Persister implements MilePersister {
     draft_data: DraftData,
     url_changes: { slug: boolean; parent_id: boolean },
   ) {
-    const content = editor.tree.data;
-    const components = editor.mile.registry.components;
-    console.log("publish", draft_data, content, url_changes);
+    // const content = editor.tree.data;
+    // const components = editor.mile.registry.components;
+    // console.log("publish", draft_data, content, url_changes);
 
-    // convert json to mdx string
-    let mdxstring = "";
-    try {
-      // let mdxstring_old = treeToMDXstring(content, components);
-      mdxstring = treeToMdx(content, "root", components);
-    } catch (error) {
-      console.error("Error converting tree to MDX", error);
-      // @ts-expect-error okk
-      error.cause = { message: "tree_to_mdx_failed" };
-      throw error;
-    }
-
+    // // convert json to mdx string
+    // let mdxstring = "";
+    // try {
+    //   // let mdxstring_old = treeToMDXstring(content, components);
+    //   mdxstring = treeToMdx(content, "root", components);
+    // } catch (error) {
+    //   console.error("Error converting tree to MDX", error);
+    //   // @ts-expect-error okk
+    //   error.cause = { message: "tree_to_mdx_failed" };
+    //   throw error;
+    // }
+    const mdxstring = editor.getMdxString();
     console.log("mdxstring", mdxstring);
 
     return mutate(

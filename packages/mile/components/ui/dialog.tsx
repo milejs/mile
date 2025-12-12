@@ -1,4 +1,4 @@
-import { Dialog as BaseDialog } from "@base-ui-components/react/dialog";
+import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 
 const Root = BaseDialog.Root;
 const Trigger = BaseDialog.Trigger;

@@ -17,7 +17,7 @@ import {
   useSelectedBlocks,
 } from "@blocknote/react";
 import { ImageIcon } from "lucide-react";
-import { Field } from "@base-ui-components/react/field";
+import { Field } from "@base-ui/react/field";
 import { Input } from "@/components/ui/input";
 import { filesize } from "./utils";
 import { toast } from "sonner";
