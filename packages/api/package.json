@@ -22,7 +22,7 @@
   "devDependencies": {
     "@milejs/eslint-config": "workspace:*",
     "@milejs/typescript-config": "workspace:*",
-    "@types/node": "^22.19.1",
+    "@types/node": "^22.19.2",
     "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.8",
     "tsup": "^8.5.1",
@@ -32,10 +32,10 @@
     "@better-upload/server": "^3.0.6",
     "@neondatabase/serverless": "^1.0.2",
     "@sindresorhus/slugify": "^3.0.0",
-    "better-auth": "^1.4.5",
+    "better-auth": "^1.4.6",
     "dotenv": "^17.2.3",
-    "drizzle-orm": "^0.45.0",
-    "hono": "^4.10.7",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.10.8",
     "nanoid": "^5.1.6",
     "ws": "^8.18.3",
     "zod": "^4.1.13"

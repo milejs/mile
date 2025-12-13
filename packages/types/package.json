@@ -26,9 +26,9 @@
   "devDependencies": {
     "@milejs/eslint-config": "workspace:*",
     "@milejs/typescript-config": "workspace:*",
-    "@types/node": "^22.19.1",
+    "@types/node": "^22.19.2",
     "bunchee": "^6.6.2",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.2",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
@@ -43,6 +43,6 @@
     "@atlaskit/pragmatic-drag-and-drop-flourish": "^2.0.9",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.1.0",
     "@atlaskit/pragmatic-drag-and-drop-react-drop-indicator": "^3.2.9",
-    "@blocknote/core": "^0.44.0"
+    "@blocknote/core": "^0.44.2"
   }
 }

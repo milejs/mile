@@ -15,24 +15,24 @@
     "@milejs/core": "workspace:*",
     "@milejs/types": "workspace:*",
     "@radix-ui/react-slot": "^1.2.4",
-    "@tailwindcss/postcss": "^4.1.17",
+    "@tailwindcss/postcss": "^4.1.18",
     "class-variance-authority": "^0.7.1",
     "embla-carousel-react": "^8.6.0",
-    "lucide-react": "^0.556.0",
+    "lucide-react": "^0.561.0",
     "next": "16.0.7",
     "postcss": "^8.5.6",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "tailwindcss": "^4.1.17"
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@milejs/eslint-config": "workspace:*",
     "@milejs/typescript-config": "workspace:*",
-    "@next/eslint-plugin-next": "16.0.1",
-    "@types/node": "^22.19.1",
+    "@next/eslint-plugin-next": "16.0.10",
+    "@types/node": "^22.19.2",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
-    "eslint": "^9.39.1",
+    "eslint": "^9.39.2",
     "typescript": "^5.9.3"
   }
 }
