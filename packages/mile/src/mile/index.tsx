@@ -3665,25 +3665,6 @@ function PageSettingsReady({ parent, close }: any) {
 
         <div className="w-full flex flex-col items-center gap-y-4">
           <div className="w-full">
-            <label htmlFor="content" className="font-semibold text-sm">
-              Content
-            </label>
-            <Field.Control
-              id="content"
-              value={draft_context.draft_data.content as string}
-              onValueChange={(value) => {
-                draft_context.updateDraftData({
-                  type: "UpdateField",
-                  payload: { key: "content", value },
-                });
-              }}
-              render={<Textarea rows={4} />}
-            />
-          </div>
-        </div>
-
-        <div className="w-full flex flex-col items-center gap-y-4">
-          <div className="w-full">
             <label className="font-semibold text-sm flex flex-row items-center gap-x-2">
               Do not index page
               <Switch.Root
