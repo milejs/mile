@@ -1448,10 +1448,6 @@ function NewPageSettings({ close }: any) {
     og_images: [],
   });
   const [error, setError] = useState<string | null>(null);
-  const parent = useSWR(
-    pageData.parent_id ? [`/pages/`, pageData.parent_id] : null,
-    fetcher,
-  );
 
   function handleTitleChange(event: any) {
     setPageData((e) => {
@@ -1494,10 +1490,6 @@ function NewPageSettings({ close }: any) {
       setError("Title is required.");
       return;
     }
-    // if (pageData.own_slug === "") {
-    //   setError("Slug is required.");
-    //   return;
-    // }
     if (pageData.slug !== "" && pageData.slug.at(0) === "/") {
       setError("Slug cannot start with slash e.g. /good-slug ");
       return;
@@ -1575,7 +1567,6 @@ function NewPageSettings({ close }: any) {
               onChange={handleSlugChange}
               title={pageData.title}
               parentId={pageData.parent_id}
-              parentTitle={parent?.data?.title}
               onParentChange={handleParentIdChange}
             />
           </div>

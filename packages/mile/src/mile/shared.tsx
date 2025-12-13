@@ -3,8 +3,11 @@ import { FolderOpen, Home, Link2, Loader2, SearchIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import debounce from "debounce";
 import slugify from "@sindresorhus/slugify";
+import useSWR from "swr";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
+const fetcher = (key: string[]) =>
+  fetch(`${API}${key.join("")}`).then((res) => res.json());
 
 const useDebounce = (callback: () => Promise<void>) => {
   const ref = useRef<() => Promise<void> | null>(null);
@@ -21,6 +24,33 @@ const useDebounce = (callback: () => Promise<void>) => {
 };
 
 export function SlugInput({
+  value = "",
+  onChange,
+  title,
+  parentId,
+  onParentChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  title?: string;
+  parentId: string | null | undefined;
+  onParentChange: (parentId: string | null) => void;
+}) {
+  const parent = useSWR(parentId ? [`/pages/`, parentId] : null, fetcher);
+
+  return (
+    <SlugInputInner
+      value={value}
+      onChange={onChange}
+      title={title}
+      parentId={parentId}
+      parentTitle={parent?.data?.title}
+      onParentChange={onParentChange}
+    />
+  );
+}
+
+function SlugInputInner({
   value = "",
   onChange,
   title,

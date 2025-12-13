@@ -3462,20 +3462,6 @@ function MileHeaderPageSettings() {
 
 function PageSettings({ close }: { close: () => void }) {
   const draft_context = useDraftData();
-  // TODO: move this inside SlugInput?
-  const parent = useSWR(
-    draft_context.draft_data.parent_id
-      ? [`/pages/`, draft_context.draft_data.parent_id]
-      : null,
-    fetcher,
-  );
-  console.log("parent", parent);
-
-  return <PageSettingsReady parent={parent} close={close} />;
-}
-
-function PageSettingsReady({ parent, close }: any) {
-  const draft_context = useDraftData();
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -3535,7 +3521,6 @@ function PageSettingsReady({ parent, close }: any) {
               }}
               title={draft_context.draft_data.title}
               parentId={draft_context.draft_data.parent_id}
-              parentTitle={parent?.data?.title}
               onParentChange={(parent_id: string | null) => {
                 draft_context.updateDraftData({
                   type: "UpdateField",
