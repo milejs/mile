@@ -36,6 +36,7 @@ import {
   handleRedirect,
   getRedirectStats,
   getCarouselPosts,
+  deletePage,
 } from "./dao";
 import { auth } from "./auth";
 
@@ -473,9 +474,9 @@ pages.post("/:id/publish", async (c) => {
 /**
  * Delete page by id (not implemented)
  */
-pages.delete("/:id", async (c) => {
+pages.post("/:id/delete", async (c) => {
   const id = c.req.param("id");
-  await db.delete(pagesTable).where(eq(pagesTable.id, id));
+  await deletePage(id);
   return c.json({ message: "Page deleted successfully" });
 });
 

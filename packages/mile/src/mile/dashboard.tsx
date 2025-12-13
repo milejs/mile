@@ -7,6 +7,7 @@ import {
   EqualIcon,
   PlusIcon,
   SearchIcon,
+  TrashIcon,
   XIcon,
 } from "lucide-react";
 import { Dialog } from "@base-ui/react/dialog";
@@ -637,8 +638,7 @@ function Pages({
 }: {
   search: { [key: string]: string | string[] | undefined };
 }) {
-  // const [mode, setMode] = useState("allpages");
-  const [mode, setMode] = useState(search.mode || "allpages");
+  const [mode, setMode] = useState(search.mode || "allpages"); // "allpages" | "tree" | "pagination"
 
   return (
     <div className="py-5 space-y-6">
@@ -878,6 +878,9 @@ function TableHeader() {
       <TableCol3>
         <span className="text-xs text-zinc-600 font-semibold">Created</span>
       </TableCol3>
+      <div className="w-32 shrink-0">
+        <span className="text-xs text-zinc-600 font-semibold">Action</span>
+      </div>
     </TableRow>
   );
 }
@@ -1075,7 +1078,6 @@ function SearchForm({ initialQuery }: { initialQuery?: any }) {
     <Form
       className="flex flex-row items-center gap-x-2"
       errors={errors}
-      onClearErrors={setErrors}
       action="/mile/search"
     >
       <Field.Root name="query" className="flex flex-col items-start gap-y-1">
@@ -1298,7 +1300,7 @@ function PagesList({ data }: { data: any }) {
 }
 
 function TableRow({ children }: { children: React.ReactNode }) {
-  return <div className="py-1.5 flex flex-row">{children}</div>;
+  return <div className="py-1.5 flex flex-row items-start">{children}</div>;
 }
 
 function TableCol1({ children }: { children: React.ReactNode }) {
@@ -1356,6 +1358,28 @@ function PageItem({ data }: { data: any }) {
           })}
         </div>
       </TableCol3>
+      <div className="w-32 shrink-0">
+        <form
+          method="POST"
+          action={`/api/mile/pages/${data.id}/delete`}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const response = await fetch(`/api/mile/pages/${data.id}/delete`, {
+              method: "POST",
+            });
+            if (response.ok) {
+              window.location.reload();
+            } else {
+              const error = await response.json();
+              console.error("error deleting page", error);
+            }
+          }}
+        >
+          <button className="p-2 bg-zinc-100 hover:bg-zinc-200 cursor-pointer">
+            <TrashIcon className="size-3" />
+          </button>
+        </form>
+      </div>
     </TableRow>
   );
 }

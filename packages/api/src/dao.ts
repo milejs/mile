@@ -31,7 +31,7 @@ import { alias } from "drizzle-orm/pg-core";
 export const publishedVersion = alias(draftsTable, "published_version");
 export const draftVersion = alias(draftsTable, "draft_version");
 
-// Search pages in slug's combobox
+// Search pages in slug's combobox (regardless of status)
 export async function searchDraftPagesByTitle(query: string, limit = 20) {
   const searchCondition = or(
     ilike(draftVersion.title, `%${query}%`),
@@ -51,7 +51,7 @@ export async function searchDraftPagesByTitle(query: string, limit = 20) {
   return results;
 }
 
-// Search pages in CMS
+// Search pages in CMS (regardless of status)
 export async function searchPages(query: string, limit = 20, offset = 0) {
   const searchCondition = or(
     ilike(draftVersion.title, `%${query}%`),
@@ -165,7 +165,7 @@ async function pageListDto(pagesList: any[]) {
   return results;
 }
 
-// List paginated pages for CMS
+// List paginated pages for CMS (regardless of status)
 export async function listPaginatedPages(limit = 20, offset = 0) {
   const [pagesList, totalCount] = await Promise.all([
     // Get the current page of data
@@ -208,7 +208,7 @@ export interface PageListItem {
   created_at: Date;
 }
 
-// List all pages for CMS
+// List all "published" pages for CMS
 export async function getCarouselPosts() {
   // First, get all pages
   const pagesList = await db
@@ -270,7 +270,7 @@ export async function getCarouselPosts() {
   return pagesWithImages;
 }
 
-// List all pages for CMS
+// List all pages for CMS (regardless of status)
 export async function listAllPages(): Promise<PageListItem[]> {
   const pagesList = await db
     .select(page_list_columns)
@@ -444,6 +444,13 @@ export async function publishPage(
   return draft;
 }
 
+export function deletePage(page_id: string) {
+  return db
+    .update(pagesTable)
+    .set({ status: "archived" })
+    .where(eq(pagesTable.id, page_id));
+}
+
 // Create a page
 export interface CreatePageData {
   id: string;
@@ -590,8 +597,12 @@ export async function getPublishedPageByFullSlug(full_slug: string) {
     .select()
     .from(pagesTable)
     .innerJoin(draftsTable, eq(pagesTable.published_version_id, draftsTable.id))
-    // TODO: should we add 'published' status?
-    .where(eq(pagesTable.full_slug, full_slug))
+    .where(
+      and(
+        eq(pagesTable.full_slug, full_slug),
+        eq(pagesTable.status, "published"),
+      ),
+    )
     .limit(1);
 }
 
@@ -942,6 +953,7 @@ export async function getMediasByIds(media_ids: string[]) {
  * Sitemap
  */
 
+// List all "published" pages for sitemap for CMS (regardless of status)
 export async function listAllPublishedPagesSitemap() {
   const pages = await db
     .select()
