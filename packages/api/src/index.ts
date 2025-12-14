@@ -37,6 +37,7 @@ import {
   getRedirectStats,
   getCarouselPosts,
   deletePage,
+  getBreadcrumbs,
 } from "./dao";
 import { auth } from "./auth";
 
@@ -219,6 +220,17 @@ ui.get("/page/:page_id", async (c) => {
     full_slug,
     og_images,
   });
+});
+
+// Get page for ref
+ui.get("/breadcrumb/:page_id", async (c) => {
+  const page_id = c.req.param("page_id");
+  const { mode = "draft" } = c.req.query();
+  const breadcrumbs = await getBreadcrumbs(page_id, { mode });
+  if (!breadcrumbs) {
+    return c.json({ message: "Page not found" }, 404);
+  }
+  return c.json(breadcrumbs);
 });
 
 /****************************************************************

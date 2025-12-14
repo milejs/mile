@@ -310,6 +310,155 @@ export async function getDraftFullSlug(
   }
 }
 
+// List breadcrumb
+type Breadcrumb = {
+  page_id: string;
+  slug: string;
+  title: string | null;
+  full_slug: string | null;
+};
+export async function getBreadcrumbs(
+  page_id: string,
+  options: {
+    mode?: string; // "draft" (default) | "published"
+    maxDepth?: number;
+  },
+): Promise<Breadcrumb[]> {
+  if (options.mode === "published") {
+    return getPublishedBreadcrumbs(page_id);
+  }
+
+  return getDraftBreadcrumbsCTE(page_id, options.maxDepth ?? 20);
+}
+
+async function getDraftBreadcrumbsCTE(
+  page_id: string,
+  maxDepth = 20,
+): Promise<Breadcrumb[]> {
+  const result = await db.execute<{
+    page_id: string;
+    parent_id: string | null;
+    slug: string;
+    title: string | null;
+    depth: number;
+    path_ids: string[];
+  }>(sql`
+    WITH RECURSIVE draft_tree AS (
+      -- Anchor
+      SELECT
+        p.id AS page_id,
+        d.parent_id,
+        d.slug,
+        d.title,
+        1 AS depth,
+        ARRAY[p.id]::char(32)[] AS path_ids
+      FROM pages p
+      JOIN drafts d ON d.id = p.draft_version_id
+      WHERE p.id = ${page_id}
+
+      UNION ALL
+
+      -- Recursive step
+      SELECT
+        p.id AS page_id,
+        d.parent_id,
+        d.slug,
+        d.title,
+        dt.depth + 1 AS depth,
+        (dt.path_ids || p.id)::char(32)[] AS path_ids
+      FROM draft_tree dt
+      JOIN pages p ON p.id = dt.parent_id
+      JOIN drafts d ON d.id = p.draft_version_id
+      WHERE
+        dt.depth < ${maxDepth}
+        AND NOT p.id = ANY(dt.path_ids)
+    )
+    SELECT *
+    FROM draft_tree;
+  `);
+
+  if (result.rows.length === 0) return [];
+  // Reverse: root → leaf
+  const nodes = [...result.rows].reverse();
+  const breadcrumbs: Breadcrumb[] = [
+    {
+      page_id: "home",
+      slug: "",
+      title: "Home",
+      full_slug: "/",
+    },
+  ];
+  let currentPath = "";
+
+  for (const node of nodes) {
+    currentPath =
+      currentPath === "" ? `/${node.slug}` : `${currentPath}/${node.slug}`;
+    // Avoid duplicate "/" when slug is empty
+    if (currentPath === "/") continue;
+
+    breadcrumbs.push({
+      page_id: node.page_id,
+      slug: node.slug,
+      title: node.title,
+      full_slug: currentPath,
+    });
+  }
+
+  return breadcrumbs;
+}
+
+async function getPublishedBreadcrumbs(page_id: string): Promise<Breadcrumb[]> {
+  const page = await db
+    .select({
+      full_slug: pagesTable.full_slug,
+    })
+    .from(pagesTable)
+    .where(and(eq(pagesTable.id, page_id), eq(pagesTable.status, "published")))
+    .limit(1);
+
+  if (!page[0]?.full_slug) return [];
+
+  const segments = page[0].full_slug
+    .replace(/^\/|\/$/g, "")
+    .split("/")
+    .filter(Boolean);
+
+  const paths = segments.map(
+    (_, i) => "/" + segments.slice(0, i + 1).join("/"),
+  );
+
+  const rows = await db
+    .select({
+      page_id: pagesTable.id,
+      full_slug: pagesTable.full_slug,
+      title: draftsTable.title,
+    })
+    .from(pagesTable)
+    .innerJoin(draftsTable, eq(pagesTable.published_version_id, draftsTable.id))
+    .where(inArray(pagesTable.full_slug, paths))
+    .orderBy(pagesTable.full_slug);
+
+  const breadcrumbs: Breadcrumb[] = [
+    {
+      page_id: "home",
+      slug: "",
+      title: "Home",
+      full_slug: "/",
+    },
+  ];
+
+  for (const row of rows) {
+    breadcrumbs.push({
+      page_id: row.page_id,
+      slug: row.full_slug?.split("/").pop()!,
+      title: row.title,
+      full_slug: row.full_slug,
+    });
+  }
+
+  return breadcrumbs;
+}
+
 /**
  * Creates a new draft and update page's pointer
  *  - check circular reference

@@ -305,25 +305,6 @@ export const mileconfig: Config = {
       },
     },
     {
-      type: "breadcrumb",
-      name: "breadcrumb",
-      title: "Breadcrumb",
-      thumbnail: "/mile-thumbnails/breadcrumb.png",
-      fields: [],
-      getInitialNodes: (node_id) => {
-        return {
-          [node_id]: {
-            id: node_id,
-            type: "breadcrumb",
-            props: {
-              className: "",
-            },
-            options: undefined,
-          },
-        };
-      },
-    },
-    {
       type: "condition_content_text",
       name: "condition_content_text",
       title: "Condition Text",
@@ -826,6 +807,103 @@ export const mileconfig: Config = {
           [node_id]: {
             id: node_id,
             type: "condition_content_cta",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        };
+      },
+    },
+    {
+      type: "condition_main_grid_3",
+      name: "condition_main_grid_3",
+      title: "Condition Main Grid 3x1",
+      thumbnail: "/mile-thumbnails/condition_main_grid_3.png",
+      fields: [
+        {
+          type: "string",
+          name: "text0",
+          title: "Text 1",
+        },
+        {
+          type: "image",
+          name: "image0",
+          title: "Image 1",
+        },
+        {
+          type: "array",
+          name: "links0",
+          title: "Links 1",
+          of: [
+            {
+              type: "link",
+              name: "link",
+              title: "Link",
+            },
+          ],
+          options: {
+            layout: "list",
+          },
+        },
+        //
+        {
+          type: "string",
+          name: "text1",
+          title: "Text 2",
+        },
+        {
+          type: "image",
+          name: "image1",
+          title: "Image 2",
+        },
+        {
+          type: "array",
+          name: "links1",
+          title: "Links 2",
+          of: [
+            {
+              type: "link",
+              name: "link",
+              title: "Link",
+            },
+          ],
+          options: {
+            layout: "list",
+          },
+        },
+        //
+        {
+          type: "string",
+          name: "text2",
+          title: "Text 3",
+        },
+        {
+          type: "image",
+          name: "image2",
+          title: "Image 3",
+        },
+        {
+          type: "array",
+          name: "links2",
+          title: "Links 3",
+          of: [
+            {
+              type: "link",
+              name: "link",
+              title: "Link",
+            },
+          ],
+          options: {
+            layout: "list",
+          },
+        },
+      ],
+      getInitialNodes: (node_id) => {
+        return {
+          [node_id]: {
+            id: node_id,
+            type: "condition_main_grid_3",
             props: {
               className: "",
             },

@@ -4,7 +4,6 @@ import { BannerBlue } from "./banner_blue";
 import { BannerLightBlue } from "./banner_light_blue";
 import { Media2Cols } from "./media_2_cols";
 import { CarouselPosts } from "./carousel_posts";
-import { Breadcrumb } from "./breadcrumb";
 import { ConditionTitle } from "./condition_title";
 import { ConditionContentText } from "./condition_content_text";
 import { ConditionBanner } from "./condition_banner";
@@ -16,6 +15,7 @@ import { ConditionContent2Slides } from "./condition_content_2_slides";
 import { ConditionContentCTA } from "./condition_content_cta";
 import { ConditionContentTestimonial } from "./condition_content_testimonial";
 import { ResourceBannerGrid3x2 } from "./resource_banner_grid_3x2";
+import { ConditionMainGrid3 } from "./condition_main_grid_3";
 
 const components = {
   home_hero: {
@@ -45,10 +45,6 @@ const components = {
   condition_title: {
     name: "condition_title",
     component: ConditionTitle,
-  },
-  breadcrumb: {
-    name: "breadcrumb",
-    component: Breadcrumb,
   },
   condition_content_text: {
     name: "condition_content_text",
@@ -89,6 +85,10 @@ const components = {
   resource_banner_grid_3x2: {
     name: "resource_banner_grid_3x2",
     component: ResourceBannerGrid3x2,
+  },
+  condition_main_grid_3: {
+    name: "condition_main_grid_3",
+    component: ConditionMainGrid3,
   },
   // override built-in markdown component
   heading: {

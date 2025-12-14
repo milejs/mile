@@ -22,8 +22,11 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useState,
 } from "react";
 import { invariant } from "@/lib/invariant";
+
+const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
 const MileContext = createContext<Mile | null>(null);
 
@@ -142,6 +145,9 @@ const builtinComponentLibrarySchema = [
   {
     type: "image_container",
   },
+  {
+    type: "breadcrumb",
+  },
 ];
 
 const internalSchema = [
@@ -178,6 +184,18 @@ const internalSchema = [
         title: "External",
       },
     ],
+    preview: {
+      select: {
+        link_text: "link_text",
+        url: "url",
+      },
+      prepare({ link_text, url }: any) {
+        return {
+          title: link_text,
+          subtitle: url,
+        };
+      },
+    },
   },
   {
     type: "image",
@@ -250,6 +268,31 @@ const internalSchema = [
     },
   },
   {
+    type: "breadcrumb",
+    name: "breadcrumb",
+    title: "Breadcrumb",
+    thumbnail: "/mile-thumbnails/breadcrumb.png",
+    fields: [
+      {
+        type: "string",
+        name: "page_id",
+        title: "Page ID",
+      },
+    ],
+    getInitialNodes: (node_id: string) => {
+      return {
+        [node_id]: {
+          id: node_id,
+          type: "breadcrumb",
+          props: {
+            className: "",
+          },
+          options: undefined,
+        },
+      };
+    },
+  },
+  {
     type: "heading",
     name: "heading",
     title: "Heading",
@@ -295,6 +338,10 @@ const builtinComponents: Components = {
   image_container: {
     name: "image_container",
     component: ImageContainer,
+  },
+  breadcrumb: {
+    name: "breadcrumb",
+    component: Breadcrumb,
   },
   paragraph: {
     name: "paragraph",
@@ -560,6 +607,59 @@ function ImageContainer(props: any) {
   }
 
   return null;
+}
+
+function Breadcrumb(props: any) {
+  const { options } = props ?? {};
+  const { page_id } = options ?? {};
+  const [breadcrumbs, setBreadcrumbs] = useState<
+    { title: string; full_slug: string }[]
+  >([]);
+
+  useEffect(() => {
+    function getBreadcrumbs(page_id?: string) {
+      if (!page_id) return;
+      fetch(`${API}/ui/breadcrumb/${page_id}`)
+        .then((response) => response.json())
+        .then((data) => {
+          console.log("breadcrumbs", data);
+          setBreadcrumbs(data);
+        });
+    }
+    getBreadcrumbs(page_id);
+  }, [page_id]);
+
+  return (
+    <div className="px-4 sm:px-0 py-5 w-full">
+      <div className="max-w-5xl mx-auto">
+        <nav aria-label="Breadcrumb">
+          <ol className="flex flex-wrap items-center gap-2 text-sm">
+            {breadcrumbs.map((breadcrumb, index) => (
+              <li key={index} className="flex items-center gap-2">
+                {index === breadcrumbs.length - 1 ? (
+                  // Current page - not a link
+                  <span className="text-gray-700 font-medium">
+                    {breadcrumb.title}
+                  </span>
+                ) : (
+                  // Parent pages - links
+                  <>
+                    <a
+                      href={breadcrumb.full_slug}
+                      className="text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      {breadcrumb.title}
+                    </a>
+                    <span className="text-gray-400">/</span>
+                  </>
+                )}
+              </li>
+            ))}
+          </ol>
+        </nav>
+      </div>
+    </div>
+  );
 }
 
 class Registry implements MileRegistry {

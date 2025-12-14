@@ -1867,6 +1867,9 @@ function ArrayItemListItem({
         )}
         <div className="grow">
           <div className="text-sm">{preview.title}</div>
+          {preview.subtitle && (
+            <div className="text-xs text-gray-500">{preview.subtitle}</div>
+          )}
         </div>
         {closestEdge && <DropIndicator edge={closestEdge} gap="1px" />}
       </div>
@@ -2479,7 +2482,7 @@ function EditField({
 }) {
   const mile = useMileProvider();
 
-  // console.log("EditField", path, field, state, parent);
+  console.log("EditField", path, field, state, parent);
   const type = field.type;
   const isPrimitive = isPrimitiveType(type);
   if (isPrimitive) {
@@ -2634,6 +2637,11 @@ function EditNode({ node }: { node: NodeData }) {
     });
   };
 
+  // special case breadcrumb to rende readonly breadcrumb
+  if (schema.type === "breadcrumb") {
+    return <BreadcrumbReadOnlyField node_id={treenode.id} />;
+  }
+
   return (
     <div className="space-y-3">
       <h3 className="font-bold text-xl">{schema.title}</h3>
@@ -2645,6 +2653,33 @@ function EditNode({ node }: { node: NodeData }) {
         parent={schema}
         fields={schema.fields}
       />
+    </div>
+  );
+}
+
+function BreadcrumbReadOnlyField({ node_id }: { node_id: string }) {
+  const editor = useEditor();
+  const draft_context = useDraftData();
+  const page_id = draft_context.draft_data.page_id;
+
+  useEffect(() => {
+    editor.perform({
+      type: "updateNodeOption",
+      name: `Update node option (breadcrumb)`,
+      payload: {
+        nodeId: node_id,
+        value: { page_id },
+        initialValue: { page_id },
+      },
+    });
+  }, [editor, node_id, page_id]);
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-bold text-xl">Breadcrumb</h3>
+      <div className="text-sm">
+        Page ID: <code>{page_id}</code>
+      </div>
     </div>
   );
 }
