@@ -1,5 +1,5 @@
 import { NodeData, TreeData } from "@milejs/types";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader, PlusIcon } from "lucide-react";
 import { useMileProvider } from "./client";
 import { createChannel } from "bidc";
@@ -15,6 +15,20 @@ type ChannelPayload =
       data: TreeData;
     }
   | {
+      kind: "selectNode";
+      data: {
+        id: string;
+        type: string;
+      };
+    }
+  | {
+      kind: "populateEmbedContent";
+      data: {
+        node_id: string;
+        content: any;
+      };
+    }
+  | {
       kind: "set_active_node_id";
       data: {
         id: string | null;
@@ -26,6 +40,18 @@ type PreviewProps = {
   // data: PageData;
   // data: TreeData | undefined;
   // tree: Tree;
+};
+
+const ChannelContext = React.createContext<
+  ((payload: ChannelPayload) => void) | null
+>(null);
+
+export const useSendData = () => {
+  const channel = React.useContext(ChannelContext);
+  if (!channel) {
+    throw new Error("useChannel must be used within a ChannelProvider");
+  }
+  return channel;
 };
 
 export function Preview({ slug }: PreviewProps) {
@@ -71,14 +97,13 @@ export function Preview({ slug }: PreviewProps) {
     async function requestData() {
       if (isConnected) {
         console.log("sync");
-
         await channelRef.current?.send({ kind: "request_data" });
       }
     }
     requestData();
   }, [isConnected]);
 
-  const sendData = async (data: any) => {
+  const sendData = useCallback(async (data: any) => {
     if (!channelRef.current) return;
 
     try {
@@ -87,34 +112,33 @@ export function Preview({ slug }: PreviewProps) {
     } catch (error) {
       console.error("Failed to send data:", error);
     }
-  };
+  }, []);
 
   if (!data) return <Loader className="animate-spin" />;
   // console.log("Preview data", data);
 
   return (
     <Container>
-      <Render
-        data={data}
-        sendData={sendData}
-        activeNodeId={activeNodeId}
-        setActiveNodeId={setActiveNodeId}
-      />
-      {isConnected && (
-        <div className="fixed top-4 bottom-0 right-0 left-4 w-2 h-2 rounded-full bg-green-600"></div>
-      )}
+      <ChannelContext value={sendData}>
+        <Render
+          data={data}
+          activeNodeId={activeNodeId}
+          setActiveNodeId={setActiveNodeId}
+        />
+        {isConnected && (
+          <div className="fixed top-4 bottom-0 right-0 left-4 w-2 h-2 rounded-full bg-green-600"></div>
+        )}
+      </ChannelContext>
     </Container>
   );
 }
 
 function Render({
   data,
-  sendData,
   activeNodeId,
   setActiveNodeId,
 }: {
   data: TreeData | undefined;
-  sendData: (data: any) => Promise<void>;
   activeNodeId: string | null;
   setActiveNodeId: (id: string | null) => void;
 }) {
@@ -129,7 +153,6 @@ function Render({
       data={data}
       id={root.id}
       parent_id={null}
-      sendData={sendData}
       activeNodeId={activeNodeId}
       setActiveNodeId={setActiveNodeId}
     />
@@ -140,19 +163,17 @@ function RenderItem({
   data,
   id,
   parent_id,
-  sendData,
   activeNodeId,
   setActiveNodeId,
 }: {
   data: TreeData;
   id: string;
   parent_id: string | null;
-  sendData: (data: any) => Promise<void>;
   activeNodeId: string | null;
   setActiveNodeId: (id: string | null) => void;
 }) {
-  const mile = useMileProvider();
   const ref = useRef<HTMLDivElement | null>(null);
+  const sendData = useSendData();
   const item = data[id];
 
   if (item.id === "root") {
@@ -178,7 +199,6 @@ function RenderItem({
                 data={data}
                 id={child_id}
                 parent_id="root"
-                sendData={sendData}
                 activeNodeId={activeNodeId}
                 setActiveNodeId={setActiveNodeId}
               />
@@ -215,7 +235,6 @@ function RenderItem({
       data={data}
       id={id}
       parent_id={parent_id}
-      sendData={sendData}
       activeNodeId={activeNodeId}
       setActiveNodeId={setActiveNodeId}
     />
@@ -227,7 +246,6 @@ function RenderComponent({
   data,
   id,
   parent_id,
-  sendData,
   activeNodeId,
   setActiveNodeId,
 }: {
@@ -235,7 +253,6 @@ function RenderComponent({
   data: TreeData;
   id: string;
   parent_id: string | null;
-  sendData: (data: any) => Promise<void>;
   activeNodeId: string | null;
   setActiveNodeId: (id: string | null) => void;
 }) {
@@ -279,7 +296,6 @@ function RenderComponent({
                 data={data}
                 id={id}
                 parent_id={node.id}
-                sendData={sendData}
                 activeNodeId={activeNodeId}
                 setActiveNodeId={setActiveNodeId}
               />

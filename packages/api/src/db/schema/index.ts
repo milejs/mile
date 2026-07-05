@@ -6,6 +6,7 @@ import {
   integer,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -93,6 +94,47 @@ export type InsertPage = typeof pages.$inferInsert;
 export type SelectDraft = typeof drafts.$inferSelect;
 export type InsertDraft = typeof drafts.$inferInsert;
 export type SelectMedia = typeof medias.$inferSelect;
+
+export const component_library = pgTable(
+  "component_library",
+  {
+    id: char("id", { length: 32 }).primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    content: text("content").notNull(),
+    category: text("category"),
+    thumbnail_id: char("thumbnail_id", { length: 32 }),
+    is_active: integer("is_active").default(1),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+    updated_at: timestamp("updated_at")
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index("component_library_category__idx").on(table.category),
+    index("component_library_is_active__idx").on(table.is_active),
+  ],
+);
+
+export type InsertComponent = typeof component_library.$inferInsert;
+
+export const page_embeds = pgTable(
+  "page_embeds",
+  {
+    page_id: char("page_id", { length: 32 }).notNull(),
+    component_id: char("component_id", { length: 32 }).notNull(),
+    // Track which version uses this embed
+    draft_version_id: char("draft_version_id", { length: 32 }),
+    created_at: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.page_id, table.component_id, table.draft_version_id],
+    }),
+    index("page_embeds_component__idx").on(table.component_id),
+    index("page_embeds_draft_version__idx").on(table.draft_version_id),
+  ],
+);
 
 export const preview_tokens = pgTable("preview_tokens", {
   id: uuid("id").defaultRandom().primaryKey(),

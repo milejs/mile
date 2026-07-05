@@ -560,6 +560,15 @@ function MileFrame({
             data: data,
           });
         }
+
+        if (message?.kind === "populateEmbedContent") {
+          const { node_id, content } = message.data;
+          editor.perform({
+            type: "replaceNodeData",
+            name: `Replace node data`,
+            payload: { node_id, content },
+          });
+        }
       });
     }, 500);
 

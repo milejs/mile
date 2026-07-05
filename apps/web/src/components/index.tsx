@@ -16,6 +16,9 @@ import { ConditionContentCTA } from "./condition_content_cta";
 import { ConditionContentTestimonial } from "./condition_content_testimonial";
 import { ResourceBannerGrid3x2 } from "./resource_banner_grid_3x2";
 import { ConditionMainGrid3 } from "./condition_main_grid_3";
+import { ConditionContent3Slides } from "./condition_content_3_slides";
+import { ConditionContent2CLinkImageText } from "./condition_content_2c_link_image_text";
+import { ConditionContent2CImageText } from "./condition_content_2c_image_text";
 
 const components = {
   home_hero: {
@@ -89,6 +92,18 @@ const components = {
   condition_main_grid_3: {
     name: "condition_main_grid_3",
     component: ConditionMainGrid3,
+  },
+  condition_content_3_slides: {
+    name: "condition_content_3_slides",
+    component: ConditionContent3Slides,
+  },
+  condition_content_2c_link_image_text: {
+    name: "condition_content_2c_link_image_text",
+    component: ConditionContent2CLinkImageText,
+  },
+  condition_content_2c_image_text: {
+    name: "condition_content_2c_image_text",
+    component: ConditionContent2CImageText,
   },
   // override built-in markdown component
   heading: {

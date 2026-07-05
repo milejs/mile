@@ -780,12 +780,22 @@ async function matchPattern(
   return null; // no match
 }
 
-// TODO: pattern should be {type, attrs}
 const row_pattern_condition_intro = [
   "et_pb_section",
   "et_pb_row",
   "et_pb_column",
   "et_pb_post_title",
+  "lwp_divi_breadcrumbs",
+  "et_pb_text",
+  "text",
+];
+
+const row_pattern_condition_intro_text = [
+  "et_pb_section",
+  "et_pb_row",
+  "et_pb_column",
+  "et_pb_text",
+  "text",
   "lwp_divi_breadcrumbs",
   "et_pb_text",
   "text",
@@ -798,7 +808,6 @@ const row_pattern_condition_banner = [
   "et_pb_image",
 ];
 
-// rename: add text_image
 const row_pattern_condition_content_2_cols_text_image = [
   "et_pb_section",
   { type: "et_pb_row", attrs: { named: { column_structure: "1_2,1_2" } } },
@@ -832,7 +841,7 @@ const row_pattern_condition_content_2_cols_blue_banner = [
   { type: "et_pb_row", attrs: { named: { column_structure: "1_2,1_2" } } },
   {
     type: "et_pb_column",
-    attrs: { named: { type: "1_2" } },
+    attrs: { named: { type: "1_2", background_color: "#0C71C3" } },
   },
   "et_pb_text",
   "text",
@@ -853,6 +862,29 @@ const row_pattern_condition_content_2_slides = [
   {
     type: "et_pb_column",
     attrs: { named: { type: "1_2" } },
+  },
+  "et_pb_slider",
+  "et_pb_slide",
+];
+
+const row_pattern_condition_content_3_slides = [
+  "et_pb_section",
+  { type: "et_pb_row", attrs: { named: { column_structure: "1_3,1_3,1_3" } } },
+  {
+    type: "et_pb_column",
+    attrs: { named: { type: "1_3" } },
+  },
+  "et_pb_slider",
+  "et_pb_slide",
+  {
+    type: "et_pb_column",
+    attrs: { named: { type: "1_3" } },
+  },
+  "et_pb_slider",
+  "et_pb_slide",
+  {
+    type: "et_pb_column",
+    attrs: { named: { type: "1_3" } },
   },
   "et_pb_slider",
   "et_pb_slide",
@@ -900,6 +932,39 @@ const row_pattern_condition_testimonial = [
   "text",
 ];
 
+const row_pattern_condition_2c_link_image_text = [
+  "et_pb_section",
+  { type: "et_pb_row", attrs: { named: { column_structure: "1_2,1_2" } } },
+  {
+    type: "et_pb_column",
+    attrs: { named: { type: "1_2" } },
+  },
+  "et_pb_image",
+  {
+    type: "et_pb_column",
+    attrs: { named: { type: "1_2" } },
+  },
+  "et_pb_text",
+  "text",
+  "et_pb_button",
+];
+
+const row_pattern_condition_2c_image_text = [
+  "et_pb_section",
+  { type: "et_pb_row", attrs: { named: { column_structure: "1_2,1_2" } } },
+  {
+    type: "et_pb_column",
+    attrs: { named: { type: "1_2" } },
+  },
+  "et_pb_image",
+  {
+    type: "et_pb_column",
+    attrs: { named: { type: "1_2" } },
+  },
+  "et_pb_text",
+  "text",
+];
+
 const row_pattern_map = {
   condition_intro: {
     pattern: row_pattern_condition_intro,
@@ -917,6 +982,31 @@ const row_pattern_map = {
         {
           type: "condition_content_text",
           content: `<ConditionContentText id='${generateId()}' type='condition_content_text' options={{${text_option}}} />`,
+        },
+      ];
+    },
+  },
+  condition_intro2: {
+    pattern: row_pattern_condition_intro_text,
+    content: async (snapshot: any, processor: any) => {
+      const texts = getAllTextsOption(snapshot, processor);
+      const title_json_string = texts[0];
+      const title_nodes = JSON5.parse(title_json_string);
+      const title_node_content = title_nodes[0].content;
+      const title = title_node_content[0]?.text;
+
+      return [
+        {
+          type: "condition_title",
+          content: `<ConditionTitle id='${generateId()}' type='condition_title' options={{title: '${title}'}} />`,
+        },
+        {
+          type: "breadcrumb",
+          content: `<Breadcrumb id='${generateId()}' type='breadcrumb' />`,
+        },
+        {
+          type: "condition_content_text",
+          content: `<ConditionContentText id='${generateId()}' type='condition_content_text' options={{text: ${texts[1]}}} />`,
         },
       ];
     },
@@ -986,6 +1076,18 @@ const row_pattern_map = {
       ];
     },
   },
+  condition_content_3_slides: {
+    pattern: row_pattern_condition_content_3_slides,
+    content: (snapshot: any, processor: any) => {
+      const slide_option = getOptionSlide(snapshot);
+      return [
+        {
+          type: "condition_content_3_slides",
+          content: `<ConditionContent3Slides id='${generateId()}' type='condition_content_3_slides' options={{${slide_option}}} />`,
+        },
+      ];
+    },
+  },
   condition_content_text: {
     pattern: row_pattern_condition_content_text,
     content: (snapshot: any, processor: any) => {
@@ -1048,28 +1150,34 @@ const row_pattern_map = {
       ];
     },
   },
+  condition_content_2c_link_image_text: {
+    pattern: row_pattern_condition_2c_link_image_text,
+    content: (snapshot: any, processor: any) => {
+      const text_option = getOptionText(snapshot, processor);
+      const button_option = getOptionButton(snapshot);
+      const image_option = getOptionImage(snapshot);
+      return [
+        {
+          type: "condition_content_2c_link_image_text",
+          content: `<ConditionContent2CLinkImageText id='${generateId()}' type='condition_content_2c_link_image_text' options={{${image_option}, ${text_option}, ${button_option}}} />`,
+        },
+      ];
+    },
+  },
+  condition_content_2c_image_text: {
+    pattern: row_pattern_condition_2c_image_text,
+    content: (snapshot: any, processor: any) => {
+      const text_option = getOptionText(snapshot, processor);
+      const image_option = getOptionImage(snapshot);
+      return [
+        {
+          type: "condition_content_2c_image_text",
+          content: `<ConditionContent2CImageText id='${generateId()}' type='condition_content_2c_image_text' options={{${image_option}, ${text_option}}} />`,
+        },
+      ];
+    },
+  },
 };
-
-function getOptionTexts(snapshot: any, processor: any) {
-  const text_content_items = snapshot.filter(
-    (child: any) => child.type === "text",
-  );
-  if (text_content_items.length === 0) {
-    throw new Error(`Text content item not found in condition_banner`);
-  }
-  const text_contents = text_content_items.map((e: any) =>
-    processor.processSync(e.content),
-  );
-  const text_contents_option = text_contents
-    .map((txt: any, i: number) => {
-      const mdx = sanitizeMdxString(String(txt)).replace(/\\n$/, "") || "";
-      const blocks = editor.tryParseMarkdownToBlocks(mdx);
-      const value = JSON5.stringify(blocks);
-      return `text${i}: ${value}`;
-    })
-    .join(", ");
-  return text_contents_option;
-}
 
 function getOptionText(snapshot: any, processor: any) {
   const text_content_item = snapshot.find(
@@ -1083,6 +1191,42 @@ function getOptionText(snapshot: any, processor: any) {
   const blocks = editor.tryParseMarkdownToBlocks(mdx);
   const value = JSON5.stringify(blocks);
   return `text: ${value}`;
+}
+
+function getAllTextsOption(snapshot: any, processor: any) {
+  const items = snapshot.filter((child: any) => child.type === "text");
+  if (items.length === 0) {
+    throw new Error(`Text content item not found in condition_banner`);
+  }
+  const text_contents = items.map((e: any) => processor.processSync(e.content));
+  console.info("text_contents", text_contents);
+
+  const texts = text_contents.map((txt: any, i: number) => {
+    const mdx = sanitizeMdxString(String(txt)).replace(/\\n$/, "") || "";
+    console.info("mdx", mdx);
+
+    const blocks = editor.tryParseMarkdownToBlocks(mdx);
+    const value = JSON5.stringify(blocks);
+    return value;
+  });
+  return texts;
+}
+
+function getOptionTexts(snapshot: any, processor: any) {
+  const items = snapshot.filter((child: any) => child.type === "text");
+  if (items.length === 0) {
+    throw new Error(`Text content item not found in condition_banner`);
+  }
+  const text_contents = items.map((e: any) => processor.processSync(e.content));
+  const text_contents_option = text_contents
+    .map((txt: any, i: number) => {
+      const mdx = sanitizeMdxString(String(txt)).replace(/\\n$/, "") || "";
+      const blocks = editor.tryParseMarkdownToBlocks(mdx);
+      const value = JSON5.stringify(blocks);
+      return `text${i}: ${value}`;
+    })
+    .join(", ");
+  return text_contents_option;
 }
 
 function getOptionText2(snapshot: any, processor: any) {
@@ -1111,15 +1255,22 @@ function getOptionSlider(snapshot: any) {
 }
 
 function getOptionSlide(snapshot: any) {
+  const sliders = snapshot.filter(
+    (child: any) => child.type === "et_pb_slider",
+  );
   const slides = snapshot.filter((child: any) => child.type === "et_pb_slide");
   if (slides.length === 0) {
     throw new Error(`Slide content item not found`);
   }
   const options = slides
-    .map(
-      (e: any, i: number) =>
-        `bg_img${i}:{image_url: '${e.attrs.named.background_image || ""}'}, btn_text${i}:{link_text: '${sanitizeMdxString(e.attrs.named.button_text) || ""}', url${i}: '${sanitizeMdxString(e.attrs.named.button_link) || ""}'}, heading${i}: '${sanitizeMdxString(e.attrs.named.heading) || ""}'`,
-    )
+    .map((e: any, i: number) => {
+      let img_url = e.attrs.named.background_image;
+      if (!img_url) {
+        // if slide has no background image, use the slider's background image
+        img_url = sliders[i].attrs.named.background_image;
+      }
+      return `bg_img${i}:{image_url: '${img_url || ""}'}, btn_text${i}:{link_text: '${sanitizeMdxString(e.attrs.named.button_text) || ""}', url${i}: '${sanitizeMdxString(e.attrs.named.button_link) || ""}'}, heading${i}: '${sanitizeMdxString(e.attrs.named.heading) || ""}'`;
+    })
     .join(", ");
   return options;
 }
@@ -1215,9 +1366,12 @@ export async function transformShortcodes(input: any) {
     if (tag === "et_pb_row") {
       const candidate = await findRowCandidate(snapshot, processor);
       console.info("--------- candidate", candidate);
-      if (candidate) {
-        candidates.push(candidate);
+      if (!candidate) {
+        throw new Error(
+          `Failed to find row candidate for snapshot: ${JSON.stringify(snapshot)}`,
+        );
       }
+      candidates.push(candidate);
     }
   }
 

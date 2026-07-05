@@ -317,6 +317,11 @@ export const mileconfig: Config = {
         },
         {
           type: "string",
+          name: "bg_color",
+          title: "Background Color",
+        },
+        {
+          type: "string",
           name: "pt",
           title: "Padding Top",
         },
@@ -460,6 +465,11 @@ export const mileconfig: Config = {
       title: "Condition Grid 3x1",
       thumbnail: "/mile-thumbnails/condition_content_grid_3.png",
       fields: [
+        {
+          type: "string",
+          name: "bg_color",
+          title: "Background Color",
+        },
         {
           type: "richtext",
           name: "text0",
@@ -681,6 +691,11 @@ export const mileconfig: Config = {
           title: "Align",
           description: "left | center | right",
         },
+        {
+          type: "string",
+          name: "bg_color",
+          title: "Background Color",
+        },
       ],
       getInitialNodes: (node_id) => {
         return {
@@ -742,6 +757,71 @@ export const mileconfig: Config = {
           [node_id]: {
             id: node_id,
             type: "condition_content_2_slides",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        };
+      },
+    },
+    {
+      type: "condition_content_3_slides",
+      name: "condition_content_3_slides",
+      title: "Condition 3 Sides",
+      thumbnail: "/mile-thumbnails/condition_content_3_slides.png",
+      fields: [
+        {
+          type: "string",
+          name: "heading0",
+          title: "Heading 1",
+        },
+        {
+          type: "image",
+          name: "bg_img0",
+          title: "BG Image 1",
+        },
+        {
+          type: "link",
+          name: "btn_text0",
+          title: "Button Link 1",
+        },
+        {
+          type: "string",
+          name: "heading1",
+          title: "Heading 2",
+        },
+        {
+          type: "image",
+          name: "bg_img1",
+          title: "BG Image 2",
+        },
+        {
+          type: "link",
+          name: "btn_text1",
+          title: "Button Link 2",
+        },
+        {
+          type: "string",
+          name: "heading2",
+          title: "Heading 3",
+        },
+        {
+          type: "image",
+          name: "bg_img2",
+          title: "BG Image 3",
+        },
+        {
+          type: "link",
+          name: "btn_text2",
+          title: "Button Link 3",
+        },
+      ],
+      getInitialNodes: (node_id) => {
+        return {
+          [node_id]: {
+            id: node_id,
+            type: "condition_content_3_slides",
             props: {
               className: "",
             },
@@ -904,6 +984,76 @@ export const mileconfig: Config = {
           [node_id]: {
             id: node_id,
             type: "condition_main_grid_3",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        };
+      },
+    },
+    {
+      type: "condition_content_2c_link_image_text",
+      name: "condition_content_2c_link_image_text",
+      title: "Condition 2 Cols Link Image Text",
+      thumbnail: "/mile-thumbnails/condition_content_2c_link_image_text.png",
+      fields: [
+        {
+          type: "richtext",
+          name: "text",
+          title: "Text",
+        },
+        {
+          type: "link",
+          name: "link",
+          title: "Link",
+        },
+        {
+          type: "image",
+          name: "image",
+          title: "Image",
+        },
+        {
+          type: "url",
+          name: "image_url",
+          title: "Image link url",
+        },
+      ],
+      getInitialNodes: (node_id) => {
+        return {
+          [node_id]: {
+            id: node_id,
+            type: "condition_content_2c_link_image_text",
+            props: {
+              className: "",
+            },
+            options: undefined,
+          },
+        };
+      },
+    },
+    {
+      type: "condition_content_2c_image_text",
+      name: "condition_content_2c_image_text",
+      title: "Condition 2 Cols Image Text",
+      thumbnail: "/mile-thumbnails/condition_content_2c_image_text.png",
+      fields: [
+        {
+          type: "richtext",
+          name: "text",
+          title: "Text",
+        },
+        {
+          type: "image",
+          name: "image",
+          title: "Image",
+        },
+      ],
+      getInitialNodes: (node_id) => {
+        return {
+          [node_id]: {
+            id: node_id,
+            type: "condition_content_2c_image_text",
             props: {
               className: "",
             },

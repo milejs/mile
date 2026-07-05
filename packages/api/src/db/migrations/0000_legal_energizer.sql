@@ -48,6 +48,18 @@ CREATE TABLE "verification" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "component_library" (
+	"id" char(32) PRIMARY KEY NOT NULL,
+	"name" text NOT NULL,
+	"description" text,
+	"content" text NOT NULL,
+	"category" text,
+	"thumbnail_id" char(32),
+	"is_active" integer DEFAULT 1,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "drafts" (
 	"id" char(32) PRIMARY KEY NOT NULL,
 	"page_id" char(32) NOT NULL,
@@ -83,6 +95,14 @@ CREATE TABLE "medias" (
 	"title" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "page_embeds" (
+	"page_id" char(32) NOT NULL,
+	"component_id" char(32) NOT NULL,
+	"draft_version_id" char(32),
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "page_embeds_page_id_component_id_draft_version_id_pk" PRIMARY KEY("page_id","component_id","draft_version_id")
 );
 --> statement-breakpoint
 CREATE TABLE "pages" (
@@ -142,8 +162,12 @@ ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("
 CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "session_userId_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "verification_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
+CREATE INDEX "component_library_category__idx" ON "component_library" USING btree ("category");--> statement-breakpoint
+CREATE INDEX "component_library_is_active__idx" ON "component_library" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX "drafts_id_version__idx" ON "drafts" USING btree ("page_id","version_number");--> statement-breakpoint
 CREATE INDEX "drafts_page_id__idx" ON "drafts" USING btree ("page_id");--> statement-breakpoint
+CREATE INDEX "page_embeds_component__idx" ON "page_embeds" USING btree ("component_id");--> statement-breakpoint
+CREATE INDEX "page_embeds_draft_version__idx" ON "page_embeds" USING btree ("draft_version_id");--> statement-breakpoint
 CREATE INDEX "pages_full_slug__idx" ON "pages" USING btree ("full_slug");--> statement-breakpoint
 CREATE INDEX "pages_status__idx" ON "pages" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "redirect_id_idx" ON "redirect_history" USING btree ("redirect_id");--> statement-breakpoint

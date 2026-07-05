@@ -89,6 +89,52 @@ class BlockNodes {
   }
 }
 
+const COLORS_DEFAULT = {
+  gray: {
+    text: "#9b9a97",
+    background: "#ebeced",
+  },
+  brown: {
+    text: "#64473a",
+    background: "#e9e5e3",
+  },
+  red: {
+    text: "#e03e3e",
+    background: "#fbe4e4",
+  },
+  orange: {
+    text: "#d9730d",
+    background: "#f6e9d9",
+  },
+  yellow: {
+    text: "#dfab01",
+    background: "#fbf3db",
+  },
+  green: {
+    text: "#4d6461",
+    background: "#ddedea",
+  },
+  blue: {
+    text: "#0c71c3",
+    background: "#ddebf1",
+  },
+  purple: {
+    text: "#6940a5",
+    background: "#eae4f2",
+  },
+  pink: {
+    text: "#ad1a72",
+    background: "#f4dfeb",
+  },
+} as Record<string, { text: string; background: string }>;
+
+function getTextColor(color: string) {
+  if (color in COLORS_DEFAULT) {
+    return COLORS_DEFAULT[color].text;
+  }
+  return color;
+}
+
 // Component to render styled text with all formatting
 const StyledTextRenderer = ({ styledText }: any) => {
   if (styledText.type !== "text") return null;
@@ -108,7 +154,7 @@ const StyledTextRenderer = ({ styledText }: any) => {
     style.textDecoration = "underline line-through";
   if (styles.textColor && styles.textColor !== "default") {
     // @ts-expect-error okk
-    style.color = styles.textColor;
+    style.color = getTextColor(styles.textColor);
   }
 
   // return (
@@ -141,11 +187,7 @@ const InlineContentRenderer = ({ content }: any) => {
       {content.map((item: any, index: number) => {
         if (item.type === "link") {
           return (
-            <a
-              key={index}
-              href={item.href}
-              style={{ color: "#0066cc", textDecoration: "underline" }}
-            >
+            <a key={index} href={item.href} style={{ color: "#0c71c3" }}>
               {item.content.map((text: any, i: number) => (
                 <StyledTextRenderer key={i} styledText={text} />
               ))}

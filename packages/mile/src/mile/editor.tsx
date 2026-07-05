@@ -311,6 +311,19 @@ const actions: Actions = {
     return result.reverseAction;
   },
 
+  replaceNodeData(
+    editor,
+    payload: { node_id: string; content: TreeData },
+  ): Action | undefined {
+    const { node_id, content } = payload;
+    const result = editor.tree.replaceNodeData(node_id, content);
+    editor.updateData(result.data, {
+      trigger: "pointer",
+      outcome: { type: "replace-node-data", targetId: node_id },
+    });
+    return result.reverseAction;
+  },
+
   replaceTreeData(
     editor,
     payload: { node_id: string; treeData: TreeData; content: TreeData },

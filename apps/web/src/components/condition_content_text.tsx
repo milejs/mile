@@ -12,6 +12,7 @@ export function ConditionContentText(props: MileComponentProps) {
       className={cn(
         `px-4 sm:px-0 /py-10 w-full`,
         getPadding(options),
+        getBgColor(options),
         props.className,
       )}
     >
@@ -24,6 +25,15 @@ export function ConditionContentText(props: MileComponentProps) {
   );
 }
 
+function getBgColor(options: any) {
+  const { bg_color } = options ?? {};
+  if (bg_color) {
+    if (bg_color === "gray" || bg_color === "grey") {
+      return "bg-zinc-100";
+    }
+  }
+  return "";
+}
 function getPadding(options: any) {
   const { pt, pb, pl, pr } = options ?? {};
   let padding = "";

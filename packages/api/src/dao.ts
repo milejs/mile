@@ -8,6 +8,8 @@ import {
   redirects,
   SelectRedirect,
   redirect_history,
+  page_embeds,
+  component_library,
 } from "./db/schema";
 import {
   desc,
@@ -1503,3 +1505,102 @@ export async function getRedirectStats(only_active: boolean = false) {
   }
   return await db.select().from(redirects).orderBy(desc(redirects.hit_count));
 }
+
+/**
+ * Embed library
+ */
+
+export async function getEmbed(embed_id: string) {
+  const result = await db
+    .select()
+    .from(component_library)
+    .where(eq(component_library.id, embed_id))
+    .limit(1);
+  return result[0];
+}
+
+export async function getActiveEmbeds() {
+  const result = await db
+    .select()
+    .from(component_library)
+    .where(eq(component_library.is_active, 1))
+    .orderBy(desc(component_library.created_at));
+  return result;
+}
+
+export async function createNewComponent(body: any) {
+  const result = await db.insert(component_library).values(body);
+  return result;
+}
+
+async function getPageWithEmbeds(page_id: string, isDraft = false) {
+  const page = await db
+    .select()
+    .from(pagesTable)
+    .where(eq(pagesTable.id, page_id))
+    .limit(1);
+
+  if (!page || page.length === 0) return null;
+
+  const version_id = isDraft
+    ? page[0].draft_version_id
+    : page[0].published_version_id;
+  if (!version_id) throw new Error(`No version found for page ${page_id}`);
+  // Single query with JOIN
+  const result = await db
+    .select({
+      draft: draftsTable,
+      component: component_library,
+    })
+    .from(draftsTable)
+    .leftJoin(page_embeds, eq(page_embeds.draft_version_id, draftsTable.id))
+    .leftJoin(
+      component_library,
+      eq(component_library.id, page_embeds.component_id),
+    )
+    .where(eq(draftsTable.id, version_id));
+
+  const draft = result[0]?.draft;
+  const components = result
+    .filter((r) => r.component !== null)
+    .map((r) => r.component);
+
+  return {
+    page,
+    draft,
+    embeds: components.reduce(
+      (acc, comp) => {
+        if (!comp) return acc;
+        acc[comp.id] = comp.content;
+        return acc;
+      },
+      {} as Record<string, string>,
+    ),
+  };
+}
+
+// // Which pages use this component?
+// const pagesUsingComponent = await db
+//   .select({
+//     pageId: pagesTable.id,
+//     slug: pagesTable.full_slug,
+//     status: pagesTable.status,
+//   })
+//   .from(page_embeds)
+//   .innerJoin(pagesTable, eq(pagesTable.id, page_embeds.page_id))
+//   .where(eq(page_embeds.component_id, "lib-resource-01"))
+//   .groupBy(pagesTable.id); // Dedup if component used multiple times
+
+// // How many times is each component used?
+// const componentStats = await db
+//   .select({
+//     componentId: page_embeds.component_id,
+//     componentName: component_library.name,
+//     usageCount: count(page_embeds.page_id).as("usage_count"),
+//   })
+//   .from(page_embeds)
+//   .innerJoin(
+//     component_library,
+//     eq(component_library.id, page_embeds.component_id),
+//   )
+//   .groupBy(page_embeds.component_id, component_library.name);

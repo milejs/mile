@@ -38,6 +38,9 @@ import {
   getCarouselPosts,
   deletePage,
   getBreadcrumbs,
+  getEmbed,
+  getActiveEmbeds,
+  createNewComponent,
 } from "./dao";
 import { auth } from "./auth";
 
@@ -121,6 +124,7 @@ export function MileAPI(options: MileAPIOptions) {
   app.route("/page", frontend);
   app.route("/redirects", redirects);
   app.route("/ui", ui);
+  app.route("/embeds", embed);
 
   app.get("/handle-redirect", async (c) => {
     const { pathname } = c.req.query();
@@ -189,6 +193,32 @@ const frontend = new Hono();
 const drafts = new Hono();
 const redirects = new Hono();
 const ui = new Hono();
+const embed = new Hono();
+
+/****************************************************************
+ * Embed
+ */
+
+// Get all component library
+embed.get("/", async (c) => {
+  const result = await getActiveEmbeds();
+  return c.json({ data: result });
+});
+embed.post("/", async (c) => {
+  const body = await c.req.json();
+  const id = await createNewComponent(body);
+  return c.json({ data: id }, 201);
+});
+
+// Get component library by id
+embed.get("/:embed_id", async (c) => {
+  const embed_id = c.req.param("embed_id");
+  const single = await getEmbed(embed_id);
+  if (!single) {
+    return c.json({ message: "Component not found" }, 404);
+  }
+  return c.json({ data: single });
+});
 
 /****************************************************************
  * UIs

@@ -4,6 +4,16 @@ import cn from "../lib/cn";
 import { RichtextView } from "@milejs/core/app";
 import NextLink from "next/link";
 
+function getBgColor(options: any) {
+  const { bg_color } = options ?? {};
+  if (bg_color) {
+    if (bg_color === "gray" || bg_color === "grey") {
+      return "bg-zinc-100";
+    }
+  }
+  return "";
+}
+
 export function ConditionContentGrid3(props: MileComponentProps) {
   const { options } = props ?? {};
   const {
@@ -19,7 +29,14 @@ export function ConditionContentGrid3(props: MileComponentProps) {
   } = options ?? {};
 
   return (
-    <div {...props} className={cn(`px-4 sm:px-0 py-5 w-full`, props.className)}>
+    <div
+      {...props}
+      className={cn(
+        `px-4 sm:px-0 py-5 w-full`,
+        getBgColor(options),
+        props.className,
+      )}
+    >
       <div className="max-w-5xl mx-auto">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-6 ">
           {/* Item */}

@@ -625,6 +625,82 @@ export class Tree implements MileTree {
     };
   }
 
+  replaceNodeData(node_id: string, content: any) {
+    console.log("------ replaceNodeData", node_id, content, this.data);
+    const current_node = this.get(node_id);
+    const embed_root = content.root;
+    invariant(
+      embed_root && embed_root.children && embed_root.children.length > 0,
+    );
+
+    function getChildrenNodes(
+      tree: TreeData,
+      children: string[],
+    ): Record<string, NodeData> {
+      const nodes: Record<string, NodeData> = {};
+      for (const child_id of children) {
+        const child_node = tree[child_id];
+        if (child_node) {
+          nodes[child_id] = { ...child_node };
+        }
+      }
+      return nodes;
+    }
+
+    // this routine is for populating an embed node with the provided embed content
+    // - first, save the current node's children nodes, and then delete them
+    // - replace the current node's children array with the embed root children array
+    // - copy all nodes in the embed content into tree
+    const prev_children = current_node.children;
+    let tree = this._data;
+    const prev_tree = structuredClone(tree);
+    const prev_children_nodes = prev_children
+      ? getChildrenNodes(tree, prev_children)
+      : undefined;
+
+    tree = {
+      ...tree,
+      // replace children
+      [node_id]: {
+        ...current_node,
+        children: embed_root.children,
+      },
+    };
+
+    // delete the old current_node's children nodes
+    if (current_node.children) {
+      for (const child_id of current_node.children) {
+        // TODO: is this safe to delete mutably? should we do spread and set child_id to undefined?
+        delete tree[child_id];
+      }
+    }
+
+    // copy all nodes into tree
+    const { root, ...rest } = content;
+    // add them to the tree
+    const new_tree = {
+      ...tree,
+      ...rest,
+    };
+
+    // refresh the world
+    this.updateTreeData(new_tree);
+
+    // compute reverse action ------------------------------------------
+    return {
+      data: new_tree,
+      reverseAction: {
+        type: "replaceNodeData",
+        name: `Replace Node data`,
+        payload: {
+          nodeId: node_id,
+          treeData: prev_tree,
+          content: content,
+        },
+      },
+    };
+  }
+
   replaceTreeData(node_id: string, treeData: TreeData, content: any) {
     console.log("------ replaceTreeData", node_id, treeData, content);
     // refresh the world

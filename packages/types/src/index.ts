@@ -408,6 +408,22 @@ export interface MileTree {
     };
   };
 
+  replaceNodeData(
+    node_id: string,
+    content: any,
+  ): {
+    data: TreeData;
+    reverseAction: {
+      type: string;
+      name: string;
+      payload: {
+        nodeId: string;
+        treeData: TreeData;
+        content: any;
+      };
+    };
+  };
+
   replaceTreeData(
     node_id: string,
     treeData: TreeData,
@@ -522,6 +538,7 @@ type Outcome =
   | { type: "update-node-option"; targetId: string }
   | { type: "merge-tree-data"; targetId: string }
   | { type: "replace-tree-data"; targetId: string }
+  | { type: "replace-node-data"; targetId: string }
   | { type: "set-tree-data"; targetId: string };
 
 export type Operation = {

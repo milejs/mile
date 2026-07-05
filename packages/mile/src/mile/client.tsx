@@ -25,6 +25,9 @@ import React, {
   useState,
 } from "react";
 import { invariant } from "@/lib/invariant";
+import { mdxToTree } from "./data";
+import { useEditor } from "./editor";
+import { useSendData } from "./preview";
 
 const API = `${process.env.NEXT_PUBLIC_HOST_URL}/api/mile`;
 
@@ -147,6 +150,9 @@ const builtinComponentLibrarySchema = [
   },
   {
     type: "breadcrumb",
+  },
+  {
+    type: "embed",
   },
 ];
 
@@ -293,6 +299,28 @@ const internalSchema = [
     },
   },
   {
+    type: "embed",
+    name: "embed",
+    title: "Embed",
+    thumbnail: "/mile-thumbnails/embed.png",
+    fields: [
+      {
+        type: "string",
+        name: "embed_id",
+        title: "Embed ID",
+      },
+    ],
+    getInitialNodes: (node_id: string) => {
+      return {
+        [node_id]: {
+          id: node_id,
+          type: "embed",
+          options: undefined,
+        },
+      };
+    },
+  },
+  {
     type: "heading",
     name: "heading",
     title: "Heading",
@@ -334,6 +362,10 @@ const builtinComponents: Components = {
   heading: {
     name: "heading",
     component: Heading,
+  },
+  embed: {
+    name: "embed",
+    component: Embed,
   },
   image_container: {
     name: "image_container",
@@ -658,6 +690,43 @@ function Breadcrumb(props: any) {
           </ol>
         </nav>
       </div>
+    </div>
+  );
+}
+
+function Embed(props: any) {
+  const sendData = useSendData();
+  const { options, children } = props ?? {};
+  const { embed_id } = options ?? {};
+  console.log("embed props", props);
+
+  useEffect(() => {
+    function loadEmbedContent(embed_id?: string) {
+      if (!embed_id) return;
+      fetch(`${API}/embeds/${embed_id}`)
+        .then((response) => response.json())
+        .then((embed) => {
+          if (embed?.message) {
+            console.log("Failed to load embed content:", embed.message);
+            return;
+          }
+          const tree = mdxToTree(embed.data);
+          if (!tree.error) {
+            sendData({
+              kind: "populateEmbedContent",
+              data: { node_id: props.id, content: tree.result.content },
+            });
+          } else {
+            throw new Error(`Failed to load embed content`);
+          }
+        });
+    }
+    loadEmbedContent(embed_id);
+  }, [embed_id]);
+
+  return (
+    <div className="px-4 sm:px-0 py-5 w-full">
+      <div className="max-w-5xl mx-auto">{children ? children : "Embed"}</div>
     </div>
   );
 }

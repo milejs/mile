@@ -9,7 +9,11 @@ export function ConditionContentRowButton(props: MileComponentProps) {
   return (
     <div
       {...props}
-      className={cn(`px-4 sm:px-0 py-10 w-full`, props.className)}
+      className={cn(
+        `px-4 sm:px-0 py-10 w-full`,
+        getBgColor(options),
+        props.className,
+      )}
     >
       <div className="max-w-5xl mx-auto flex flex-col gap-y-12">
         <div className={`${getAlign(align)}`}>
@@ -32,3 +36,13 @@ const getAlign = (align?: string) => {
       return "text-left";
   }
 };
+
+function getBgColor(options: any) {
+  const { bg_color } = options ?? {};
+  if (bg_color) {
+    if (bg_color === "gray" || bg_color === "grey") {
+      return "bg-zinc-100";
+    }
+  }
+  return "";
+}

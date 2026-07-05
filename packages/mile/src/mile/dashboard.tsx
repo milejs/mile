@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ChevronDownIcon,
+  ChevronLeftIcon,
   ChevronRightIcon,
   EqualIcon,
   PlusIcon,
@@ -127,6 +128,21 @@ export function Dashboard({
     return (
       <AppShell path={path}>
         <ConvertDiviPage />
+      </AppShell>
+    );
+  }
+  if (path === "/library") {
+    return (
+      <AppShell path={path}>
+        <LibraryPage />
+      </AppShell>
+    );
+  }
+  if (path.startsWith("/library/")) {
+    const id = path.split("/")[2];
+    return (
+      <AppShell path={path}>
+        <LibraryDetailPage id={id} />
       </AppShell>
     );
   }
@@ -1511,7 +1527,7 @@ function NewPageSettings({ close }: any) {
   async function handleCreatePage() {
     // validate
     if (pageData.title === "") {
-      setError("Title is required.");
+      setError("Nam");
       return;
     }
     if (pageData.slug !== "" && pageData.slug.at(0) === "/") {
@@ -1790,6 +1806,313 @@ function AttrsPreview({ value }: { value: any }) {
         className="w-full border border-zinc-300"
       />
     </div>
+  );
+}
+
+function LibraryDetailPage({ id }: { id: string }) {
+  const {
+    data: page,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR([`/embeds/${id}`], fetcher);
+  if (pagesError) return <MainContainer>Failed to load</MainContainer>;
+  if (pagesIsLoading) return <MainContainer>loading...</MainContainer>;
+  if (page && page.error === true) {
+    console.error("error", page.message);
+    return <MainContainer>Failed to load</MainContainer>;
+  }
+  console.log("page", page);
+  const { data } = page;
+
+  if (page) {
+    return (
+      <MainContainer>
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <div className="mt-6 space-y-6">
+            <div className="flex">
+              <a
+                href="/mile/library"
+                className="flex items-center gap-x-2 px-3 py-2 bg-zinc-200 text-sm font-medium text-zinc-700 hover:text-zinc-900 hover:bg-zinc-300 rounded"
+              >
+                <ChevronLeftIcon className="w-4 h-4" /> Back to Library
+              </a>
+            </div>
+            <div className="flex flex-col gap-y-1">
+              <h4 className="text-sm text-zinc-500">{data.id}</h4>
+              <h1 className="text-xl font-bold">{data.name}</h1>
+            </div>
+          </div>
+        </div>
+        <div className="mt-6">
+          <div className="text-sm font-bold">Content</div>
+          <textarea
+            rows={24}
+            readOnly
+            value={data.content}
+            className="w-full border border-zinc-300"
+          />
+        </div>
+      </MainContainer>
+    );
+  }
+}
+
+function LibraryPage() {
+  // const [mode, setMode] = useState("allpages");
+  const {
+    data: pages,
+    error: pagesError,
+    isLoading: pagesIsLoading,
+  } = useSWR([`/embeds`], fetcher);
+  if (pagesError) return <MainContainer>Failed to load</MainContainer>;
+  if (pagesIsLoading) return <MainContainer>loading...</MainContainer>;
+  if (pages && pages.error === true) {
+    console.error("error", pages.message);
+    return <MainContainer>Failed to load</MainContainer>;
+  }
+  console.log("pages", pages);
+
+  const { data } = pages;
+
+  return (
+    <div className="py-5 space-y-6">
+      <div className="max-w-5xl mx-auto flex justify-between items-center">
+        <div className="flex w-full items-center justify-between">
+          <div className="flex gap-x-2 items-center">
+            <h1 className="font-bold text-3xl">Embeds</h1>
+            <CreateEmbedComponentModal />
+          </div>
+        </div>
+      </div>
+
+      <MainContainer>
+        <div className="">
+          <table className="w-full table-auto sm:table-fixed border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="sm:w-[250px] border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    ID
+                  </span>
+                </th>
+                <th className="border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    Name
+                  </span>
+                </th>
+                {/*<th className="border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    Description
+                  </span>
+                </th>
+                <th className="sm:w-30 border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    Category
+                  </span>
+                </th>*/}
+                <th className="border-b border-gray-200 p-4 pt-0 pb-3 pl-8 text-left font-medium text-gray-400">
+                  <span className="text-xs text-zinc-600 font-semibold">
+                    Date
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="space-y-10">
+              {data.map((e: any) => {
+                return (
+                  <tr key={e.id}>
+                    <td className="border-b border-gray-100 p-4 pl-1 text-zinc-700 text-xs">
+                      {e.id}
+                    </td>
+                    <td className="border-b border-gray-100 p-4 pl-8 text-zinc-700">
+                      <a href={`/mile/library/${e.id}`}>{e.name}</a>
+                    </td>
+                    {/*<td className="border-b border-gray-100 p-4 pl-8 text-zinc-700">
+                      {e.description}
+                    </td>
+                    <td className="border-b border-gray-100 p-4 pl-8 text-zinc-700">
+                      {e.category}
+                    </td>*/}
+                    <td className="border-b border-gray-100 p-4 pl-8 text-zinc-700">
+                      {new Date(e.created_at).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </MainContainer>
+    </div>
+  );
+}
+
+function CreateEmbedComponentModal() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <DialogRoot open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger className="h-9 flex items-center justify-center gap-x-1 rounded-md border border-zinc-300 bg-zinc-50 px-3.5 text-sm font-medium text-zinc-900 select-none hover:bg-zinc-100 focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-blue-800 active:bg-zinc-100">
+        New <PlusIcon size={16} />
+      </DialogTrigger>
+      <DialogContent className="fixed top-1/2 left-1/2 w-lg max-w-[calc(100vw-3rem)] -translate-x-1/2 -translate-y-1/2 rounded-lg bg-zinc-50 p-6 text-zinc-900 outline-1 outline-zinc-200 transition-all duration-150 data-[ending-style]:scale-90 data-[ending-style]:opacity-0 data-[starting-style]:scale-90 data-[starting-style]:opacity-0">
+        <Dialog.Title className="-mt-1.5 mb-1 text-lg font-medium">
+          Create New Component
+        </Dialog.Title>
+        <NewComponentSettings />
+      </DialogContent>
+    </DialogRoot>
+  );
+}
+
+async function createComponentLibrary(data: { [k: string]: any }) {
+  const resp = await fetch(`${API}/embeds`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!resp.ok) {
+    const error = new Error(
+      "An error occurred while creating the component library.",
+    );
+    const info = await resp.json();
+    console.error("Error creating component library", info);
+    // @ts-expect-error okk
+    error.info = info;
+    // @ts-expect-error okk
+    error.status = resp.status;
+    throw error;
+  }
+  const result = await resp.json();
+  // console.log("POST CREATE", pages, result);
+
+  return result?.data;
+}
+
+function NewComponentSettings() {
+  const [data, setData] = useState({
+    id: "_notused_",
+    name: "",
+    description: "",
+    category: "",
+    content: "",
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  function handleFieldChange(event: any) {
+    const { name, value } = event.target;
+    setData((e) => {
+      return { ...e, [name]: value };
+    });
+  }
+  function handleDescriptionChange(v: string) {
+    setData((e) => {
+      return { ...e, description: v };
+    });
+  }
+  function handleContentChange(v: string) {
+    setData((e) => {
+      return { ...e, content: v };
+    });
+  }
+
+  async function handleCreatePage() {
+    // validate
+    if (data.name === "") {
+      setError("Name is required.");
+      return;
+    }
+    if (data.content === "") {
+      setError("Content is required.");
+      return;
+    }
+    setError(null);
+
+    const payload = {
+      id: generateId(),
+      name: data.name?.trim(),
+      content: data.content?.trim(),
+      description: data.description,
+      category: data.category,
+    };
+    // console.log("payload", data, payload);
+    await createComponentLibrary(payload)
+      .then((e) => {
+        console.log("createComponentLibrary e", e);
+        if (e) {
+          window.location.reload();
+        }
+        // close();
+      })
+      .catch((e) => {
+        let message = e.info?.message
+          ? `${e.message} ${e.info.message}`
+          : e.message;
+        setError(message);
+      });
+  }
+
+  return (
+    <>
+      <div className="overflow-y-auto h-[calc(100vh-350px)]">
+        <div className="pt-2 pb-12 space-y-4">
+          <div className="w-full">
+            <label htmlFor="name" className="font-semibold text-sm">
+              Name
+            </label>
+            <Input
+              id="name"
+              name="name"
+              value={data.name}
+              onChange={handleFieldChange}
+              placeholder="e.g. Stroke Resource"
+            />
+            <div className="mt-1 text-xs text-zinc-600">
+              Name of the component
+            </div>
+          </div>
+          <div className="w-full">
+            <label htmlFor="content" className="font-semibold text-sm">
+              Content
+            </label>
+            <Field.Control
+              id="content"
+              name="content"
+              value={data.content}
+              onValueChange={handleContentChange}
+              render={<Textarea rows={4} />}
+            />
+          </div>
+          <div className="w-full">
+            <label htmlFor="description" className="font-semibold text-sm">
+              Description
+            </label>
+            <Field.Control
+              id="description"
+              name="description"
+              value={data.description}
+              onValueChange={handleDescriptionChange}
+              render={<Textarea rows={4} />}
+            />
+          </div>
+        </div>
+      </div>
+      <div className="mt-4 w-full">
+        {error ? (
+          <div className="mb-2 text-xs text-red-600">{error}</div>
+        ) : null}
+        <Button
+          onClick={handleCreatePage}
+          className="w-full py-3 text-white bg-indigo-500 hover:bg-indigo-600 transition-colors"
+        >
+          Create Component
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -2577,6 +2900,10 @@ const navConfig = {
         {
           title: "Redirects",
           href: "/mile/redirects",
+        },
+        {
+          title: "Libraries",
+          href: "/mile/library",
         },
       ],
     },
